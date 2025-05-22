@@ -1,0 +1,51 @@
+{
+  "comments": {
+    "lineComment": "//",
+    "blockComment": ["/*", "*/"]
+  },
+  "brackets": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"]
+  ],
+  "autoClosingPairs": [
+    { "open": "{", "close": "}" },
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] },
+    { "open": "'", "close": "'", "notIn": ["string", "comment"] },
+    { "open": "/**", "close": " */", "notIn": ["string"] }
+  ],
+  "autoCloseBefore": ";:.,=}])>\\n",
+  "surroundingPairs": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["\"", "\""],
+    ["'", "'"]
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "^((?!\\/\\/).)*(\\{[^}\"']*|\\([^)\"']*|\\[[^\\]\"']*)$",
+    "decreaseIndentPattern": "^((?!.*?\\/\\/).*\\*\\/)?\\s*[\\}\\]].*$"
+  },
+  "snippets": [
+    {
+      "name": "AI Read-Only Guard",
+      "prefix": "@guard:ai:r",
+      "body": "// @guard:ai:r",
+      "description": "Insert an AI read-only guard tag"
+    },
+    {
+      "name": "AI Write Access Guard",
+      "prefix": "@guard:ai:w",
+      "body": "// @guard:ai:w",
+      "description": "Insert an AI write access guard tag"
+    },
+    {
+      "name": "AI No Access Guard",
+      "prefix": "@guard:ai:n",
+      "body": "// @guard:ai:n",
+      "description": "Insert an AI no access guard tag"
+    }
+  ]
+}

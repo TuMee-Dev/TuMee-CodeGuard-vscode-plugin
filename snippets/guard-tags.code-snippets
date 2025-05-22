@@ -1,0 +1,30 @@
+{
+  "AI Read-Only Guard": {
+    "prefix": "guard-r",
+    "body": [
+      "// @guard:ai:r"
+    ],
+    "description": "Insert an AI read-only guard tag"
+  },
+  "AI Write Access Guard": {
+    "prefix": "guard-w",
+    "body": [
+      "// @guard:ai:w"
+    ],
+    "description": "Insert an AI write access guard tag"
+  },
+  "AI No Access Guard": {
+    "prefix": "guard-n",
+    "body": [
+      "// @guard:ai:n"
+    ],
+    "description": "Insert an AI no access guard tag"
+  },
+  "AI Guard (Choose)": {
+    "prefix": "guard",
+    "body": [
+      "// @guard:ai:${1|r,w,n|}"
+    ],
+    "description": "Insert an AI guard tag with permission choice"
+  }
+}

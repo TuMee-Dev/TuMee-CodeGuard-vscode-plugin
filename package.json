@@ -1,0 +1,336 @@
+{
+  "name": "tumee-vscode-plugin",
+  "displayName": "TuMee File and Folder Customization",
+  "description": "Customize your files and folders based on human/AI attributes. Set colors, badges, or tooltips for any file or folder in your workspace based on ACL rules.",
+  "version": "1.5.17",
+  "license": "MIT",
+  "icon": "resources/images/icon.png",
+  "galleryBanner": {
+    "color": "#4B0082",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.92.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "folder",
+    "file",
+    "customization",
+    "color",
+    "badge",
+    "tooltip",
+    "human",
+    "ai",
+    "acl"
+  ],
+  "pricing": "Free",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:tumee-vscode-plugin.setAIReadOnly",
+    "onCommand:tumee-vscode-plugin.setAIWrite",
+    "onCommand:tumee-vscode-plugin.setAINoAccess",
+    "onCommand:tumee-vscode-plugin.toggleAIAccess"
+  ],
+  "main": "./dist/extension.js",
+  "snippets": [
+    {
+      "language": "*",
+      "path": "./snippets/guard-tags.code-snippets"
+    }
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "TuMee File and Folder Customization",
+      "properties": {
+        "tumee-vscode-plugin.colorChangedFiles": {
+          "title": "Color Changed Files",
+          "type": "boolean",
+          "description": "Ignore any color customizations set by the IDE when in a Git repository",
+          "default": false
+        },
+        "tumee-vscode-plugin.aclCliPath": {
+          "title": "ACL CLI Path",
+          "type": "string",
+          "description": "Path to the CodeGuard CLI tool for checking ACL status",
+          "default": "codeguard"
+        },
+        "tumee-vscode-plugin.codeDecorationOpacity": {
+          "title": "Code Region Opacity",
+          "type": "number",
+          "description": "The opacity of the code region decorations (0.0 to 1.0)",
+          "default": 0.1,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "tumee-vscode-plugin.items": {
+          "type": "array",
+          "title": "Files and Folders",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Path to the file or folder"
+              },
+              "type": {
+                "type": "string",
+                "description": "Type of the item (file, folder, or any)",
+                "enum": [
+                  "file",
+                  "folder",
+                  "any"
+                ],
+                "default": "any"
+              },
+              "badge": {
+                "type": "string",
+                "description": "Badge for the item",
+                "maxLength": 2
+              },
+              "color": {
+                "type": "string",
+                "description": "Color for the item"
+              },
+              "tooltip": {
+                "type": "string",
+                "description": "Tooltip for the item"
+              },
+              "isHuman": {
+                "type": "boolean",
+                "description": "Whether this item is human-editable",
+                "default": false
+              },
+              "isAI": {
+                "type": "boolean",
+                "description": "Whether this item is AI-editable",
+                "default": false
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "default": []
+        }
+      }
+    },
+    "submenus": [
+      {
+        "id": "tumee-vscode-plugin.subMenu",
+        "label": "TuMee Customization"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "explorerResourceIsFolder || resourceScheme == file",
+          "group": "tumeeCustomization",
+          "submenu": "tumee-vscode-plugin.subMenu"
+        }
+      ],
+      "editor/context": [
+        {
+          "when": "editorTextFocus",
+          "group": "tumeeGuardTags",
+          "command": "tumee-vscode-plugin.setAIReadOnly"
+        },
+        {
+          "when": "editorTextFocus",
+          "group": "tumeeGuardTags",
+          "command": "tumee-vscode-plugin.setAIWrite"
+        },
+        {
+          "when": "editorTextFocus",
+          "group": "tumeeGuardTags",
+          "command": "tumee-vscode-plugin.setAINoAccess"
+        }
+      ],
+      "tumee-vscode-plugin.subMenu": [
+        {
+          "command": "tumee-vscode-plugin.setColor",
+          "group": "tumeeCustomization1@1"
+        },
+        {
+          "command": "tumee-vscode-plugin.clearColor",
+          "group": "tumeeCustomization1@2"
+        },
+        {
+          "command": "tumee-vscode-plugin.setAsHuman",
+          "group": "tumeeCustomization2@1"
+        },
+        {
+          "command": "tumee-vscode-plugin.setAsAI",
+          "group": "tumeeCustomization2@2"
+        },
+        {
+          "command": "tumee-vscode-plugin.clearACL",
+          "group": "tumeeCustomization2@3"
+        },
+        {
+          "command": "tumee-vscode-plugin.setTextBadge",
+          "group": "tumeeCustomization3@1"
+        },
+        {
+          "command": "tumee-vscode-plugin.setEmojiBadge",
+          "group": "tumeeCustomization3@2"
+        },
+        {
+          "command": "tumee-vscode-plugin.clearBadge",
+          "group": "tumeeCustomization3@3"
+        },
+        {
+          "command": "tumee-vscode-plugin.setTooltip",
+          "group": "tumeeCustomization4@1"
+        },
+        {
+          "command": "tumee-vscode-plugin.clearTooltip",
+          "group": "tumeeCustomization4@2"
+        },
+        {
+          "command": "tumee-vscode-plugin.clearCustomization",
+          "group": "tumeeCustomization5@1"
+        },
+        {
+          "command": "tumee-vscode-plugin.resetWorkspace",
+          "group": "tumeeCustomization5@2"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "tumee-vscode-plugin.setColor",
+        "title": "Set Color",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.clearColor",
+        "title": "Clear Color",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.setAsHuman",
+        "title": "Set as Human-Editable",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.setAsAI",
+        "title": "Set as AI-Editable",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.clearACL",
+        "title": "Clear ACL Status",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.setAIReadOnly",
+        "title": "Set AI Read-Only (@guard:ai:r)",
+        "category": "TuMee Guard Tags"
+      },
+      {
+        "command": "tumee-vscode-plugin.setAIWrite",
+        "title": "Set AI Write Access (@guard:ai:w)",
+        "category": "TuMee Guard Tags"
+      },
+      {
+        "command": "tumee-vscode-plugin.setAINoAccess",
+        "title": "Set AI No Access (@guard:ai:n)",
+        "category": "TuMee Guard Tags"
+      },
+      {
+        "command": "tumee-vscode-plugin.toggleAIAccess",
+        "title": "Toggle AI Access Level",
+        "category": "TuMee Guard Tags"
+      },
+      {
+        "command": "tumee-vscode-plugin.setTextBadge",
+        "title": "Set Text Badge",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.setEmojiBadge",
+        "title": "Set Emoji Badge",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.clearBadge",
+        "title": "Clear Badge",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.setTooltip",
+        "title": "Set Tooltip",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.clearTooltip",
+        "title": "Clear Tooltip",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.clearCustomization",
+        "title": "Clear All Customizations",
+        "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.resetWorkspace",
+        "title": "Reset Workspace",
+        "category": "TuMee Customization"
+      }
+    ],
+    "colors": [
+      {
+        "id": "tumee.human",
+        "defaults": {
+          "dark": "#4CAF50",
+          "light": "#4CAF50",
+          "highContrast": "#4CAF50",
+          "highContrastLight": "#4CAF50"
+        },
+        "description": "AI No Access color (green)"
+      },
+      {
+        "id": "tumee.ai",
+        "defaults": {
+          "dark": "#F44336",
+          "light": "#F44336",
+          "highContrast": "#F44336",
+          "highContrastLight": "#F44336"
+        },
+        "description": "AI write access color"
+      },
+      {
+        "id": "tumee.humanAI",
+        "defaults": {
+          "dark": "#2196F3",
+          "light": "#2196F3",
+          "highContrast": "#2196F3",
+          "highContrastLight": "#2196F3"
+        },
+        "description": "Mixed access color (blue, not currently used)"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch --mode development",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "lint": "eslint src --ext ts",
+    "test": "node ./tests/line-count/focused-fix.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.46",
+    "@types/vscode": "^1.100.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.4.5",
+    "webpack": "^5.99.8",
+    "webpack-cli": "^5.1.4"
+  }
+}

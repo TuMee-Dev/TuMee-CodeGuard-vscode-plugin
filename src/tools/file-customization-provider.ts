@@ -1,0 +1,236 @@
+import type { Event, ExtensionContext, FileDecorationProvider, ProviderResult, Uri } from "vscode";
+import { EventEmitter, FileDecoration, ThemeColor, extensions, window, workspace } from "vscode";
+import type { Change, ExtensionItem, GitAPIState, GitRepository } from "@/types";
+import { cleanPath, getAclStatus, getExtensionWithOptionalName } from "@/utils";
+
+const GIT_EXTENSION_ID = "vscode.git";
+const GIT_API_VERSION = 1;
+
+export class FileCustomizationProvider implements FileDecorationProvider {
+  private readonly _onDidChangeFileDecorations: EventEmitter<Uri | Uri[] | undefined> = new EventEmitter<
+    Uri | Uri[] | undefined
+  >();
+
+  get onDidChangeFileDecorations() {
+    return this._onDidChangeFileDecorations.event;
+  }
+
+  private _gitAPI: {
+    onDidChangeState: Event<GitAPIState>;
+    onDidOpenRepository: Event<GitRepository>;
+    onDidCloseRepository: Event<GitRepository>;
+    getAPI: (version: number) => unknown;
+    repositories: GitRepository[];
+  } | null = null;
+
+  private async initializeGitAPI() {
+    const gitExtension = extensions.getExtension(GIT_EXTENSION_ID);
+
+    if (gitExtension) {
+      const activeGitExtension = gitExtension.isActive ? gitExtension.exports : await gitExtension.activate();
+
+      if (activeGitExtension) {
+        this._gitAPI = activeGitExtension.getAPI(GIT_API_VERSION);
+
+        this._gitAPI?.onDidChangeState(() => {
+          this.fireOnChange();
+        });
+        this._gitAPI?.onDidOpenRepository((repo) => {
+          repo.state.onDidChange(() => {
+            this.fireOnChange();
+          });
+          this.fireOnChange();
+        });
+        this._gitAPI?.onDidCloseRepository(() => {
+          this.fireOnChange();
+        });
+
+        this.fireOnChange();
+      }
+    }
+  }
+
+  private getAllGitChanges(): Change[] {
+    if (this._gitAPI && this._gitAPI.repositories && this._gitAPI.repositories.length > 0) {
+      return this._gitAPI.repositories.reduce((acc, repo) => {
+        return [
+          ...acc,
+          ...(repo.state.workingTreeChanges || []),
+          ...(repo.state.untrackedChanges || []),
+          ...(repo.state.untrackedTreeChanges || []),
+          ...(repo.state.indexChanges || []),
+          ...(repo.state.mergeChanges || []),
+        ];
+      }, [] as Change[]);
+    }
+    return [];
+  }
+
+  public fireOnChange() {
+    this._onDidChangeFileDecorations.fire(undefined);
+  }
+
+  constructor() {
+    this.initializeGitAPI();
+
+    workspace.onDidChangeConfiguration((e) => {
+      if (
+        e.affectsConfiguration(getExtensionWithOptionalName("items")) ||
+        e.affectsConfiguration(getExtensionWithOptionalName("colorChangedFiles"))
+      ) {
+        this.fireOnChange();
+      }
+    });
+  }
+
+  /**
+   * @param uri {Uri} Location of the file or folder
+   * @param ignore {boolean} Whether to ignore this and always return false
+   * @returns {boolean} Whether the file or folder has been changed
+   */
+  private isUriChanged(uri: Uri, ignore?: boolean): boolean {
+    if (ignore) {
+      return false;
+    }
+    const changes = this.getAllGitChanges();
+
+    return changes.length === 0
+      ? false
+      : changes.some((change) => {
+          return (
+            change.uri.path === uri.path ||
+            change.uri.path.includes(uri.path) ||
+            (change.originalUri &&
+              (change.originalUri.path === uri.path || change.originalUri.path.includes(uri.path))) ||
+            (change.renameUri && (change.renameUri.path === uri.path || change.renameUri.path.includes(uri.path)))
+          );
+        });
+  }
+
+  /**
+   * Determines the appropriate color based on ACL status
+   * @param aclCode The ACL code (e.g., "AI-RO:HU-ED")
+   * @returns The theme color ID or undefined
+   */
+  private getColorFromACL(aclCode: string | null): string | undefined {
+    if (!aclCode) {
+      return undefined;
+    }
+    
+    const hasAI = aclCode.includes("AI-ED");
+    const hasHuman = aclCode.includes("HU-ED");
+    
+    if (hasAI && hasHuman) {
+      return "tumee.humanAI";
+    } else if (hasAI) {
+      return "tumee.ai";
+    } else if (hasHuman) {
+      return "tumee.human";
+    }
+    
+    return undefined;
+  }
+
+  public async getDecorationValue(uri: Uri): Promise<{ color?: ThemeColor; badge?: string; tooltip?: string } | null> {
+    const items =
+      workspace.getConfiguration(getExtensionWithOptionalName()).get<Array<ExtensionItem>>("items") || [];
+    const ignoreChangedFiles = workspace
+      .getConfiguration(getExtensionWithOptionalName())
+      .get<boolean>("colorChangedFiles");
+
+    const isUriChanged = this.isUriChanged(uri, ignoreChangedFiles);
+    const projectPath = cleanPath(uri.fsPath);
+
+    // Determine if this is a file or folder
+    let isDirectory = false;
+    try {
+      const fileStat = await workspace.fs.stat(uri);
+      isDirectory = (fileStat.type & 1) === 1; // FileType.Directory === 1
+    } catch (error) {
+      console.error(`Error getting file stat: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+
+    // Check if we have any custom settings for this exact file/folder or parent folders
+    // First look for exact path matches, then parent paths
+    const exactMatch = items.find(item => item.path === projectPath);
+
+    // If no exact match or the item is of a different type, look for parent folders that include this path
+    const parentMatches = !exactMatch ?
+      items
+        .filter((item) =>
+          projectPath.includes(item.path) &&
+          (item.type === "any" || (isDirectory && item.type === "folder") || (!isDirectory && item.type === "file"))
+        )
+        .sort((a, b) => b.path.length - a.path.length)
+      : [];
+
+    // Combine all matching items, with exact match taking priority
+    const matchItems = exactMatch ? [exactMatch, ...parentMatches] : parentMatches;
+
+    // Find most specific match for each attribute
+    const firstMatchWithColor = matchItems.find((item) => item.color);
+    const firstMatchWithBadge = matchItems.find((item) => item.badge);
+    const firstMatchWithTooltip = matchItems.find((item) => item.tooltip);
+
+    // Get the ACL status from CodeGuard CLI
+    const aclStatus = await getAclStatus(projectPath);
+    const aclColorId = this.getColorFromACL(aclStatus?.code || null);
+
+    // Determine the final color - give priority to manually set color over ACL-based color
+    let finalColorId: string | undefined;
+
+    if (firstMatchWithColor && firstMatchWithColor.color !== "__blocked__" && !isUriChanged) {
+      finalColorId = firstMatchWithColor.color;
+    } else if (aclColorId && !isUriChanged) {
+      finalColorId = aclColorId;
+    }
+
+    // Create tooltip string
+    let tooltipText: string | undefined;
+    if (firstMatchWithTooltip && firstMatchWithTooltip.tooltip && firstMatchWithTooltip.tooltip !== "__blocked__") {
+      tooltipText = firstMatchWithTooltip.tooltip;
+    } else if (aclStatus && aclStatus.status === "success") {
+      tooltipText = `AI: ${aclStatus.permissions.ai}, Human: ${aclStatus.permissions.human}`;
+    }
+
+    // Create badge
+    const badge = firstMatchWithBadge?.badge;
+    const badgeText = badge && badge !== "__blocked__" && badge.length > 0 && badge.length <= 2 ? badge : undefined;
+
+    // Only return a decoration if we have at least one attribute to show
+    if (finalColorId || badgeText || tooltipText) {
+      return {
+        color: finalColorId ? new ThemeColor(finalColorId) : undefined,
+        badge: badgeText,
+        tooltip: tooltipText,
+      };
+    }
+
+    return null;
+  }
+
+  async provideFileDecoration(uri: Uri): Promise<FileDecoration | undefined> {
+    try {
+      const decoration = await this.getDecorationValue(uri);
+      if (decoration !== null) {
+        return new FileDecoration(decoration.badge, decoration.tooltip, decoration.color);
+      }
+      return undefined;
+    } catch (error) {
+      console.error(`Error providing file decoration: ${error instanceof Error ? error.message : String(error)}`);
+      return undefined;
+    }
+  }
+}
+
+export const registerFileDecorationProvider = (context: ExtensionContext) => {
+  const provider = new FileCustomizationProvider();
+  const disposable = window.registerFileDecorationProvider(provider);
+  context.subscriptions.push(disposable);
+
+  return {
+    provider,
+    disposable,
+  };
+};

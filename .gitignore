@@ -1,0 +1,16 @@
+# VS Code extension build output
+dist/
+out/
+node_modules/
+.vscode-test/
+*.vsix
+
+# Backup files
+backups/
+
+# Debug logs
+*.log
+
+# OS specific files
+.DS_Store
+Thumbs.db
