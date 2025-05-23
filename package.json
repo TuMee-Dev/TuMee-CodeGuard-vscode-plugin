@@ -320,6 +320,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node ./tests/integration.test.js",
     "test:old": "node ./tests/line-count/focused-fix.js",
+    "test:tree-sitter": "node ./tests/tree-sitter-direct-test.js",
+    "test:tree-sitter:diff": "node ./tests/tree-sitter-vs-regex-test.js",
+    "test:tree-sitter:all": "npm run test:tree-sitter && npm run test:tree-sitter:diff",
     "precommit": "npm run lint && npm run typecheck && npm run test"
   },
   "devDependencies": {
@@ -327,6 +330,7 @@
     "@types/vscode": "^1.100.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
+    "copy-webpack-plugin": "^13.0.0",
     "eslint": "^8.57.0",
     "ts-loader": "^9.5.2",
     "typescript": "^5.4.5",

@@ -36,13 +36,13 @@ function getScopeCache(document: vscode.TextDocument): ScopeCache {
 /**
  * Resolve semantic scope with caching
  */
-function resolveSemanticWithCache(
+async function resolveSemanticWithCache(
   document: vscode.TextDocument,
   line: number,
   scope: string,
   addScopes?: string[],
   removeScopes?: string[]
-): ScopeBoundary | null {
+): Promise<ScopeBoundary | null> {
   const cache = getScopeCache(document);
   const cacheKey = `${line}:${scope}:${addScopes?.join(',') || ''}:${removeScopes?.join(',') || ''}`;
 
@@ -52,7 +52,7 @@ function resolveSemanticWithCache(
   }
 
   // Resolve and cache
-  const result = resolveSemantic(document, line, scope, addScopes, removeScopes);
+  const result = await resolveSemantic(document, line, scope, addScopes, removeScopes);
   cache.scopes.set(cacheKey, result);
   return result;
 }
@@ -61,7 +61,7 @@ function resolveSemanticWithCache(
  * Parse guard tags from document lines
  * This is the unified function that both updateCodeDecorations and updateStatusBarItem will use
  */
-export function parseGuardTags(document: vscode.TextDocument, lines: string[]): GuardTag[] {
+export async function parseGuardTags(document: vscode.TextDocument, lines: string[]): Promise<GuardTag[]> {
   // Validate input
   if (!validateDocument(document)) {
     throw new GuardProcessingError('Invalid document object', ErrorSeverity.ERROR);
@@ -91,7 +91,7 @@ export function parseGuardTags(document: vscode.TextDocument, lines: string[]): 
       if (tagInfo) {
         // If there's a semantic scope, resolve it to line numbers
         if (tagInfo.scope && !tagInfo.lineCount) {
-          const scopeBoundary = resolveSemanticWithCache(
+          const scopeBoundary = await resolveSemanticWithCache(
             document,
             i,
             tagInfo.scope,

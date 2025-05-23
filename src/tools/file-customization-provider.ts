@@ -4,6 +4,7 @@ import type { Change, ExtensionItem, GitAPIState, GitRepository } from '@/types'
 import { cleanPath, getAclStatus, getExtensionWithOptionalName } from '@/utils';
 import { isCliAvailable, getAclCliPath } from '@/utils/acl';
 import { commands } from 'vscode';
+import { errorHandler } from '@/utils/errorHandler';
 
 const GIT_EXTENSION_ID = 'vscode.git';
 const GIT_API_VERSION = 1;
@@ -134,6 +135,7 @@ export class FileCustomizationProvider implements FileDecorationProvider {
 
     const cliPath = getAclCliPath();
 
+    errorHandler.showWarning(`CodeGuard CLI not found at '${cliPath}'. File coloring disabled.`);
     void window.showWarningMessage(
       `CodeGuard CLI not found at '${cliPath}'. File coloring disabled.`,
       'Open Settings'
@@ -186,7 +188,13 @@ export class FileCustomizationProvider implements FileDecorationProvider {
       const fileStat = await workspace.fs.stat(uri);
       isDirectory = (fileStat.type & 1) === 1; // FileType.Directory === 1
     } catch (error) {
-      console.error(`Error getting file stat: ${error instanceof Error ? error.message : String(error)}`);
+      errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          operation: 'getDecorationValue.stat',
+          details: { uri: uri.toString() }
+        }
+      );
       return null;
     }
 
@@ -273,7 +281,14 @@ export class FileCustomizationProvider implements FileDecorationProvider {
       }
       return undefined;
     } catch (error) {
-      console.error(`Error providing file decoration: ${error instanceof Error ? error.message : String(error)}`);
+      errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          operation: 'provideFileDecoration',
+          details: { uri: uri.toString() },
+          userFriendlyMessage: 'Failed to update file decoration'
+        }
+      );
       return undefined;
     }
   }

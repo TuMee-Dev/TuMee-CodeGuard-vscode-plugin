@@ -146,7 +146,10 @@ export const getAclStatus = async (path: string): Promise<ACLStatus | null> => {
       return null;
     }
 
-    const { stdout } = await exec(`${cliPath} -acl --format json "${cleanedPath}"`);
+    // Execute with timeout to handle slow CLI startup
+    const { stdout } = await exec(`${cliPath} acl "${cleanedPath}" -f json`, {
+      timeout: 10000 // 10 seconds timeout for slow startup
+    });
 
     try {
       return JSON.parse(stdout) as ACLStatus;

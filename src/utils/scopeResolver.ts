@@ -1,34 +1,16 @@
 import type * as vscode from 'vscode';
 import { getLanguagePatterns } from './regexCache';
-
-// Tree-sitter for VSCode needs web-tree-sitter (WASM version)
-// These are placeholders for future tree-sitter implementation
-let _Parser: unknown;
-const _parserCache: Map<string, unknown> = new Map();
-
-// Language to parser mappings
-const _LANGUAGE_PARSERS: Record<string, string> = {
-  'javascript': 'tree-sitter-javascript.wasm',
-  'typescript': 'tree-sitter-typescript.wasm',
-  'python': 'tree-sitter-python.wasm',
-  'java': 'tree-sitter-java.wasm',
-  'csharp': 'tree-sitter-c_sharp.wasm',
-  'c': 'tree-sitter-c.wasm',
-  'cpp': 'tree-sitter-cpp.wasm',
-  'go': 'tree-sitter-go.wasm',
-  'rust': 'tree-sitter-rust.wasm',
-  'ruby': 'tree-sitter-ruby.wasm',
-  'php': 'tree-sitter-php.wasm',
-};
+import { parseDocument, findNodeAtPosition, findParentOfType, getNodeBoundaries, initializeTreeSitter } from './treeSitterParser';
+import type { Node } from 'web-tree-sitter';
 
 // Semantic scope to tree-sitter node type mappings
-const _SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
+const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'javascript': {
     'func': ['function_declaration', 'function_expression', 'arrow_function', 'method_definition'],
     'class': ['class_declaration', 'class_expression'],
-    'block': ['block_statement', 'if_statement', 'for_statement', 'while_statement', 'try_statement'],
-    'sig': ['function_declaration', 'method_definition'],
-    'body': ['block_statement', 'class_body'],
+    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
+    'sig': ['function_declaration', 'method_definition', 'function_signature'],
+    'body': ['statement_block', 'class_body'],
     'method': ['method_definition'],
     'import': ['import_statement'],
     'export': ['export_statement'],
@@ -36,9 +18,19 @@ const _SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'typescript': {
     'func': ['function_declaration', 'function_expression', 'arrow_function', 'method_definition', 'method_signature'],
     'class': ['class_declaration', 'class_expression', 'interface_declaration'],
-    'block': ['block_statement', 'if_statement', 'for_statement', 'while_statement', 'try_statement'],
-    'sig': ['function_declaration', 'method_definition', 'method_signature'],
-    'body': ['block_statement', 'class_body', 'interface_body'],
+    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
+    'sig': ['function_declaration', 'method_definition', 'method_signature', 'function_signature'],
+    'body': ['statement_block', 'class_body', 'interface_body'],
+    'method': ['method_definition', 'method_signature'],
+    'import': ['import_statement'],
+    'export': ['export_statement'],
+  },
+  'tsx': {
+    'func': ['function_declaration', 'function_expression', 'arrow_function', 'method_definition', 'method_signature'],
+    'class': ['class_declaration', 'class_expression', 'interface_declaration'],
+    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
+    'sig': ['function_declaration', 'method_definition', 'method_signature', 'function_signature'],
+    'body': ['statement_block', 'class_body', 'interface_body'],
     'method': ['method_definition', 'method_signature'],
     'import': ['import_statement'],
     'export': ['export_statement'],
@@ -49,34 +41,111 @@ const _SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
     'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'with_statement'],
     'sig': ['function_definition'],
     'body': ['block'],
-    'method': ['function_definition'], // Python doesn't distinguish methods syntactically
+    'method': ['function_definition'],
     'import': ['import_statement', 'import_from_statement'],
-    'docstring': ['expression_statement'], // Need to check if it contains a string
+    'docstring': ['expression_statement'],
   },
   'java': {
     'func': ['method_declaration', 'constructor_declaration'],
     'class': ['class_declaration', 'interface_declaration', 'enum_declaration'],
-    'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement'],
+    'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
     'sig': ['method_declaration', 'constructor_declaration'],
     'body': ['block', 'class_body', 'interface_body', 'enum_body'],
     'method': ['method_declaration'],
     'import': ['import_declaration'],
   },
   'csharp': {
-    'func': ['method_declaration', 'constructor_declaration', 'property_declaration'],
-    'class': ['class_declaration', 'interface_declaration', 'struct_declaration'],
-    'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement'],
+    'func': ['method_declaration', 'constructor_declaration', 'property_declaration', 'local_function_statement'],
+    'class': ['class_declaration', 'interface_declaration', 'struct_declaration', 'record_declaration'],
+    'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
     'sig': ['method_declaration', 'constructor_declaration'],
     'body': ['block', 'class_body', 'interface_body'],
     'method': ['method_declaration'],
     'import': ['using_directive'],
   },
+  'go': {
+    'func': ['function_declaration', 'method_declaration'],
+    'class': ['type_declaration'],
+    'block': ['block', 'if_statement', 'for_statement', 'switch_statement'],
+    'sig': ['function_declaration', 'method_declaration'],
+    'body': ['block'],
+    'method': ['method_declaration'],
+    'import': ['import_declaration'],
+  },
+  'rust': {
+    'func': ['function_item', 'function_signature_item'],
+    'class': ['struct_item', 'enum_item', 'trait_item', 'impl_item'],
+    'block': ['block', 'if_expression', 'for_expression', 'while_expression', 'match_expression'],
+    'sig': ['function_item', 'function_signature_item'],
+    'body': ['block'],
+    'method': ['function_item'],
+    'import': ['use_declaration'],
+  },
+  'ruby': {
+    'func': ['method', 'lambda'],
+    'class': ['class', 'module'],
+    'block': ['do_block', 'block', 'if', 'for', 'while', 'case'],
+    'sig': ['method'],
+    'body': ['do_block', 'block'],
+    'method': ['method'],
+    'import': ['require', 'load'],
+  },
+  'php': {
+    'func': ['function_definition', 'method_declaration'],
+    'class': ['class_declaration', 'interface_declaration', 'trait_declaration'],
+    'block': ['compound_statement', 'if_statement', 'for_statement', 'while_statement', 'switch_statement'],
+    'sig': ['function_definition', 'method_declaration'],
+    'body': ['compound_statement'],
+    'method': ['method_declaration'],
+    'import': ['use_statement', 'require_expression', 'include_expression'],
+  },
+  'c': {
+    'func': ['function_definition'],
+    'class': ['struct_specifier', 'union_specifier'],
+    'block': ['compound_statement', 'if_statement', 'for_statement', 'while_statement', 'switch_statement'],
+    'sig': ['function_declarator'],
+    'body': ['compound_statement'],
+    'method': ['function_definition'],
+    'import': ['preproc_include'],
+  },
+  'cpp': {
+    'func': ['function_definition', 'lambda_expression'],
+    'class': ['class_specifier', 'struct_specifier', 'union_specifier'],
+    'block': ['compound_statement', 'if_statement', 'for_statement', 'while_statement', 'switch_statement'],
+    'sig': ['function_declarator'],
+    'body': ['compound_statement', 'field_declaration_list'],
+    'method': ['function_definition'],
+    'import': ['preproc_include', 'using_declaration'],
+  },
+  'swift': {
+    'func': ['function_declaration'],
+    'class': ['class_declaration', 'struct_declaration', 'protocol_declaration', 'enum_declaration'],
+    'block': ['code_block', 'if_statement', 'for_statement', 'while_statement', 'switch_statement'],
+    'sig': ['function_declaration'],
+    'body': ['code_block', 'class_body'],
+    'method': ['function_declaration'],
+    'import': ['import_declaration'],
+  },
+  'kotlin': {
+    'func': ['function_declaration', 'anonymous_function'],
+    'class': ['class_declaration', 'object_declaration', 'interface_declaration'],
+    'block': ['statements', 'if_expression', 'for_statement', 'while_statement', 'when_expression'],
+    'sig': ['function_declaration'],
+    'body': ['statements', 'class_body'],
+    'method': ['function_declaration'],
+    'import': ['import_header'],
+  },
 };
 
-// Initialize parser (this would need to be called with proper WASM loading in real implementation)
-export async function initializeParser(_context: vscode.ExtensionContext) {
-  // In a real implementation, we'd load web-tree-sitter here
-  // For now, we'll use a simplified approach
+// Store the extension context for tree-sitter initialization
+let extensionContext: vscode.ExtensionContext | null = null;
+
+/**
+ * Initialize the scope resolver with the extension context
+ */
+export async function initializeScopeResolver(context: vscode.ExtensionContext): Promise<void> {
+  extensionContext = context;
+  await initializeTreeSitter(context);
 }
 
 /**
@@ -89,16 +158,194 @@ export interface ScopeBoundary {
 }
 
 /**
- * Resolves semantic scope to line numbers
- * For now, this is a simplified implementation that uses regex patterns
- * In a full implementation, this would use tree-sitter
+ * Resolves semantic scope to line numbers using tree-sitter with regex fallback
  */
-export function resolveSemantic(
+export async function resolveSemantic(
   document: vscode.TextDocument,
   line: number,
   scope: string,
   _addScopes?: string[],
   _removeScopes?: string[]
+): Promise<ScopeBoundary | null> {
+  // First, try to use tree-sitter
+  if (extensionContext) {
+    try {
+      const treeSitterResult = await resolveSemanticWithTreeSitter(document, line, scope);
+      if (treeSitterResult) {
+        return treeSitterResult;
+      }
+    } catch (error) {
+      console.warn('Tree-sitter parsing failed, falling back to regex:', error);
+    }
+  }
+
+  // Fall back to regex-based parsing
+  return resolveSemanticWithRegex(document, line, scope);
+}
+
+/**
+ * Resolve semantic scope using tree-sitter
+ */
+async function resolveSemanticWithTreeSitter(
+  document: vscode.TextDocument,
+  line: number,
+  scope: string
+): Promise<ScopeBoundary | null> {
+  if (!extensionContext) return null;
+
+  const tree = await parseDocument(extensionContext, document);
+  if (!tree) return null;
+
+  const languageId = document.languageId;
+  const scopeMap = SCOPE_MAPPINGS[languageId];
+  if (!scopeMap) return null;
+
+  const nodeTypes = scopeMap[scope] || scopeMap[scope.toLowerCase()];
+  if (!nodeTypes || nodeTypes.length === 0) return null;
+
+  // Find the node at the guard tag line
+  const node = findNodeAtPosition(tree, line);
+  if (!node) return null;
+
+  // Handle different scope types
+  switch (scope) {
+    case 'sig':
+    case 'signature':
+      return findSignatureScopeTreeSitter(node, nodeTypes, line);
+
+    case 'body':
+      return findBodyScopeTreeSitter(node, nodeTypes);
+
+    case 'stmt':
+    case 'statement':
+      return findStatementScopeTreeSitter(node, line);
+
+    default: {
+      // For other scopes, find the nearest parent of the specified type
+      const parentNode = findParentOfType(node, nodeTypes);
+      if (parentNode) {
+        const bounds = getNodeBoundaries(parentNode);
+        return {
+          startLine: bounds.startLine,
+          endLine: bounds.endLine,
+          type: scope
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Find signature scope using tree-sitter
+ */
+function findSignatureScopeTreeSitter(
+  node: Node,
+  nodeTypes: string[],
+  _guardLine: number
+): ScopeBoundary | null {
+  // Check if we're on a function/method node
+  const funcNode = findParentOfType(node, nodeTypes);
+  if (!funcNode) return null;
+
+  // For signatures, we want just the declaration line(s), not the body
+  const startLine = funcNode.startPosition.row;
+
+  // Find where the body starts (usually after '{' or ':')
+  let endLine = startLine;
+  for (const child of funcNode.children) {
+    if (child && ['statement_block', 'block', 'compound_statement', 'code_block'].includes(child.type)) {
+      endLine = child.startPosition.row - 1;
+      break;
+    }
+  }
+
+  // If we didn't find a body, check if the signature spans multiple lines
+  if (endLine === startLine) {
+    // Look for the opening brace or colon on the same or next lines
+    const text = funcNode.text;
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('{') || lines[i].includes(':')) {
+        endLine = startLine + i;
+        break;
+      }
+    }
+  }
+
+  return {
+    startLine,
+    endLine: Math.max(startLine, endLine),
+    type: 'signature'
+  };
+}
+
+/**
+ * Find body scope using tree-sitter
+ */
+function findBodyScopeTreeSitter(
+  node: Node,
+  nodeTypes: string[]
+): ScopeBoundary | null {
+  // Find the function/method containing this node
+  const funcTypes = SCOPE_MAPPINGS[node.tree.rootNode.type]?.func || nodeTypes;
+  const funcNode = findParentOfType(node, funcTypes);
+  if (!funcNode) return null;
+
+  // Find the body within the function
+  for (const child of funcNode.children) {
+    if (child && ['statement_block', 'block', 'compound_statement', 'code_block', 'do_block'].includes(child.type)) {
+      const bounds = getNodeBoundaries(child);
+      return {
+        startLine: bounds.startLine + 1, // Skip the opening brace line
+        endLine: bounds.endLine - 1, // Skip the closing brace line
+        type: 'body'
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Find statement scope using tree-sitter
+ */
+function findStatementScopeTreeSitter(
+  node: Node,
+  line: number
+): ScopeBoundary | null {
+  // Find the smallest statement containing this line
+  let current = node;
+  while (current.parent) {
+    if (current.type.includes('statement') || current.type.includes('expression')) {
+      const bounds = getNodeBoundaries(current);
+      if (bounds.startLine <= line && bounds.endLine >= line) {
+        return {
+          startLine: bounds.startLine,
+          endLine: bounds.endLine,
+          type: 'statement'
+        };
+      }
+    }
+    current = current.parent;
+  }
+
+  // Default to just the current line
+  return {
+    startLine: line,
+    endLine: line,
+    type: 'statement'
+  };
+}
+
+/**
+ * Resolve semantic scope using regex (fallback)
+ */
+function resolveSemanticWithRegex(
+  document: vscode.TextDocument,
+  line: number,
+  scope: string
 ): ScopeBoundary | null {
   const languageId = document.languageId;
   const text = document.getText();
@@ -136,7 +383,7 @@ export function resolveSemantic(
 }
 
 /**
- * Find function scope boundaries
+ * Find function scope boundaries using regex
  */
 function findFunctionScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
   // Get cached language patterns
@@ -165,7 +412,7 @@ function findFunctionScope(lines: string[], guardLine: number, language: string)
 }
 
 /**
- * Find class scope boundaries
+ * Find class scope boundaries using regex
  */
 function findClassScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
   // Get cached language patterns
@@ -193,7 +440,7 @@ function findClassScope(lines: string[], guardLine: number, language: string): S
 }
 
 /**
- * Find block scope boundaries
+ * Find block scope boundaries using regex
  */
 function findBlockScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
   // For languages with braces, find the nearest enclosing brace pair
@@ -237,7 +484,7 @@ function findBlockScope(lines: string[], guardLine: number, language: string): S
 }
 
 /**
- * Find signature scope (just the signature, not the body)
+ * Find signature scope (just the signature, not the body) using regex
  */
 function findSignatureScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
   // Check if the guard tag is on the same line as a function signature
@@ -284,7 +531,7 @@ function findSignatureScope(lines: string[], guardLine: number, language: string
 }
 
 /**
- * Find body scope (implementation without signature)
+ * Find body scope (implementation without signature) using regex
  */
 function findBodyScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
   const functionScope = findFunctionScope(lines, guardLine, language);
@@ -309,7 +556,7 @@ function findBodyScope(lines: string[], guardLine: number, language: string): Sc
 }
 
 /**
- * Find method scope (similar to function but within a class)
+ * Find method scope (similar to function but within a class) using regex
  */
 function findMethodScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
   // First check if we're inside a class
@@ -321,7 +568,7 @@ function findMethodScope(lines: string[], guardLine: number, language: string): 
 }
 
 /**
- * Find statement scope (single logical statement)
+ * Find statement scope (single logical statement) using regex
  */
 function findStatementScope(lines: string[], guardLine: number): ScopeBoundary | null {
   // For now, just return the current line

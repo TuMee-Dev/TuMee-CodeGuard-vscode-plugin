@@ -8,7 +8,8 @@ import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
 import { parseGuardTags, computeLinePermissions } from '@/utils/guardProcessor';
 import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
 import type { GuardTag } from '@/types/guardTypes';
-import { logError } from '@/utils/errorHandler';
+import { errorHandler } from '@/utils/errorHandler';
+import { initializeScopeResolver } from '@/utils/scopeResolver';
 
 let disposables: Disposable[] = [];
 let aiOnlyDecoration: TextEditorDecorationType;
@@ -23,59 +24,73 @@ let statusBarItem: StatusBarItem;
 let decorationUpdateTimer: NodeJS.Timeout | undefined;
 const DECORATION_UPDATE_DELAY = 100; // milliseconds
 
-export function activate(context: ExtensionContext) {
-  disposables = [];
+export async function activate(context: ExtensionContext) {
+  try {
+    disposables = [];
 
-  const isEnabled = context.globalState.get('isEnabled');
+    // Initialize tree-sitter for semantic scope resolution
+    await initializeScopeResolver(context);
 
-  if (isEnabled !== false) {
-    firstTimeRun(context);
+    const isEnabled = context.globalState.get('isEnabled');
 
-    // Register file and folder decoration provider
-    const { disposable, provider } = registerFileDecorationProvider(context);
-    disposables.push(disposable);
+    if (isEnabled !== false) {
+      firstTimeRun(context);
 
-    // Register context menu commands
-    const contextMenuDisposables = registerContextMenu(context, provider);
-    disposables.push(...contextMenuDisposables);
+      // Register file and folder decoration provider
+      const { disposable, provider } = registerFileDecorationProvider(context);
+      disposables.push(disposable);
 
-    // Register guard tag commands for editor context menu
-    const guardDisposables = registerGuardTagCommands(context);
-    disposables.push(...guardDisposables);
+      // Register context menu commands
+      const contextMenuDisposables = registerContextMenu(context, provider);
+      disposables.push(...contextMenuDisposables);
 
-    // Create decorations for code regions
-    initializeCodeDecorations(context);
+      // Register guard tag commands for editor context menu
+      const guardDisposables = registerGuardTagCommands(context);
+      disposables.push(...guardDisposables);
 
-    // Create status bar item
-    createStatusBarItem(context);
+      // Create decorations for code regions
+      initializeCodeDecorations(context);
 
-    // Set up listeners for active editor
-    const activeEditor = window.activeTextEditor;
-    if (activeEditor) {
-      triggerUpdateDecorations(activeEditor.document);
-      updateStatusBarItem(activeEditor.document);
+      // Create status bar item
+      createStatusBarItem(context);
+
+      // Set up listeners for active editor
+      const activeEditor = window.activeTextEditor;
+      if (activeEditor) {
+        triggerUpdateDecorations(activeEditor.document);
+        void updateStatusBarItem(activeEditor.document);
+      }
+
+      // Update decorations when document changes
+      disposables.push(
+        workspace.onDidChangeTextDocument(event => {
+          const activeEditor = window.activeTextEditor;
+          if (activeEditor && event.document === activeEditor.document) {
+            triggerUpdateDecorations(event.document);
+            void updateStatusBarItem(event.document);
+          }
+        })
+      );
+
+      // Update decorations when editor changes
+      disposables.push(
+        window.onDidChangeActiveTextEditor(editor => {
+          if (editor) {
+            triggerUpdateDecorations(editor.document);
+            void updateStatusBarItem(editor.document);
+          }
+        })
+      );
     }
-
-    // Update decorations when document changes
-    disposables.push(
-      workspace.onDidChangeTextDocument(event => {
-        const activeEditor = window.activeTextEditor;
-        if (activeEditor && event.document === activeEditor.document) {
-          triggerUpdateDecorations(event.document);
-          updateStatusBarItem(event.document);
-        }
-      })
+  } catch (error) {
+    errorHandler.handleError(
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        operation: 'extension.activate',
+        userFriendlyMessage: 'Failed to activate CodeGuard extension'
+      }
     );
-
-    // Update decorations when editor changes
-    disposables.push(
-      window.onDidChangeActiveTextEditor(editor => {
-        if (editor) {
-          triggerUpdateDecorations(editor.document);
-          updateStatusBarItem(editor.document);
-        }
-      })
-    );
+    throw error;
   }
 }
 
@@ -181,7 +196,7 @@ function updateCodeDecorations(document: TextDocument) {
   }
 
   // Process the document to apply decorations
-  updateCodeDecorationsImpl(document);
+  void updateCodeDecorationsImpl(document);
 }
 
 /**
@@ -200,150 +215,169 @@ function clearDecorations() {
 }
 
 /**
+ * Helper function to find the last non-empty line in a range
+ */
+function findLastNonEmptyLine(lines: string[], startLine: number, endLine: number): number {
+  for (let i = endLine; i >= startLine; i--) {
+    if (lines[i].trim() !== '') {
+      return i;
+    }
+  }
+  return startLine; // Default to startLine if all lines are empty
+}
+
+/**
  * Implementation of code decoration updates
  * This now uses the shared guard processing logic
  *
  * @param document The active document
  */
-function updateCodeDecorationsImpl(document: TextDocument) {
-  if (!document) return;
-
-  const activeEditor = window.activeTextEditor;
-  if (!activeEditor) return;
-
-  const text = document.getText();
-  const lines = text.split(/\r?\n/);
-
-  // Check if the document has any guard tags - if not, clear decorations and exit
-  const isMarkdown = document.languageId === 'markdown';
-  let hasGuardTags = false;
-
-  if (isMarkdown) {
-    hasGuardTags = MARKDOWN_GUARD_TAG_REGEX.test(text);
-  } else {
-    hasGuardTags = GUARD_TAG_REGEX.test(text);
-  }
-
-  if (!hasGuardTags) {
-    clearDecorations();
-    return;
-  }
-
-  // Use shared functions to parse guard tags and compute line permissions
-  let guardTags: GuardTag[] = [];
-  let linePermissions: ReturnType<typeof computeLinePermissions> = [];
-
+async function updateCodeDecorationsImpl(document: TextDocument) {
   try {
-    guardTags = parseGuardTags(document, lines);
-    linePermissions = computeLinePermissions(lines, guardTags);
-  } catch (error) {
-    logError(error, 'updateCodeDecorationsImpl', { showUser: false });
-    clearDecorations();
-    return;
-  }
+    if (!document) return;
 
-  // Now convert linePermissions to decoration ranges
-  const decorationRanges = {
-    aiWrite: [] as { range: Range }[],
-    aiNoAccess: [] as { range: Range }[],
-    humanReadOnly: [] as { range: Range }[],
-    humanNoAccess: [] as { range: Range }[],
-    context: [] as { range: Range }[]
-  };
+    const activeEditor = window.activeTextEditor;
+    if (!activeEditor) return;
 
-  // Helper function to find the last non-empty line in a range
-  function findLastNonEmptyLine(startLine: number, endLine: number): number {
-    for (let i = endLine; i >= startLine; i--) {
-      if (lines[i].trim() !== '') {
-        return i;
-      }
+    const text = document.getText();
+    const lines = text.split(/\r?\n/);
+
+    // Check if the document has any guard tags - if not, clear decorations and exit
+    const isMarkdown = document.languageId === 'markdown';
+    let hasGuardTags = false;
+
+    if (isMarkdown) {
+      hasGuardTags = MARKDOWN_GUARD_TAG_REGEX.test(text);
+    } else {
+      hasGuardTags = GUARD_TAG_REGEX.test(text);
     }
-    return startLine; // Default to startLine if all lines are empty
-  }
 
-  // Process the line permissions into continuous ranges
-  let currentStart = -1;
-  let currentTarget = '';
-  let currentPermission = '';
+    if (!hasGuardTags) {
+      clearDecorations();
+      return;
+    }
 
-  for (let i = 0; i < linePermissions.length; i++) {
-    const perm = linePermissions[i];
-    const target = typeof perm === 'object' ? perm.target : 'ai';
-    const permission = typeof perm === 'object' ? perm.permission : perm;
+    // Use shared functions to parse guard tags and compute line permissions
+    let guardTags: GuardTag[] = [];
+    let linePermissions: ReturnType<typeof computeLinePermissions> = [];
 
-    // Check if we need to end the current range
-    if (target !== currentTarget || permission !== currentPermission) {
+    try {
+      guardTags = await parseGuardTags(document, lines);
+      linePermissions = computeLinePermissions(lines, guardTags);
+    } catch (error) {
+      errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          operation: 'parseGuardTags',
+          details: { document: document.fileName }
+        }
+      );
+      clearDecorations();
+      return;
+    }
+
+    // Now convert linePermissions to decoration ranges
+    const decorationRanges = {
+      aiWrite: [] as { range: Range }[],
+      aiNoAccess: [] as { range: Range }[],
+      humanReadOnly: [] as { range: Range }[],
+      humanNoAccess: [] as { range: Range }[],
+      context: [] as { range: Range }[]
+    };
+
+    // Process the line permissions into continuous ranges
+    let currentStart = -1;
+    let currentTarget = '';
+    let currentPermission = '';
+
+    for (let i = 0; i < linePermissions.length; i++) {
+      const perm = linePermissions[i];
+      const target = typeof perm === 'object' ? perm.target : 'ai';
+      const permission = typeof perm === 'object' ? perm.permission : perm;
+
+      // Check if we need to end the current range
+      if (target !== currentTarget || permission !== currentPermission) {
       // End previous range if it exists
-      if (currentStart >= 0) {
-        const lastContentLine = findLastNonEmptyLine(currentStart, i - 1);
-        const range = new Range(
-          new Position(currentStart, 0),
-          new Position(lastContentLine, lines[lastContentLine] ? lines[lastContentLine].length : 0)
-        );
+        if (currentStart >= 0) {
+          const lastContentLine = findLastNonEmptyLine(lines, currentStart, i - 1);
+          const range = new Range(
+            new Position(currentStart, 0),
+            new Position(lastContentLine, lines[lastContentLine] ? lines[lastContentLine].length : 0)
+          );
 
-        // Add range to appropriate decoration array
-        if (currentTarget === 'ai') {
-          if (currentPermission === 'w') {
-            decorationRanges.aiWrite.push({ range });
-          } else if (currentPermission === 'n') {
-            decorationRanges.aiNoAccess.push({ range });
-          } else if (currentPermission === 'context') {
-            decorationRanges.context.push({ range });
-          }
-        } else if (currentTarget === 'human') {
-          if (currentPermission === 'r') {
-            decorationRanges.humanReadOnly.push({ range });
-          } else if (currentPermission === 'n') {
-            decorationRanges.humanNoAccess.push({ range });
+          // Add range to appropriate decoration array
+          if (currentTarget === 'ai') {
+            if (currentPermission === 'w') {
+              decorationRanges.aiWrite.push({ range });
+            } else if (currentPermission === 'n') {
+              decorationRanges.aiNoAccess.push({ range });
+            } else if (currentPermission === 'context') {
+              decorationRanges.context.push({ range });
+            }
+          } else if (currentTarget === 'human') {
+            if (currentPermission === 'r') {
+              decorationRanges.humanReadOnly.push({ range });
+            } else if (currentPermission === 'n') {
+              decorationRanges.humanNoAccess.push({ range });
+            }
           }
         }
-      }
 
-      // Start new range if this is a highlighted permission
-      if (permission !== 'default' && permission !== 'r' && target) {
-        currentStart = i;
-        currentTarget = target;
-        currentPermission = permission;
-      } else {
-        currentStart = -1;
-        currentTarget = '';
-        currentPermission = '';
+        // Start new range if this is a highlighted permission
+        if (permission !== 'default' && permission !== 'r' && target) {
+          currentStart = i;
+          currentTarget = target;
+          currentPermission = permission;
+        } else {
+          currentStart = -1;
+          currentTarget = '';
+          currentPermission = '';
+        }
       }
     }
-  }
 
-  // Handle the last range if it extends to the end of the file
-  if (currentStart >= 0 && currentTarget && currentPermission) {
-    const lastContentLine = findLastNonEmptyLine(currentStart, lines.length - 1);
-    const range = new Range(
-      new Position(currentStart, 0),
-      new Position(lastContentLine, lines[lastContentLine] ? lines[lastContentLine].length : 0)
+    // Handle the last range if it extends to the end of the file
+    if (currentStart >= 0 && currentTarget && currentPermission) {
+      const lastContentLine = findLastNonEmptyLine(lines, currentStart, lines.length - 1);
+      const range = new Range(
+        new Position(currentStart, 0),
+        new Position(lastContentLine, lines[lastContentLine] ? lines[lastContentLine].length : 0)
+      );
+
+      if (currentTarget === 'ai') {
+        if (currentPermission === 'w') {
+          decorationRanges.aiWrite.push({ range });
+        } else if (currentPermission === 'n') {
+          decorationRanges.aiNoAccess.push({ range });
+        } else if (currentPermission === 'context') {
+          decorationRanges.context.push({ range });
+        }
+      } else if (currentTarget === 'human') {
+        if (currentPermission === 'r') {
+          decorationRanges.humanReadOnly.push({ range });
+        } else if (currentPermission === 'n') {
+          decorationRanges.humanNoAccess.push({ range });
+        }
+      }
+    }
+
+    // Apply decorations
+    activeEditor.setDecorations(aiOnlyDecoration, decorationRanges.aiWrite);
+    activeEditor.setDecorations(humanOnlyDecoration, decorationRanges.aiNoAccess);
+    activeEditor.setDecorations(mixedDecoration, []);
+    activeEditor.setDecorations(humanReadOnlyDecoration, decorationRanges.humanReadOnly);
+    activeEditor.setDecorations(humanNoAccessDecoration, decorationRanges.humanNoAccess);
+    activeEditor.setDecorations(contextDecoration, decorationRanges.context);
+  } catch (error) {
+    errorHandler.handleError(
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        operation: 'updateCodeDecorationsImpl',
+        details: { document: document.fileName }
+      }
     );
-
-    if (currentTarget === 'ai') {
-      if (currentPermission === 'w') {
-        decorationRanges.aiWrite.push({ range });
-      } else if (currentPermission === 'n') {
-        decorationRanges.aiNoAccess.push({ range });
-      } else if (currentPermission === 'context') {
-        decorationRanges.context.push({ range });
-      }
-    } else if (currentTarget === 'human') {
-      if (currentPermission === 'r') {
-        decorationRanges.humanReadOnly.push({ range });
-      } else if (currentPermission === 'n') {
-        decorationRanges.humanNoAccess.push({ range });
-      }
-    }
+    clearDecorations();
   }
-
-  // Apply decorations
-  activeEditor.setDecorations(aiOnlyDecoration, decorationRanges.aiWrite);
-  activeEditor.setDecorations(humanOnlyDecoration, decorationRanges.aiNoAccess);
-  activeEditor.setDecorations(mixedDecoration, []);
-  activeEditor.setDecorations(humanReadOnlyDecoration, decorationRanges.humanReadOnly);
-  activeEditor.setDecorations(humanNoAccessDecoration, decorationRanges.humanNoAccess);
-  activeEditor.setDecorations(contextDecoration, decorationRanges.context);
 }
 
 /**
@@ -379,70 +413,87 @@ function createStatusBarItem(_context: ExtensionContext) {
  * Updates the status bar item to show the current AI access level
  * @param document The active document
  */
-function updateStatusBarItem(document: TextDocument) {
-  if (!document || !statusBarItem) return;
-
-  // Get the text at the current cursor position
-  const activeEditor = window.activeTextEditor;
-  if (!activeEditor) {
-    statusBarItem.text = '$(shield) AI: Unknown';
-    return;
-  }
-
-  const text = document.getText();
-  if (!text) {
-    statusBarItem.text = '$(shield) AI: Default';
-    return;
-  }
-
-  // Scan the document to find the current AI access level at cursor
-  const cursorPosition = activeEditor.selection.active;
-  const cursorLine = cursorPosition.line;
-
-  const lines = text.split(/\r?\n/);
-  let currentAccess = 'Default';
-  let lineCount: number | undefined = undefined;
-
-  // Use shared functions to parse guard tags
-  let guardTags: GuardTag[] = [];
-  let linePermissions: ReturnType<typeof computeLinePermissions> = [];
-
+async function updateStatusBarItem(document: TextDocument) {
   try {
-    guardTags = parseGuardTags(document, lines);
-    linePermissions = computeLinePermissions(lines, guardTags);
-  } catch (error) {
-    logError(error, 'updateStatusBarItem', { showUser: false });
-    statusBarItem.text = '$(shield) AI: Error';
-    return;
-  }
+    if (!document || !statusBarItem) return;
 
-  // Get the permission at the cursor line
-  const cursorPermission = linePermissions[cursorLine];
+    // Get the text at the current cursor position
+    const activeEditor = window.activeTextEditor;
+    if (!activeEditor) {
+      statusBarItem.text = '$(shield) AI: Unknown';
+      return;
+    }
 
-  // Only show AI permissions in the status bar for now
-  if (cursorPermission && cursorPermission.target === 'ai') {
-    currentAccess =
+    const text = document.getText();
+    if (!text) {
+      statusBarItem.text = '$(shield) AI: Default';
+      return;
+    }
+
+    // Scan the document to find the current AI access level at cursor
+    const cursorPosition = activeEditor.selection.active;
+    const cursorLine = cursorPosition.line;
+
+    const lines = text.split(/\r?\n/);
+    let currentAccess = 'Default';
+    let lineCount: number | undefined = undefined;
+
+    // Use shared functions to parse guard tags
+    let guardTags: GuardTag[] = [];
+    let linePermissions: ReturnType<typeof computeLinePermissions> = [];
+
+    try {
+      guardTags = await parseGuardTags(document, lines);
+      linePermissions = computeLinePermissions(lines, guardTags);
+    } catch (error) {
+      errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          operation: 'parseGuardTags.statusBar',
+          details: { document: document.fileName }
+        }
+      );
+      statusBarItem.text = '$(shield) AI: Error';
+      return;
+    }
+
+    // Get the permission at the cursor line
+    const cursorPermission = linePermissions[cursorLine];
+
+    // Only show AI permissions in the status bar for now
+    if (cursorPermission && cursorPermission.target === 'ai') {
+      currentAccess =
       cursorPermission.permission === 'r' ? 'Read-Only' :
         cursorPermission.permission === 'w' ? 'Write' :
           cursorPermission.permission === 'n' ? 'No Access' :
             cursorPermission.permission === 'context' ? 'Context' : 'Default';
 
-    lineCount = cursorPermission.lineCount;
-  }
+      lineCount = cursorPermission.lineCount;
+    }
 
-  // Set status bar text with line count if present
-  const lineCountText = lineCount ? ` (${lineCount} lines)` : '';
-  statusBarItem.text = `$(shield) AI: ${currentAccess}${lineCountText}`;
+    // Set status bar text with line count if present
+    const lineCountText = lineCount ? ` (${lineCount} lines)` : '';
+    statusBarItem.text = `$(shield) AI: ${currentAccess}${lineCountText}`;
 
-  // Set color based on permission
-  if (currentAccess === 'Read-Only') {
-    statusBarItem.color = new ThemeColor('editor.foreground');
-  } else if (currentAccess === 'Write') {
-    statusBarItem.color = new ThemeColor('errorForeground');
-  } else if (currentAccess === 'No Access') {
-    statusBarItem.color = new ThemeColor('editorInfo.foreground');
-  } else if (currentAccess === 'Context') {
-    statusBarItem.color = new ThemeColor('textLink.foreground');
+    // Set color based on permission
+    if (currentAccess === 'Read-Only') {
+      statusBarItem.color = new ThemeColor('editor.foreground');
+    } else if (currentAccess === 'Write') {
+      statusBarItem.color = new ThemeColor('errorForeground');
+    } else if (currentAccess === 'No Access') {
+      statusBarItem.color = new ThemeColor('editorInfo.foreground');
+    } else if (currentAccess === 'Context') {
+      statusBarItem.color = new ThemeColor('textLink.foreground');
+    }
+  } catch (error) {
+    errorHandler.handleError(
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        operation: 'updateStatusBarItem',
+        details: { document: document.fileName }
+      }
+    );
+    statusBarItem.text = '$(shield) AI: Error';
   }
 }
 

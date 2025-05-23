@@ -1,4 +1,4 @@
-import { window } from 'vscode';
+import * as vscode from 'vscode';
 
 /**
  * Error severity levels
@@ -7,6 +7,15 @@ export enum ErrorSeverity {
   INFO = 'info',
   WARNING = 'warning',
   ERROR = 'error'
+}
+
+/**
+ * Error context for better debugging
+ */
+export interface ErrorContext {
+  operation: string;
+  details?: unknown;
+  userFriendlyMessage?: string;
 }
 
 /**
@@ -66,13 +75,17 @@ export function logError(
 
     switch (severity) {
       case ErrorSeverity.INFO:
-        void window.showInformationMessage(errorMessage);
+        void vscode.window.showInformationMessage(errorMessage);
         break;
       case ErrorSeverity.WARNING:
-        void window.showWarningMessage(errorMessage);
+        void vscode.window.showWarningMessage(errorMessage);
         break;
       case ErrorSeverity.ERROR:
-        void window.showErrorMessage(errorMessage);
+        void vscode.window.showErrorMessage(errorMessage, 'Show Logs').then(action => {
+          if (action === 'Show Logs') {
+            getOutputChannel().show();
+          }
+        });
         break;
     }
   }
@@ -161,3 +174,81 @@ export function validateDocument(document: unknown): document is { getText: () =
   const doc = document as { getText?: unknown; languageId?: unknown };
   return typeof doc.getText === 'function' && typeof doc.languageId === 'string';
 }
+
+// Create a singleton output channel for logging
+let outputChannel: vscode.OutputChannel | null = null;
+
+/**
+ * Get or create the output channel
+ */
+export function getOutputChannel(): vscode.OutputChannel {
+  if (!outputChannel) {
+    outputChannel = vscode.window.createOutputChannel('CodeGuard');
+  }
+  return outputChannel;
+}
+
+/**
+ * Enhanced error handler with better user feedback
+ */
+export class ErrorHandler {
+  private static instance: ErrorHandler;
+  private errorLog: Array<{ timestamp: Date; error: Error; context?: ErrorContext }> = [];
+
+  static getInstance(): ErrorHandler {
+    if (!ErrorHandler.instance) {
+      ErrorHandler.instance = new ErrorHandler();
+    }
+    return ErrorHandler.instance;
+  }
+
+  /**
+   * Handles errors with appropriate logging and user notification
+   */
+  handleError(error: Error, context?: ErrorContext): void {
+    // Log to internal error log
+    this.errorLog.push({ timestamp: new Date(), error, context });
+
+    // Log to output channel
+    this.logToOutput(error, context);
+
+    // Show user notification based on severity
+    if (context?.userFriendlyMessage) {
+      void vscode.window.showErrorMessage(context.userFriendlyMessage, 'Show Logs').then(action => {
+        if (action === 'Show Logs') {
+          getOutputChannel().show();
+        }
+      });
+    }
+  }
+
+  /**
+   * Shows informational messages to the user
+   */
+  showInfo(message: string): void {
+    void vscode.window.showInformationMessage(message);
+  }
+
+  /**
+   * Shows warning messages to the user
+   */
+  showWarning(message: string): void {
+    void vscode.window.showWarningMessage(message);
+  }
+
+  private logToOutput(error: Error, context?: ErrorContext): void {
+    const channel = getOutputChannel();
+    const timestamp = new Date().toISOString();
+    channel.appendLine(`[${timestamp}] ${context?.operation || 'Unknown Operation'}`);
+    channel.appendLine(`Error: ${error.message}`);
+    if (error.stack) {
+      channel.appendLine(`Stack: ${error.stack}`);
+    }
+    if (context?.details) {
+      channel.appendLine(`Details: ${JSON.stringify(context.details, null, 2)}`);
+    }
+    channel.appendLine('---');
+  }
+}
+
+export const errorHandler = ErrorHandler.getInstance();
