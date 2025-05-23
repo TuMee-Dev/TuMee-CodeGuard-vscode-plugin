@@ -17,6 +17,7 @@ import { performanceMonitor } from '@/utils/performanceMonitor';
 import { configValidator } from '@/utils/configValidator';
 import { backgroundProcessor } from '@/utils/backgroundProcessor';
 import { incrementalParser } from '@/utils/incrementalParser';
+import { registerValidationCommands } from '@/utils/validationMode';
 
 let disposables: Disposable[] = [];
 let aiOnlyDecoration: TextEditorDecorationType;
@@ -107,6 +108,10 @@ export async function activate(context: ExtensionContext) {
           performanceMonitor.showReport();
         })
       );
+
+      // Register validation commands (developer feature)
+      const validationDisposables = registerValidationCommands(context);
+      disposables.push(...validationDisposables);
 
       // Validate configuration on startup
       const validationResult = configValidator.validateConfiguration();

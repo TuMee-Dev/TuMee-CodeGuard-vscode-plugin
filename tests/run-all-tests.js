@@ -11,7 +11,9 @@ const fs = require('fs');
 const testFiles = [
   'guard-tags.test.js',
   'line-permissions.test.js', 
-  'semantic-scopes.test.js'
+  'semantic-scopes.test.js',
+  'validation-mode.test.js',
+  'validation-integration.test.js'
 ];
 
 console.log('TuMee VSCode Plugin Test Suite\n==============================\n');
@@ -45,7 +47,7 @@ testFiles.forEach(testFile => {
   console.log('─'.repeat(50));
   
   try {
-    const output = execSync(`node ${testPath}`, { 
+    const output = execSync(`node "${testPath}"`, { 
       cwd: __dirname,
       encoding: 'utf8'
     });
