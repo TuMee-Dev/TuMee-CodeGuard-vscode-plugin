@@ -26,7 +26,24 @@ export const GUARD_TAG_PATTERNS = {
   // Language-specific line count patterns
   LINE_COUNT: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)\.(\d+)/i,
   PYTHON_LINE_COUNT: /#\s*@guard:ai:(r|w|n)\.(\d+)/i,
-  JAVASCRIPT_LINE_COUNT: /\/\/\s*@guard:ai:(r|w|n)\.(\d+)/i
+  JAVASCRIPT_LINE_COUNT: /\/\/\s*@guard:ai:(r|w|n)\.(\d+)/i,
+
+  // Inline guard tag patterns for parseGuardTag function
+  PARSE_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human)(?:\[([^\]]+)\])?:(r|w|n|context)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/i,
+  PARSE_LEGACY_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(?:\.(\d+))?/i
+} as const;
+
+// Utility patterns
+export const UTILITY_PATTERNS = {
+  // Path normalization
+  BACKSLASH: /\\/g,
+  TRAILING_SLASH: /\/+$/,
+
+  // Line splitting
+  LINE_SPLIT: /\r?\n/,
+
+  // Numeric validation
+  NUMERIC_ONLY: /^\d+$/
 } as const;
 
 // Language-specific patterns for semantic scope detection

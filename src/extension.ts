@@ -10,6 +10,7 @@ import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
 import type { GuardTag } from '@/types/guardTypes';
 import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
+import { UTILITY_PATTERNS } from '@/utils/regexCache';
 
 let disposables: Disposable[] = [];
 let aiOnlyDecoration: TextEditorDecorationType;
@@ -240,7 +241,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     if (!activeEditor) return;
 
     const text = document.getText();
-    const lines = text.split(/\r?\n/);
+    const lines = text.split(UTILITY_PATTERNS.LINE_SPLIT);
 
     // Check if the document has any guard tags - if not, clear decorations and exit
     const isMarkdown = document.languageId === 'markdown';
@@ -434,7 +435,7 @@ async function updateStatusBarItem(document: TextDocument) {
     const cursorPosition = activeEditor.selection.active;
     const cursorLine = cursorPosition.line;
 
-    const lines = text.split(/\r?\n/);
+    const lines = text.split(UTILITY_PATTERNS.LINE_SPLIT);
     let currentAccess = 'Default';
     let lineCount: number | undefined = undefined;
 

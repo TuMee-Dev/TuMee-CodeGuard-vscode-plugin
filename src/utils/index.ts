@@ -1,5 +1,6 @@
 import type { ExtensionContext } from 'vscode';
 import { window } from 'vscode';
+import { UTILITY_PATTERNS } from './regexCache';
 
 export const EXTENSION_NAME = 'tumee-vscode-plugin';
 
@@ -8,7 +9,7 @@ export const getExtensionWithOptionalName = (name?: string): string => {
 };
 
 export const cleanPath = (path: string): string => {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '');
+  return path.replace(UTILITY_PATTERNS.BACKSLASH, '/').replace(UTILITY_PATTERNS.TRAILING_SLASH, '');
 };
 
 export const firstTimeRun = (context: ExtensionContext): void => {

@@ -70,12 +70,12 @@ export const parseGuardTag = (line: string): {
   type: string
 } | null => {
   // Try the new format first
-  const newFormatMatch = line.match(/(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human)(?:\[([^\]]+)\])?:(r|w|n|context)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/i);
+  const newFormatMatch = line.match(GUARD_TAG_PATTERNS.PARSE_GUARD_TAG);
   if (newFormatMatch) {
     const [, target, identifier, permission, scopeOrCount, addScopesStr, removeScopesStr] = newFormatMatch;
 
     // Check if scope is numeric (line count) or semantic
-    const isLineCount = scopeOrCount && /^\d+$/.test(scopeOrCount);
+    const isLineCount = scopeOrCount && GUARD_TAG_PATTERNS.NUMERIC_SCOPE.test(scopeOrCount);
 
     return {
       target: target.toLowerCase(),
@@ -90,7 +90,7 @@ export const parseGuardTag = (line: string): {
   }
 
   // Try legacy format for backwards compatibility
-  const legacyMatch = line.match(/(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(?:\.(\d+))?/i);
+  const legacyMatch = line.match(GUARD_TAG_PATTERNS.PARSE_LEGACY_GUARD_TAG);
   if (legacyMatch) {
     return {
       target: 'ai',

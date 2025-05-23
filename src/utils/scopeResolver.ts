@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import { getLanguagePatterns } from './regexCache';
+import { getLanguagePatterns, UTILITY_PATTERNS } from './regexCache';
 import { parseDocument, findNodeAtPosition, findParentOfType, getNodeBoundaries, initializeTreeSitter } from './treeSitterParser';
 import type { Node } from 'web-tree-sitter';
 
@@ -349,7 +349,7 @@ function resolveSemanticWithRegex(
 ): ScopeBoundary | null {
   const languageId = document.languageId;
   const text = document.getText();
-  const lines = text.split(/\r?\n/);
+  const lines = text.split(UTILITY_PATTERNS.LINE_SPLIT);
 
   // Simple implementation for common scopes
   switch (scope) {
