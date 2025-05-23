@@ -1,22 +1,32 @@
 // The final extension.ts file with thoroughly verified line count handling
 
-import type { Disposable, ExtensionContext } from "vscode";
-import { window, workspace, commands, ThemeColor, Position, Range, TextEditorDecorationType, StatusBarAlignment } from "vscode";
-import { registerFileDecorationProvider } from "@/tools/file-customization-provider";
-import { registerContextMenu } from "@/tools/register-context-menu";
-import { registerGuardTagCommands } from "@/tools/contextMenu/setGuardTags";
-import { firstTimeRun, getExtensionWithOptionalName } from "@/utils";
+import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, type StatusBarItem, window, workspace, commands, ThemeColor, Position, Range, StatusBarAlignment } from 'vscode';
+import { registerFileDecorationProvider } from '@/tools/file-customization-provider';
+import { registerContextMenu } from '@/tools/register-context-menu';
+import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
+import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
+import { parseGuardTags, computeLinePermissions } from '@/utils/guardProcessor';
+import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
+import type { GuardTag } from '@/types/guardTypes';
+import { logError } from '@/utils/errorHandler';
 
 let disposables: Disposable[] = [];
 let aiOnlyDecoration: TextEditorDecorationType;
 let humanOnlyDecoration: TextEditorDecorationType;
 let mixedDecoration: TextEditorDecorationType;
-let statusBarItem: any;
+let humanReadOnlyDecoration: TextEditorDecorationType;
+let humanNoAccessDecoration: TextEditorDecorationType;
+let contextDecoration: TextEditorDecorationType;
+let statusBarItem: StatusBarItem;
+
+// Debounce timer for decoration updates
+let decorationUpdateTimer: NodeJS.Timeout | undefined;
+const DECORATION_UPDATE_DELAY = 100; // milliseconds
 
 export function activate(context: ExtensionContext) {
   disposables = [];
 
-  const isEnabled = context.globalState.get("isEnabled");
+  const isEnabled = context.globalState.get('isEnabled');
 
   if (isEnabled !== false) {
     firstTimeRun(context);
@@ -26,14 +36,12 @@ export function activate(context: ExtensionContext) {
     disposables.push(disposable);
 
     // Register context menu commands
-    registerContextMenu(context, provider).then((newDisposables) => {
-      disposables.push(...newDisposables);
-    });
+    const contextMenuDisposables = registerContextMenu(context, provider);
+    disposables.push(...contextMenuDisposables);
 
     // Register guard tag commands for editor context menu
-    registerGuardTagCommands(context).then((guardDisposables) => {
-      disposables.push(...guardDisposables);
-    });
+    const guardDisposables = registerGuardTagCommands(context);
+    disposables.push(...guardDisposables);
 
     // Create decorations for code regions
     initializeCodeDecorations(context);
@@ -71,9 +79,9 @@ export function activate(context: ExtensionContext) {
   }
 }
 
-function initializeCodeDecorations(context: ExtensionContext) {
+function initializeCodeDecorations(_context: ExtensionContext) {
   // Get configured opacity
-  const opacity = workspace.getConfiguration(getExtensionWithOptionalName()).get<number>("codeDecorationOpacity") || 0.1;
+  const opacity = workspace.getConfiguration(getExtensionWithOptionalName()).get<number>('codeDecorationOpacity') || 0.1;
 
   // AI Write regions (red with transparency)
   aiOnlyDecoration = window.createTextEditorDecorationType({
@@ -108,15 +116,60 @@ function initializeCodeDecorations(context: ExtensionContext) {
     overviewRulerLane: 2,
   });
 
-  disposables.push(aiOnlyDecoration, humanOnlyDecoration, mixedDecoration);
+  // Human Read-Only regions (purple with transparency)
+  humanReadOnlyDecoration = window.createTextEditorDecorationType({
+    backgroundColor: `rgba(156, 39, 176, ${opacity})`, // Purple color for Human Read-Only
+    isWholeLine: true,
+    borderWidth: '0 0 0 3px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(156, 39, 176, 0.6)',
+    overviewRulerColor: new ThemeColor('tumee.humanReadOnly'),
+    overviewRulerLane: 2,
+  });
+
+  // Human No Access regions (orange with transparency)
+  humanNoAccessDecoration = window.createTextEditorDecorationType({
+    backgroundColor: `rgba(255, 152, 0, ${opacity})`, // Orange color for Human No Access
+    isWholeLine: true,
+    borderWidth: '0 0 0 3px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 152, 0, 0.6)',
+    overviewRulerColor: new ThemeColor('tumee.humanNoAccess'),
+    overviewRulerLane: 2,
+  });
+
+  // Context regions (light blue with transparency)
+  contextDecoration = window.createTextEditorDecorationType({
+    backgroundColor: `rgba(0, 188, 212, ${opacity})`, // Light blue color for Context
+    isWholeLine: true,
+    borderWidth: '0 0 0 3px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(0, 188, 212, 0.6)',
+    overviewRulerColor: new ThemeColor('tumee.context'),
+    overviewRulerLane: 2,
+  });
+
+  disposables.push(aiOnlyDecoration, humanOnlyDecoration, mixedDecoration, humanReadOnlyDecoration, humanNoAccessDecoration, contextDecoration);
 }
 
-function triggerUpdateDecorations(document: any) {
+function triggerUpdateDecorations(document: TextDocument) {
   if (!document) return;
 
   // Skip non-text files
   if (document.uri.scheme !== 'file') return;
 
+  // Clear any pending update
+  if (decorationUpdateTimer) {
+    clearTimeout(decorationUpdateTimer);
+  }
+
+  // Debounce the update
+  decorationUpdateTimer = setTimeout(() => {
+    updateCodeDecorations(document);
+  }, DECORATION_UPDATE_DELAY);
+}
+
+function updateCodeDecorations(document: TextDocument) {
   const text = document.getText();
   if (!text) return;
 
@@ -128,180 +181,75 @@ function triggerUpdateDecorations(document: any) {
   }
 
   // Process the document to apply decorations
-  updateCodeDecorations(document);
+  updateCodeDecorationsImpl(document);
 }
 
 /**
- * This function determines the effective permission for each line in the document
- * by parsing guard tags and then creates decoration ranges.
- * 
- * The algorithm exactly follows the verified implementation from focused-fix.js:
- * 1. Process unbounded regions to establish base permissions
- * 2. Find parent permissions for bounded regions 
- * 3. Apply bounded regions with reversion to parent permissions
- * 4. Skip empty lines at section boundaries
- * 
+ * Clear all decorations
+ */
+function clearDecorations() {
+  const activeEditor = window.activeTextEditor;
+  if (!activeEditor) return;
+
+  activeEditor.setDecorations(aiOnlyDecoration, []);
+  activeEditor.setDecorations(humanOnlyDecoration, []);
+  activeEditor.setDecorations(mixedDecoration, []);
+  activeEditor.setDecorations(humanReadOnlyDecoration, []);
+  activeEditor.setDecorations(humanNoAccessDecoration, []);
+  activeEditor.setDecorations(contextDecoration, []);
+}
+
+/**
+ * Implementation of code decoration updates
+ * This now uses the shared guard processing logic
+ *
  * @param document The active document
  */
-function updateCodeDecorations(document: any) {
+function updateCodeDecorationsImpl(document: TextDocument) {
   if (!document) return;
-  
+
   const activeEditor = window.activeTextEditor;
   if (!activeEditor) return;
 
   const text = document.getText();
   const lines = text.split(/\r?\n/);
-  const isMarkdown = document.languageId === 'markdown';
-  const isPython = document.languageId === 'python';
-  
-  // Define language-specific patterns - all have line count in capture group 3
-  const MARKDOWN_PATTERN = /<!--.*?@guard:ai:(r|w|n)(\.(\d+))?.*?-->/i;
-  const PYTHON_PATTERN = /#\s*@guard:ai:(r|w|n)(\.(\d+))?/i;
-  const GENERAL_PATTERN = /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(\.(\d+))?/i;
-  
+
   // Check if the document has any guard tags - if not, clear decorations and exit
+  const isMarkdown = document.languageId === 'markdown';
   let hasGuardTags = false;
-  
+
   if (isMarkdown) {
-    hasGuardTags = text.includes("@guard:ai:") && MARKDOWN_PATTERN.test(text);
-  } else if (isPython) {
-    hasGuardTags = text.includes("@guard:ai:") && PYTHON_PATTERN.test(text);
+    hasGuardTags = MARKDOWN_GUARD_TAG_REGEX.test(text);
   } else {
-    hasGuardTags = text.includes("@guard:ai:") && GENERAL_PATTERN.test(text);
+    hasGuardTags = GUARD_TAG_REGEX.test(text);
   }
-  
+
   if (!hasGuardTags) {
-    // No guard tags - clear decorations
-    activeEditor.setDecorations(aiOnlyDecoration, []);
-    activeEditor.setDecorations(humanOnlyDecoration, []);
-    activeEditor.setDecorations(mixedDecoration, []);
+    clearDecorations();
     return;
   }
-  
-  // First, find all guard tags and store their positions and permissions
-  const guardTags = [];
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    
-    // Match guard tag based on file type
-    let match = null;
-    if (isMarkdown) {
-      match = line.match(MARKDOWN_PATTERN);
-    } else if (isPython) {
-      match = line.match(PYTHON_PATTERN);
-    } else {
-      match = line.match(GENERAL_PATTERN);
-    }
-    
-    if (match) {
-      const permission = match[1].toLowerCase();
-      const lineCount = match[3] ? parseInt(match[3], 10) : undefined;
-      
-      guardTags.push({
-        lineNumber: i,
-        permission,
-        lineCount
-      });
-    }
-  }
-  
-  // STEP 1: Create a map of permissions for each line
-  const linePermissions = new Array(lines.length).fill('default');
-  
-  // Sort guard tags by line number to ensure we process them in order
-  guardTags.sort((a, b) => a.lineNumber - b.lineNumber);
-  
-  // First process all unbounded regions to establish base permissions
-  const basePermissions = new Array(lines.length).fill(null);
-  
-  for (let i = 0; i < guardTags.length; i++) {
-    const tag = guardTags[i];
-    
-    // Skip bounded regions for now
-    if (tag.lineCount !== undefined) continue;
-    
-    // For unbounded regions, apply from this line to the next guard tag
-    const startLine = tag.lineNumber;
-    let endLine;
-    
-    // Find the next guard tag (bounded or unbounded)
-    if (i < guardTags.length - 1) {
-      endLine = guardTags[i + 1].lineNumber;
-    } else {
-      endLine = lines.length;
-    }
-    
-    // Apply this permission to all lines in the range
-    for (let j = startLine; j < endLine; j++) {
-      basePermissions[j] = tag.permission;
-      linePermissions[j] = tag.permission;
-    }
-  }
-  
-  // STEP 2: Determine parent permissions for bounded regions
-  // For each bounded region, find the most recent unbounded region before it
-  const parentPermissions = new Map();
 
-  for (let i = 0; i < guardTags.length; i++) {
-    const tag = guardTags[i];
-    if (tag.lineCount === undefined) continue; // Skip unbounded regions
+  // Use shared functions to parse guard tags and compute line permissions
+  let guardTags: GuardTag[] = [];
+  let linePermissions: ReturnType<typeof computeLinePermissions> = [];
 
-    // Find the most recent unbounded region before this one
-    let parentPermission = 'default';
-    for (let j = 0; j < i; j++) {
-      const prevTag = guardTags[j];
-      if (prevTag.lineCount === undefined && prevTag.lineNumber < tag.lineNumber) {
-        parentPermission = prevTag.permission;
-      }
-    }
-
-    parentPermissions.set(tag.lineNumber, parentPermission);
-  }
-
-  // STEP 3: Process bounded regions (with line counts)
-  for (const tag of guardTags) {
-    if (tag.lineCount === undefined) continue; // Skip unbounded regions
-
-    const startLine = tag.lineNumber;
-    // Adding +1 so we count the line with the guard tag itself
-    const endLine = Math.min(startLine + tag.lineCount + 1, lines.length);
-
-    // Apply the bounded region's permission
-    for (let i = startLine; i < endLine; i++) {
-      linePermissions[i] = tag.permission;
-    }
-
-    // BUGFIX 1: After a bounded region ends, revert to the parent permission
-    if (endLine < lines.length) {
-      // Get the parent permission we determined earlier
-      const parentPermission = parentPermissions.get(startLine);
-      if (parentPermission) {
-        linePermissions[endLine] = parentPermission;
-      }
-    }
-  }
-  
-  // Apply base permissions to any lines that haven't been set yet
-  for (let i = 0; i < lines.length; i++) {
-    if (linePermissions[i] === 'default' && basePermissions[i]) {
-      linePermissions[i] = basePermissions[i];
-    }
-  }
-  
-  // BUGFIX 2: Make sure empty lines inherit permissions
-  // This is the fix for the second bug
-  for (let i = 1; i < lines.length; i++) {
-    if (linePermissions[i] === 'default' && i > 0 && linePermissions[i-1] !== 'default') {
-      // An empty or unprocessed line inherits from the previous line
-      linePermissions[i] = linePermissions[i-1];
-    }
+  try {
+    guardTags = parseGuardTags(document, lines);
+    linePermissions = computeLinePermissions(lines, guardTags);
+  } catch (error) {
+    logError(error, 'updateCodeDecorationsImpl', { showUser: false });
+    clearDecorations();
+    return;
   }
 
   // Now convert linePermissions to decoration ranges
-  // But exclude empty lines at the END of sections
-  const aiOnlyRanges: { range: Range }[] = [];
-  const humanOnlyRanges: { range: Range }[] = [];
+  const decorationRanges = {
+    aiWrite: [] as { range: Range }[],
+    aiNoAccess: [] as { range: Range }[],
+    humanReadOnly: [] as { range: Range }[],
+    humanNoAccess: [] as { range: Range }[],
+    context: [] as { range: Range }[]
+  };
 
   // Helper function to find the last non-empty line in a range
   function findLastNonEmptyLine(startLine: number, endLine: number): number {
@@ -315,86 +263,110 @@ function updateCodeDecorations(document: any) {
 
   // Process the line permissions into continuous ranges
   let currentStart = -1;
+  let currentTarget = '';
   let currentPermission = '';
 
   for (let i = 0; i < linePermissions.length; i++) {
-    const permission = linePermissions[i];
+    const perm = linePermissions[i];
+    const target = typeof perm === 'object' ? perm.target : 'ai';
+    const permission = typeof perm === 'object' ? perm.permission : perm;
 
-    if (permission !== currentPermission) {
+    // Check if we need to end the current range
+    if (target !== currentTarget || permission !== currentPermission) {
       // End previous range if it exists
       if (currentStart >= 0) {
-        // Find the last non-empty line before this permission change
         const lastContentLine = findLastNonEmptyLine(currentStart, i - 1);
-
-        // Create range that ends at the last content line, not including trailing empty lines
         const range = new Range(
           new Position(currentStart, 0),
           new Position(lastContentLine, lines[lastContentLine] ? lines[lastContentLine].length : 0)
         );
 
-        if (currentPermission === 'w') {
-          aiOnlyRanges.push({ range });
-        } else if (currentPermission === 'n') {
-          humanOnlyRanges.push({ range });
+        // Add range to appropriate decoration array
+        if (currentTarget === 'ai') {
+          if (currentPermission === 'w') {
+            decorationRanges.aiWrite.push({ range });
+          } else if (currentPermission === 'n') {
+            decorationRanges.aiNoAccess.push({ range });
+          } else if (currentPermission === 'context') {
+            decorationRanges.context.push({ range });
+          }
+        } else if (currentTarget === 'human') {
+          if (currentPermission === 'r') {
+            decorationRanges.humanReadOnly.push({ range });
+          } else if (currentPermission === 'n') {
+            decorationRanges.humanNoAccess.push({ range });
+          }
         }
       }
 
       // Start new range if this is a highlighted permission
-      if (permission === 'w' || permission === 'n') {
+      if (permission !== 'default' && permission !== 'r' && target) {
         currentStart = i;
+        currentTarget = target;
         currentPermission = permission;
       } else {
         currentStart = -1;
+        currentTarget = '';
         currentPermission = '';
       }
     }
   }
 
   // Handle the last range if it extends to the end of the file
-  if (currentStart >= 0 && currentPermission) {
-    // Find the last non-empty line in the file
+  if (currentStart >= 0 && currentTarget && currentPermission) {
     const lastContentLine = findLastNonEmptyLine(currentStart, lines.length - 1);
-
-    // Create range that ends at the last content line
     const range = new Range(
       new Position(currentStart, 0),
       new Position(lastContentLine, lines[lastContentLine] ? lines[lastContentLine].length : 0)
     );
 
-    if (currentPermission === 'w') {
-      aiOnlyRanges.push({ range });
-    } else if (currentPermission === 'n') {
-      humanOnlyRanges.push({ range });
+    if (currentTarget === 'ai') {
+      if (currentPermission === 'w') {
+        decorationRanges.aiWrite.push({ range });
+      } else if (currentPermission === 'n') {
+        decorationRanges.aiNoAccess.push({ range });
+      } else if (currentPermission === 'context') {
+        decorationRanges.context.push({ range });
+      }
+    } else if (currentTarget === 'human') {
+      if (currentPermission === 'r') {
+        decorationRanges.humanReadOnly.push({ range });
+      } else if (currentPermission === 'n') {
+        decorationRanges.humanNoAccess.push({ range });
+      }
     }
   }
-  
+
   // Apply decorations
-  activeEditor.setDecorations(aiOnlyDecoration, aiOnlyRanges);
-  activeEditor.setDecorations(humanOnlyDecoration, humanOnlyRanges);
+  activeEditor.setDecorations(aiOnlyDecoration, decorationRanges.aiWrite);
+  activeEditor.setDecorations(humanOnlyDecoration, decorationRanges.aiNoAccess);
   activeEditor.setDecorations(mixedDecoration, []);
+  activeEditor.setDecorations(humanReadOnlyDecoration, decorationRanges.humanReadOnly);
+  activeEditor.setDecorations(humanNoAccessDecoration, decorationRanges.humanNoAccess);
+  activeEditor.setDecorations(contextDecoration, decorationRanges.context);
 }
 
 /**
  * Creates the status bar item that shows the current AI access level
  * @param context The extension context
  */
-function createStatusBarItem(context: ExtensionContext) {
+function createStatusBarItem(_context: ExtensionContext) {
   statusBarItem = window.createStatusBarItem(StatusBarAlignment.Right, 100);
-  statusBarItem.command = "tumee-vscode-plugin.toggleAIAccess";
+  statusBarItem.command = 'tumee-vscode-plugin.toggleAIAccess';
 
   // Add command to toggle AI access level
-  const toggleDisposable = commands.registerCommand("tumee-vscode-plugin.toggleAIAccess", () => {
+  const toggleDisposable = commands.registerCommand('tumee-vscode-plugin.toggleAIAccess', () => {
     const items = [
-      { label: "AI Read-Only", permission: "r" },
-      { label: "AI Write Access", permission: "w" },
-      { label: "AI No Access", permission: "n" }
+      { label: 'AI Read-Only', permission: 'r' },
+      { label: 'AI Write Access', permission: 'w' },
+      { label: 'AI No Access', permission: 'n' }
     ];
 
-    window.showQuickPick(items, {
-      placeHolder: "Select AI Access Level"
+    void window.showQuickPick(items, {
+      placeHolder: 'Select AI Access Level'
     }).then(item => {
       if (item) {
-        commands.executeCommand(`tumee-vscode-plugin.setAI${item.permission === 'r' ? 'ReadOnly' : item.permission === 'w' ? 'Write' : 'NoAccess'}`);
+        void commands.executeCommand(`tumee-vscode-plugin.setAI${item.permission === 'r' ? 'ReadOnly' : item.permission === 'w' ? 'Write' : 'NoAccess'}`);
       }
     });
   });
@@ -407,19 +379,19 @@ function createStatusBarItem(context: ExtensionContext) {
  * Updates the status bar item to show the current AI access level
  * @param document The active document
  */
-function updateStatusBarItem(document: any) {
+function updateStatusBarItem(document: TextDocument) {
   if (!document || !statusBarItem) return;
 
   // Get the text at the current cursor position
   const activeEditor = window.activeTextEditor;
   if (!activeEditor) {
-    statusBarItem.text = `$(shield) AI: Unknown`;
+    statusBarItem.text = '$(shield) AI: Unknown';
     return;
   }
 
   const text = document.getText();
   if (!text) {
-    statusBarItem.text = `$(shield) AI: Default`;
+    statusBarItem.text = '$(shield) AI: Default';
     return;
   }
 
@@ -428,156 +400,56 @@ function updateStatusBarItem(document: any) {
   const cursorLine = cursorPosition.line;
 
   const lines = text.split(/\r?\n/);
-  let currentAccess = "Default";
-  let lineCount = undefined;
+  let currentAccess = 'Default';
+  let lineCount: number | undefined = undefined;
 
-  const isMarkdown = document.languageId === 'markdown';
-  const isPython = document.languageId === 'python';
-  
-  // Define language-specific patterns
-  const MARKDOWN_PATTERN = /<!--.*?@guard:ai:(r|w|n)(\.(\d+))?.*?-->/i;
-  const PYTHON_PATTERN = /#\s*@guard:ai:(r|w|n)(\.(\d+))?/i;
-  const GENERAL_PATTERN = /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(\.(\d+))?/i;
-  
-  // Use same approach as updateCodeDecorations
-  const guardTags = [];
-  
-  // Find all guard tags
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    
-    let match = null;
-    if (isMarkdown) {
-      match = line.match(MARKDOWN_PATTERN);
-    } else if (isPython) {
-      match = line.match(PYTHON_PATTERN);
-    } else {
-      match = line.match(GENERAL_PATTERN);
-    }
-    
-    if (match) {
-      const permission = match[1].toLowerCase();
-      const count = match[3] ? parseInt(match[3], 10) : undefined;
-      
-      guardTags.push({
-        lineNumber: i,
-        permission,
-        lineCount: count
-      });
-    }
-  }
-  
-  // Process just like in updateCodeDecorations but for a single line
-  // Create a permission map for every line
-  const linePermissions = new Array(lines.length).fill({ permission: 'default' });
+  // Use shared functions to parse guard tags
+  let guardTags: GuardTag[] = [];
+  let linePermissions: ReturnType<typeof computeLinePermissions> = [];
 
-  // Sort guard tags by line number
-  guardTags.sort((a, b) => a.lineNumber - b.lineNumber);
-
-  // Process unbounded regions first
-  const basePermissions = new Array(lines.length).fill(null);
-  
-  for (let i = 0; i < guardTags.length; i++) {
-    const tag = guardTags[i];
-    
-    // Skip bounded regions for now
-    if (tag.lineCount !== undefined) continue;
-    
-    // For unbounded regions, apply from this line to the next guard tag
-    const startLine = tag.lineNumber;
-    let endLine;
-    
-    // Find the next guard tag (bounded or unbounded)
-    if (i < guardTags.length - 1) {
-      endLine = guardTags[i + 1].lineNumber;
-    } else {
-      endLine = lines.length;
-    }
-    
-    // Apply this permission to all lines in the range
-    for (let j = startLine; j < endLine; j++) {
-      basePermissions[j] = tag.permission;
-      linePermissions[j] = { 
-        permission: tag.permission
-      };
-    }
-  }
-  
-  // Determine parent permissions for bounded regions
-  const parentPermissions = new Map();
-
-  for (let i = 0; i < guardTags.length; i++) {
-    const tag = guardTags[i];
-    if (tag.lineCount === undefined) continue; // Skip unbounded regions
-
-    // Find the most recent unbounded region before this one
-    let parentPermission = 'default';
-    for (let j = 0; j < i; j++) {
-      const prevTag = guardTags[j];
-      if (prevTag.lineCount === undefined && prevTag.lineNumber < tag.lineNumber) {
-        parentPermission = prevTag.permission;
-      }
-    }
-
-    parentPermissions.set(tag.lineNumber, parentPermission);
+  try {
+    guardTags = parseGuardTags(document, lines);
+    linePermissions = computeLinePermissions(lines, guardTags);
+  } catch (error) {
+    logError(error, 'updateStatusBarItem', { showUser: false });
+    statusBarItem.text = '$(shield) AI: Error';
+    return;
   }
 
-  // Process bounded regions (with line counts)
-  for (const tag of guardTags) {
-    if (tag.lineCount === undefined) continue; // Skip unbounded regions
+  // Get the permission at the cursor line
+  const cursorPermission = linePermissions[cursorLine];
 
-    const startLine = tag.lineNumber;
-    // Adding +1 so we count the line with the guard tag itself
-    const endLine = Math.min(startLine + tag.lineCount + 1, lines.length);
+  // Only show AI permissions in the status bar for now
+  if (cursorPermission && cursorPermission.target === 'ai') {
+    currentAccess =
+      cursorPermission.permission === 'r' ? 'Read-Only' :
+        cursorPermission.permission === 'w' ? 'Write' :
+          cursorPermission.permission === 'n' ? 'No Access' :
+            cursorPermission.permission === 'context' ? 'Context' : 'Default';
 
-    // Apply the bounded region's permission
-    for (let i = startLine; i < endLine; i++) {
-      linePermissions[i] = {
-        permission: tag.permission,
-        lineCount: tag.lineCount
-      };
-    }
-
-    // After a bounded region ends, revert to the parent permission
-    if (endLine < lines.length) {
-      // Get the parent permission we determined earlier
-      const parentPermission = parentPermissions.get(startLine);
-      if (parentPermission) {
-        linePermissions[endLine] = { 
-          permission: parentPermission
-        };
-      }
-    }
-  }
-  
-  // Get the permission at cursor position
-  if (cursorLine < linePermissions.length) {
-    const linePermission = linePermissions[cursorLine];
-    
-    currentAccess = 
-      linePermission.permission === 'r' ? "Read-Only" :
-      linePermission.permission === 'w' ? "Write" :
-      linePermission.permission === 'n' ? "No Access" : "Default";
-    
-    lineCount = linePermission.lineCount;
+    lineCount = cursorPermission.lineCount;
   }
 
   // Set status bar text with line count if present
   const lineCountText = lineCount ? ` (${lineCount} lines)` : '';
   statusBarItem.text = `$(shield) AI: ${currentAccess}${lineCountText}`;
-  
+
   // Set color based on permission
-  if (currentAccess === "Read-Only") {
+  if (currentAccess === 'Read-Only') {
     statusBarItem.color = new ThemeColor('editor.foreground');
-  } else if (currentAccess === "Write") {
+  } else if (currentAccess === 'Write') {
     statusBarItem.color = new ThemeColor('errorForeground');
-  } else if (currentAccess === "No Access") {
+  } else if (currentAccess === 'No Access') {
     statusBarItem.color = new ThemeColor('editorInfo.foreground');
+  } else if (currentAccess === 'Context') {
+    statusBarItem.color = new ThemeColor('textLink.foreground');
   }
 }
 
-export function deactivate() {
-  disposables.forEach((disposable) => disposable.dispose());
+export function deactivate(): void {
+  for (const disposable of disposables) {
+    disposable.dispose();
+  }
   disposables = [];
 
   if (statusBarItem) {

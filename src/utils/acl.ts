@@ -1,78 +1,124 @@
-import { promisify } from "util";
-import { exec as execCallback } from "child_process";
-import { Uri, workspace } from "vscode";
-import type { ACLStatus } from "@/types";
-import { cleanPath, getExtensionWithOptionalName } from ".";
+import { promisify } from 'util';
+import { exec as execCallback } from 'child_process';
+import { Uri, workspace } from 'vscode';
+import type { ACLStatus } from '@/types';
+import { cleanPath, getExtensionWithOptionalName } from '.';
+import { GUARD_TAG_PATTERNS } from './regexCache';
 
 const exec = promisify(execCallback);
+
+let lastCliAvailableCheck: boolean | null = null;
+let lastCliCheckTime = 0;
+const CLI_CHECK_CACHE_TIME = 5000; // Cache CLI availability check for 5 seconds
 
 /**
  * Gets the configured path to the ACL CLI tool
  */
 export const getAclCliPath = (): string => {
-  return workspace.getConfiguration(getExtensionWithOptionalName()).get<string>("aclCliPath") || "codeguard";
+  return workspace.getConfiguration(getExtensionWithOptionalName()).get<string>('aclCliPath') || 'codeguard';
+};
+
+/**
+ * Checks if the CodeGuard CLI is available
+ * @returns true if CLI is available, false otherwise
+ */
+export const isCliAvailable = async (): Promise<boolean> => {
+  // Use cached result if recent
+  const now = Date.now();
+  if (lastCliAvailableCheck !== null && (now - lastCliCheckTime) < CLI_CHECK_CACHE_TIME) {
+    return lastCliAvailableCheck;
+  }
+
+  try {
+    const cliPath = getAclCliPath();
+    await exec(`which ${cliPath}`);
+    lastCliAvailableCheck = true;
+    lastCliCheckTime = now;
+    return true;
+  } catch {
+    lastCliAvailableCheck = false;
+    lastCliCheckTime = now;
+    return false;
+  }
 };
 
 /**
  * Regular expressions for parsing guard tags in code
- * The format is @guard:ai:permission[.count] where permission can be r (read), w (write), or n (none)
- * and count is an optional number of lines this guard applies to.
- * This may be preceded by language-specific comment characters (e.g., //, #, --, *)
+ * These are now imported from regexCache.ts for better performance
  */
-export const GUARD_TAG_REGEX = /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(?:\.(\d+))?/gi;
-export const GUARD_TAG_NO_SPACE_REGEX = /(?:\/\/|#|--|\*)\s*@guard:ai:(r|w|n)(?:\.(\d+))?/gi;
-export const GUARD_TAG_LINE_REGEX = /.*@guard:ai:(r|w|n)(?:\.(\d+))?.*/gi;
-
-/**
- * Special regex for detecting guard tags with line counts.
- * These patterns are more strict and will match only when a line count is present.
- */
-export const LINE_COUNT_REGEX = /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)\.(\d+)/i;
-export const PYTHON_LINE_COUNT_REGEX = /#\s*@guard:ai:(r|w|n)\.(\d+)/i;
-export const JAVASCRIPT_LINE_COUNT_REGEX = /\/\/\s*@guard:ai:(r|w|n)\.(\d+)/i;
+export const GUARD_TAG_REGEX = GUARD_TAG_PATTERNS.GUARD_TAG;
+export const MARKDOWN_GUARD_TAG_REGEX = GUARD_TAG_PATTERNS.MARKDOWN_GUARD_TAG;
+export const LEGACY_GUARD_TAG_REGEX = GUARD_TAG_PATTERNS.LEGACY_GUARD_TAG;
+export const GUARD_TAG_NO_SPACE_REGEX = GUARD_TAG_PATTERNS.GUARD_TAG_NO_SPACE;
+export const GUARD_TAG_LINE_REGEX = GUARD_TAG_PATTERNS.GUARD_TAG_LINE;
+export const LINE_COUNT_REGEX = GUARD_TAG_PATTERNS.LINE_COUNT;
+export const PYTHON_LINE_COUNT_REGEX = GUARD_TAG_PATTERNS.PYTHON_LINE_COUNT;
+export const JAVASCRIPT_LINE_COUNT_REGEX = GUARD_TAG_PATTERNS.JAVASCRIPT_LINE_COUNT;
 
 /**
  * Helper function to parse a guard tag from a line of text
- * Returns the permission (r, w, n) and line count if present
+ * Returns the parsed guard tag information
  */
-export const parseGuardTag = (line: string): { permission: string, lineCount?: number, type: string } | null => {
-  // First try the Python-specific pattern
+export const parseGuardTag = (line: string): {
+  target: string,
+  identifier?: string,
+  permission: string,
+  scope?: string,
+  lineCount?: number,
+  addScopes?: string[],
+  removeScopes?: string[],
+  type: string
+} | null => {
+  // Try the new format first
+  const newFormatMatch = line.match(/(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human)(?:\[([^\]]+)\])?:(r|w|n|context)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/i);
+  if (newFormatMatch) {
+    const [, target, identifier, permission, scopeOrCount, addScopesStr, removeScopesStr] = newFormatMatch;
+
+    // Check if scope is numeric (line count) or semantic
+    const isLineCount = scopeOrCount && /^\d+$/.test(scopeOrCount);
+
+    return {
+      target: target.toLowerCase(),
+      identifier: identifier || undefined,
+      permission: permission.toLowerCase(),
+      scope: isLineCount ? undefined : scopeOrCount,
+      lineCount: isLineCount ? parseInt(scopeOrCount, 10) : undefined,
+      addScopes: addScopesStr ? addScopesStr.split('+').filter(s => s) : undefined,
+      removeScopes: removeScopesStr ? removeScopesStr.split('-').filter(s => s) : undefined,
+      type: 'new-format'
+    };
+  }
+
+  // Try legacy format for backwards compatibility
+  const legacyMatch = line.match(/(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(?:\.(\d+))?/i);
+  if (legacyMatch) {
+    return {
+      target: 'ai',
+      permission: legacyMatch[1].toLowerCase(),
+      lineCount: legacyMatch[2] ? parseInt(legacyMatch[2], 10) : undefined,
+      type: 'legacy'
+    };
+  }
+
+  // Try Python-specific pattern (legacy)
   const pythonMatch = line.match(PYTHON_LINE_COUNT_REGEX);
   if (pythonMatch) {
     return {
+      target: 'ai',
       permission: pythonMatch[1].toLowerCase(),
       lineCount: parseInt(pythonMatch[2], 10),
       type: 'python'
     };
   }
 
-  // Then try the JavaScript-specific pattern
+  // Try JavaScript-specific pattern (legacy)
   const jsMatch = line.match(JAVASCRIPT_LINE_COUNT_REGEX);
   if (jsMatch) {
     return {
+      target: 'ai',
       permission: jsMatch[1].toLowerCase(),
       lineCount: parseInt(jsMatch[2], 10),
       type: 'javascript'
-    };
-  }
-
-  // Then try the generic line count pattern
-  const lineCountMatch = line.match(LINE_COUNT_REGEX);
-  if (lineCountMatch) {
-    return {
-      permission: lineCountMatch[1].toLowerCase(),
-      lineCount: parseInt(lineCountMatch[2], 10),
-      type: 'generic'
-    };
-  }
-
-  // Finally try the regular guard tag pattern
-  const guardTagMatch = line.match(/(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(?:\.(\d+))?/i);
-  if (guardTagMatch) {
-    return {
-      permission: guardTagMatch[1].toLowerCase(),
-      lineCount: guardTagMatch[2] ? parseInt(guardTagMatch[2], 10) : undefined,
-      type: 'regular'
     };
   }
 
@@ -81,32 +127,36 @@ export const parseGuardTag = (line: string): { permission: string, lineCount?: n
 };
 
 /**
- * Special regex for markdown files - only matches guard tags inside HTML comments
- * The comment must begin with <!-- and can contain the guard tag
- * Line count is captured in the second capture group
- */
-export const MARKDOWN_GUARD_TAG_REGEX = /<!--.*?@guard:ai:(r|w|n)(\.(\d+))?.*?-->/gi;
-
-/**
  * Executes the CodeGuard CLI to get the ACL status for a given path
  * @param path The path to check ACL status for
  * @returns A promise that resolves to the ACL status
  */
 export const getAclStatus = async (path: string): Promise<ACLStatus | null> => {
+  const cleanedPath = cleanPath(path);
+
   try {
     const cliPath = getAclCliPath();
-    const cleanedPath = cleanPath(path);
+
+    // Check if CodeGuard CLI is available
+    try {
+      await exec(`which ${cliPath}`);
+    } catch {
+      console.warn(`CodeGuard CLI not found at: ${cliPath}. Returning null.`);
+      // Return null when CLI is not available - no coloring should happen
+      return null;
+    }
 
     const { stdout } = await exec(`${cliPath} -acl --format json "${cleanedPath}"`);
 
     try {
       return JSON.parse(stdout) as ACLStatus;
     } catch (e) {
-      console.error(`Error parsing ACL status: ${e}`);
+      console.error(`Error parsing ACL status: ${String(e)}`);
       return null;
     }
   } catch (error) {
     console.error(`Error getting ACL status: ${error instanceof Error ? error.message : String(error)}`);
+    // Return null on error - no coloring should happen
     return null;
   }
 };
@@ -122,6 +172,15 @@ export const setAclStatus = async (path: string, who: string, permission: string
   try {
     const cliPath = getAclCliPath();
     const cleanedPath = cleanPath(path);
+
+    // Check if CodeGuard CLI is available
+    try {
+      await exec(`which ${cliPath}`);
+    } catch {
+      console.warn(`CodeGuard CLI not found at: ${cliPath}. ACL update skipped.`);
+      // Return true to avoid breaking the workflow when CLI is not available
+      return true;
+    }
 
     try {
       // Determine if this is a file or directory to use the right command

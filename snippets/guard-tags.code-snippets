@@ -1,30 +1,86 @@
 {
   "AI Read-Only Guard": {
-    "prefix": "guard-r",
+    "prefix": "guard-ai-r",
     "body": [
       "// @guard:ai:r"
     ],
     "description": "Insert an AI read-only guard tag"
   },
   "AI Write Access Guard": {
-    "prefix": "guard-w",
+    "prefix": "guard-ai-w",
     "body": [
       "// @guard:ai:w"
     ],
     "description": "Insert an AI write access guard tag"
   },
   "AI No Access Guard": {
-    "prefix": "guard-n",
+    "prefix": "guard-ai-n",
     "body": [
       "// @guard:ai:n"
     ],
     "description": "Insert an AI no access guard tag"
   },
-  "AI Guard (Choose)": {
-    "prefix": "guard",
+  "AI Context Guard": {
+    "prefix": "guard-ai-context",
     "body": [
-      "// @guard:ai:${1|r,w,n|}"
+      "// @guard:ai:context"
     ],
-    "description": "Insert an AI guard tag with permission choice"
+    "description": "Insert an AI context guard tag"
+  },
+  "Human Read-Only Guard": {
+    "prefix": "guard-human-r",
+    "body": [
+      "// @guard:human:r"
+    ],
+    "description": "Insert a human read-only guard tag"
+  },
+  "Human No Access Guard": {
+    "prefix": "guard-human-n",
+    "body": [
+      "// @guard:human:n"
+    ],
+    "description": "Insert a human no access guard tag (for generated code)"
+  },
+  "AI Guard with Model": {
+    "prefix": "guard-ai-model",
+    "body": [
+      "// @guard:ai[${1:claude-4}]:${2|r,w,n,context|}"
+    ],
+    "description": "Insert an AI guard tag with specific model"
+  },
+  "Human Guard with Team": {
+    "prefix": "guard-human-team",
+    "body": [
+      "// @guard:human[${1:security-team}]:${2|r,w,n|}"
+    ],
+    "description": "Insert a human guard tag with specific team"
+  },
+  "AI Guard with Scope": {
+    "prefix": "guard-ai-scope",
+    "body": [
+      "// @guard:ai:${1|r,w,n|}.${2|func,class,block,sig,body,stmt,expr|}"
+    ],
+    "description": "Insert an AI guard tag with semantic scope"
+  },
+  "Custom Guard": {
+    "prefix": "guard-custom",
+    "body": [
+      "// @guard:${1|ai,human|}${2:[${3}]}:${4|r,w,n,context|}${5:.${6}}"
+    ],
+    "description": "Insert a custom guard tag"
+  },
+  "Multi-Target Guard": {
+    "prefix": "guard-multi",
+    "body": [
+      "// @guard:ai[${1:claude-4}]:${2|r,w|},human[${3:dev-team}]:${4|r,w|}"
+    ],
+    "description": "Insert a multi-target guard tag"
+  },
+  "Legacy AI Guard with Line Count": {
+    "prefix": "guard-lines",
+    "body": [
+      "// @guard:ai:${1|r,w,n|}.${2:5}"
+    ],
+    "description": "Insert an AI guard tag with line count (legacy format)"
   }
 }

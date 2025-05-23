@@ -1,15 +1,22 @@
-import type { Event, ExtensionContext, FileDecorationProvider, ProviderResult, Uri } from "vscode";
-import { EventEmitter, FileDecoration, ThemeColor, extensions, window, workspace } from "vscode";
-import type { Change, ExtensionItem, GitAPIState, GitRepository } from "@/types";
-import { cleanPath, getAclStatus, getExtensionWithOptionalName } from "@/utils";
+import type { Event, ExtensionContext, FileDecorationProvider, Uri } from 'vscode';
+import { EventEmitter, FileDecoration, ThemeColor, extensions, window, workspace } from 'vscode';
+import type { Change, ExtensionItem, GitAPIState, GitRepository } from '@/types';
+import { cleanPath, getAclStatus, getExtensionWithOptionalName } from '@/utils';
+import { isCliAvailable, getAclCliPath } from '@/utils/acl';
+import { commands } from 'vscode';
 
-const GIT_EXTENSION_ID = "vscode.git";
+const GIT_EXTENSION_ID = 'vscode.git';
 const GIT_API_VERSION = 1;
+
+// CLI notification tracking
+const CLI_NOTIFICATION_KEY = 'lastCliNotificationTime';
+const CLI_NOTIFICATION_INTERVAL = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 export class FileCustomizationProvider implements FileDecorationProvider {
   private readonly _onDidChangeFileDecorations: EventEmitter<Uri | Uri[] | undefined> = new EventEmitter<
     Uri | Uri[] | undefined
   >();
+  private context: ExtensionContext | undefined;
 
   get onDidChangeFileDecorations() {
     return this._onDidChangeFileDecorations.event;
@@ -27,10 +34,12 @@ export class FileCustomizationProvider implements FileDecorationProvider {
     const gitExtension = extensions.getExtension(GIT_EXTENSION_ID);
 
     if (gitExtension) {
-      const activeGitExtension = gitExtension.isActive ? gitExtension.exports : await gitExtension.activate();
+      const activeGitExtension = (gitExtension.isActive ? gitExtension.exports : await gitExtension.activate()) as unknown;
 
-      if (activeGitExtension) {
-        this._gitAPI = activeGitExtension.getAPI(GIT_API_VERSION);
+      if (activeGitExtension && typeof activeGitExtension === 'object' && 'getAPI' in activeGitExtension) {
+        // Type assertion is necessary here as VS Code's git extension API is not fully typed
+        const gitAPI = (activeGitExtension as { getAPI: (version: number) => unknown }).getAPI(GIT_API_VERSION) as typeof this._gitAPI;
+        this._gitAPI = gitAPI;
 
         this._gitAPI?.onDidChangeState(() => {
           this.fireOnChange();
@@ -70,13 +79,14 @@ export class FileCustomizationProvider implements FileDecorationProvider {
     this._onDidChangeFileDecorations.fire(undefined);
   }
 
-  constructor() {
-    this.initializeGitAPI();
+  constructor(context?: ExtensionContext) {
+    this.context = context;
+    void this.initializeGitAPI();
 
     workspace.onDidChangeConfiguration((e) => {
       if (
-        e.affectsConfiguration(getExtensionWithOptionalName("items")) ||
-        e.affectsConfiguration(getExtensionWithOptionalName("colorChangedFiles"))
+        e.affectsConfiguration(getExtensionWithOptionalName('items')) ||
+        e.affectsConfiguration(getExtensionWithOptionalName('colorChangedFiles'))
       ) {
         this.fireOnChange();
       }
@@ -97,14 +107,41 @@ export class FileCustomizationProvider implements FileDecorationProvider {
     return changes.length === 0
       ? false
       : changes.some((change) => {
-          return (
-            change.uri.path === uri.path ||
+        return (
+          change.uri.path === uri.path ||
             change.uri.path.includes(uri.path) ||
             (change.originalUri &&
               (change.originalUri.path === uri.path || change.originalUri.path.includes(uri.path))) ||
             (change.renameUri && (change.renameUri.path === uri.path || change.renameUri.path.includes(uri.path)))
-          );
-        });
+        );
+      });
+  }
+
+  /**
+   * Shows a notification about CLI not being available, but only once every 10 minutes
+   */
+  private async showCliNotAvailableNotification(): Promise<void> {
+    if (!this.context) return;
+
+    const lastNotificationTime = this.context.globalState.get<number>(CLI_NOTIFICATION_KEY) || 0;
+    const now = Date.now();
+
+    if (now - lastNotificationTime < CLI_NOTIFICATION_INTERVAL) {
+      return; // Don't show if we've shown recently
+    }
+
+    await this.context.globalState.update(CLI_NOTIFICATION_KEY, now);
+
+    const cliPath = getAclCliPath();
+
+    void window.showWarningMessage(
+      `CodeGuard CLI not found at '${cliPath}'. File coloring disabled.`,
+      'Open Settings'
+    ).then(action => {
+      if (action === 'Open Settings') {
+        void commands.executeCommand('workbench.action.openSettings', 'tumee-vscode-plugin.aclCliPath');
+      }
+    });
   }
 
   /**
@@ -116,27 +153,29 @@ export class FileCustomizationProvider implements FileDecorationProvider {
     if (!aclCode) {
       return undefined;
     }
-    
-    const hasAI = aclCode.includes("AI-ED");
-    const hasHuman = aclCode.includes("HU-ED");
-    
+
+    const hasAI = aclCode.includes('AI-ED');
+    const hasHuman = aclCode.includes('HU-ED');
+
     if (hasAI && hasHuman) {
-      return "tumee.humanAI";
+      return 'tumee.humanAI';
     } else if (hasAI) {
-      return "tumee.ai";
-    } else if (hasHuman) {
-      return "tumee.human";
+      return 'tumee.ai';
     }
-    
+    // Don't color human-only files
+    // else if (hasHuman) {
+    //   return 'tumee.human';
+    // }
+
     return undefined;
   }
 
   public async getDecorationValue(uri: Uri): Promise<{ color?: ThemeColor; badge?: string; tooltip?: string } | null> {
     const items =
-      workspace.getConfiguration(getExtensionWithOptionalName()).get<Array<ExtensionItem>>("items") || [];
+      workspace.getConfiguration(getExtensionWithOptionalName()).get<Array<ExtensionItem>>('items') || [];
     const ignoreChangedFiles = workspace
       .getConfiguration(getExtensionWithOptionalName())
-      .get<boolean>("colorChangedFiles");
+      .get<boolean>('colorChangedFiles');
 
     const isUriChanged = this.isUriChanged(uri, ignoreChangedFiles);
     const projectPath = cleanPath(uri.fsPath);
@@ -160,7 +199,7 @@ export class FileCustomizationProvider implements FileDecorationProvider {
       items
         .filter((item) =>
           projectPath.includes(item.path) &&
-          (item.type === "any" || (isDirectory && item.type === "folder") || (!isDirectory && item.type === "file"))
+          (item.type === 'any' || (isDirectory && item.type === 'folder') || (!isDirectory && item.type === 'file'))
         )
         .sort((a, b) => b.path.length - a.path.length)
       : [];
@@ -173,30 +212,46 @@ export class FileCustomizationProvider implements FileDecorationProvider {
     const firstMatchWithBadge = matchItems.find((item) => item.badge);
     const firstMatchWithTooltip = matchItems.find((item) => item.tooltip);
 
-    // Get the ACL status from CodeGuard CLI
-    const aclStatus = await getAclStatus(projectPath);
-    const aclColorId = this.getColorFromACL(aclStatus?.code || null);
+    // Check if CLI is available before trying to get ACL status
+    let aclColorId: string | undefined;
+    let tooltipText: string | undefined;
+    const cliAvailable = await isCliAvailable();
+
+    if (!cliAvailable) {
+      // Show notification (rate-limited to once per 10 minutes)
+      void this.showCliNotAvailableNotification();
+      // Don't apply ACL-based coloring when CLI is not available
+      aclColorId = undefined;
+    } else {
+      // Get the ACL status from CodeGuard CLI
+      const aclStatus = await getAclStatus(projectPath);
+      aclColorId = this.getColorFromACL(aclStatus?.code || null);
+
+      // Create tooltip string based on ACL status
+      if (aclStatus && aclStatus.status === 'success') {
+        if (!firstMatchWithTooltip || !firstMatchWithTooltip.tooltip || firstMatchWithTooltip.tooltip === '__blocked__') {
+          tooltipText = `AI: ${aclStatus.permissions.ai}, Human: ${aclStatus.permissions.human}`;
+        }
+      }
+    }
 
     // Determine the final color - give priority to manually set color over ACL-based color
     let finalColorId: string | undefined;
 
-    if (firstMatchWithColor && firstMatchWithColor.color !== "__blocked__" && !isUriChanged) {
+    if (firstMatchWithColor && firstMatchWithColor.color !== '__blocked__' && !isUriChanged) {
       finalColorId = firstMatchWithColor.color;
     } else if (aclColorId && !isUriChanged) {
       finalColorId = aclColorId;
     }
 
-    // Create tooltip string
-    let tooltipText: string | undefined;
-    if (firstMatchWithTooltip && firstMatchWithTooltip.tooltip && firstMatchWithTooltip.tooltip !== "__blocked__") {
+    // Override with manual tooltip if available
+    if (firstMatchWithTooltip && firstMatchWithTooltip.tooltip && firstMatchWithTooltip.tooltip !== '__blocked__') {
       tooltipText = firstMatchWithTooltip.tooltip;
-    } else if (aclStatus && aclStatus.status === "success") {
-      tooltipText = `AI: ${aclStatus.permissions.ai}, Human: ${aclStatus.permissions.human}`;
     }
 
     // Create badge
     const badge = firstMatchWithBadge?.badge;
-    const badgeText = badge && badge !== "__blocked__" && badge.length > 0 && badge.length <= 2 ? badge : undefined;
+    const badgeText = badge && badge !== '__blocked__' && badge.length > 0 && badge.length <= 2 ? badge : undefined;
 
     // Only return a decoration if we have at least one attribute to show
     if (finalColorId || badgeText || tooltipText) {
@@ -225,7 +280,7 @@ export class FileCustomizationProvider implements FileDecorationProvider {
 }
 
 export const registerFileDecorationProvider = (context: ExtensionContext) => {
-  const provider = new FileCustomizationProvider();
+  const provider = new FileCustomizationProvider(context);
   const disposable = window.registerFileDecorationProvider(provider);
   context.subscriptions.push(disposable);
 

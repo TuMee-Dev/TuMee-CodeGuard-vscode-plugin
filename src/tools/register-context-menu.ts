@@ -1,4 +1,4 @@
-import type { ExtensionContext } from "vscode";
+import type { ExtensionContext } from 'vscode';
 import {
   blockBadge,
   clearACL,
@@ -9,18 +9,18 @@ import {
   resetWorkspace,
   setAsAI,
   setAsHuman,
-} from "@/tools/contextMenu/noInteraction";
-import setColor from "@/tools/contextMenu/setColor";
-import setEmojiBadge from "@/tools/contextMenu/setEmojiBadge";
-import setTextBadge from "@/tools/contextMenu/setTextBadge";
-import setTooltip from "@/tools/contextMenu/setTooltip";
-import type { FileCustomizationProvider } from "@/tools/file-customization-provider";
+} from '@/tools/contextMenu/noInteraction';
+import setColor from '@/tools/contextMenu/setColor';
+import setEmojiBadge from '@/tools/contextMenu/setEmojiBadge';
+import setTextBadge from '@/tools/contextMenu/setTextBadge';
+import setTooltip from '@/tools/contextMenu/setTooltip';
+import type { FileCustomizationProvider } from '@/tools/file-customization-provider';
 
-export const registerContextMenu = async (context: ExtensionContext, provider: FileCustomizationProvider) => {
+export const registerContextMenu = (context: ExtensionContext, provider: FileCustomizationProvider) => {
   const disposables = [
     setColor(provider, context),
     clearColor(provider),
-    
+
     setAsHuman(provider),
     setAsAI(provider),
     clearACL(provider),

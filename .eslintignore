@@ -1,0 +1,9 @@
+node_modules/
+dist/
+out/
+.vscode-test/
+*.js
+webpack.config.js
+tests/
+backups/
+Plugin/

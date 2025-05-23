@@ -1,32 +1,31 @@
-import type { ExtensionContext, Uri } from "vscode";
-import { commands, window, workspace } from "vscode";
-import { updateConfigForAll } from "@/utils/config";
-import { filterUris } from "@/utils/fs";
-import type { FileCustomizationProvider } from "@/tools/file-customization-provider";
-import { cleanPath, getColorsForPicker, getExtensionWithOptionalName } from "@/utils";
-import type { ExtensionItemInput } from "@/types";
+import { type ExtensionContext, type Uri, commands, window, workspace } from 'vscode';
+import { updateConfigForAll } from '@/utils/config';
+import { filterUris } from '@/utils/fs';
+import type { FileCustomizationProvider } from '@/tools/file-customization-provider';
+import { cleanPath, getColorsForPicker, getExtensionWithOptionalName } from '@/utils';
+import type { ExtensionItemInput } from '@/types';
 
 const disposable = (provider: FileCustomizationProvider, context: ExtensionContext) =>
-  commands.registerCommand(getExtensionWithOptionalName("setColor"), async (_, uris: Array<Uri>) => {
+  commands.registerCommand(getExtensionWithOptionalName('setColor'), async (_, uris: Array<Uri>) => {
     const filtered = await filterUris(uris);
     if (!filtered.length) {
       return;
     }
 
-    const availableColors = await getColorsForPicker(context);
+    const availableColors = getColorsForPicker(context);
     const selected = await window.showQuickPick(availableColors, {
-      placeHolder: "Select a color",
+      placeHolder: 'Select a color',
     });
 
     if (!selected) {
       return;
     }
 
-    const colorValue = selected.description === "__custom__"
+    const colorValue = selected.description === '__custom__'
       ? await window.showInputBox({
-          placeHolder: "Enter a color (e.g., #RRGGBB or a predefined theme color)",
-          prompt: "Enter a custom color value",
-        })
+        placeHolder: 'Enter a color (e.g., #RRGGBB or a predefined theme color)',
+        prompt: 'Enter a custom color value',
+      })
       : selected.description;
 
     if (!colorValue) {
@@ -42,7 +41,7 @@ const disposable = (provider: FileCustomizationProvider, context: ExtensionConte
         return {
           path: cleanPath(uri.fsPath),
           color: colorValue,
-          type: isDirectory ? "folder" : "file",
+          type: isDirectory ? 'folder' : 'file',
         } as ExtensionItemInput;
       } catch (error) {
         console.error(`Error getting file stat: ${error instanceof Error ? error.message : String(error)}`);

@@ -1,30 +1,29 @@
-import type { ExtensionContext } from "vscode";
-import { QuickPickItem, window, workspace } from "vscode";
-import type { ExtensionItem, ExtensionItemInput } from "@/types";
-import { getExtensionWithOptionalName } from ".";
-import type { FileDecorationProvider } from "vscode";
+import type { ExtensionContext, QuickPickItem } from 'vscode';
+import { workspace } from 'vscode';
+import type { ExtensionItem, ExtensionItemInput } from '@/types';
+import { getExtensionWithOptionalName } from '.';
 
-export const getColorsForPicker = async (context: ExtensionContext): Promise<Array<QuickPickItem>> => {
+export const getColorsForPicker = (_context: ExtensionContext): Array<QuickPickItem> => {
   const pickItems = [
     {
-      label: "Human-Editable",
-      description: "tumee.human",
-      detail: "Files and folders that are editable by humans only",
+      label: 'Human-Editable',
+      description: 'tumee.human',
+      detail: 'Files and folders that are editable by humans only',
     },
     {
-      label: "AI-Editable",
-      description: "tumee.ai",
-      detail: "Files and folders that are editable by AI only",
+      label: 'AI-Editable',
+      description: 'tumee.ai',
+      detail: 'Files and folders that are editable by AI only',
     },
     {
-      label: "Human and AI Editable",
-      description: "tumee.humanAI",
-      detail: "Files and folders that are editable by both humans and AI",
+      label: 'Human and AI Editable',
+      description: 'tumee.humanAI',
+      detail: 'Files and folders that are editable by both humans and AI',
     },
     {
-      label: "Custom Color",
-      description: "__custom__",
-      detail: "Pick a custom color",
+      label: 'Custom Color',
+      description: '__custom__',
+      detail: 'Pick a custom color',
     },
   ];
 
@@ -33,12 +32,12 @@ export const getColorsForPicker = async (context: ExtensionContext): Promise<Arr
 
 export const updateConfig = (
   item: ExtensionItemInput,
-  opts: { provider?: any } = {},
+  opts: { provider?: { fireOnChange: () => void } } = {},
 ): boolean => {
   const { provider } = opts;
 
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
-  const items = config.get<Array<ExtensionItem>>("items") || [];
+  const items = config.get<Array<ExtensionItem>>('items') || [];
 
   const itemWithSamePath = items.findIndex((f) => f.path === item.path);
 
@@ -82,7 +81,7 @@ export const updateConfig = (
     items[itemWithSamePath] = folder;
   }
 
-  config.update("items", items).then(() => {
+  void config.update('items', items).then(() => {
     if (provider && typeof provider.fireOnChange === 'function') {
       provider.fireOnChange();
     }
@@ -93,20 +92,20 @@ export const updateConfig = (
 
 export const updateConfigForAll = (
   items: Array<ExtensionItemInput>,
-  opts: { provider?: any } = {},
+  opts: { provider?: { fireOnChange: () => void } } = {},
 ): boolean => {
   return items.every((item) => updateConfig(item, opts));
 };
 
-export const removePathFromConfig = (path: string, opts: { provider?: any } = {}): boolean => {
+export const removePathFromConfig = (path: string, opts: { provider?: { fireOnChange: () => void } } = {}): boolean => {
   const { provider } = opts;
 
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
-  const folders = config.get<Array<ExtensionItem>>("items") || [];
+  const folders = config.get<Array<ExtensionItem>>('items') || [];
 
   const newFolders = folders.filter((f) => f.path !== path);
 
-  config.update("items", newFolders).then(() => {
+  void config.update('items', newFolders).then(() => {
     if (provider && typeof provider.fireOnChange === 'function') {
       provider.fireOnChange();
     }
@@ -115,12 +114,12 @@ export const removePathFromConfig = (path: string, opts: { provider?: any } = {}
   return true;
 };
 
-export const removeAllFromConfig = (opts: { provider?: any } = {}): boolean => {
+export const removeAllFromConfig = (opts: { provider?: { fireOnChange: () => void } } = {}): boolean => {
   const { provider } = opts;
 
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
 
-  config.update("items", []).then(() => {
+  void config.update('items', []).then(() => {
     if (provider && typeof provider.fireOnChange === 'function') {
       provider.fireOnChange();
     }
@@ -131,7 +130,7 @@ export const removeAllFromConfig = (opts: { provider?: any } = {}): boolean => {
 
 export const getCustomizationForPath = (path: string): ExtensionItem | null => {
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
-  const items = config.get<Array<ExtensionItem>>("items") || [];
+  const items = config.get<Array<ExtensionItem>>('items') || [];
 
   const item = items.find((f) => f.path === path);
 

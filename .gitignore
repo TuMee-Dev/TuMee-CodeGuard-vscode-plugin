@@ -4,6 +4,7 @@ out/
 node_modules/
 .vscode-test/
 *.vsix
+.vscode/settings.json
 
 # Backup files
 backups/

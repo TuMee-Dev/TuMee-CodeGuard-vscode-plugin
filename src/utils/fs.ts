@@ -1,5 +1,5 @@
-import type { Uri } from "vscode";
-import { workspace } from "vscode";
+import type { Uri } from 'vscode';
+import { workspace } from 'vscode';
 
 /**
  * Filters an array of Uris to only include those that exist

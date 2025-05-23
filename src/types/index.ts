@@ -1,15 +1,15 @@
-import type { Uri } from "vscode";
+import type { Uri } from 'vscode';
 
-export type ItemType = "file" | "folder" | "any";
+export type ItemType = 'file' | 'folder' | 'any';
 
 export type ACLStatus = {
   path: string;
   permissions: {
-    ai: "read-only" | "editable" | "fixed" | "none"; 
-    human: "read-only" | "editable" | "fixed" | "none";
+    ai: 'read-only' | 'editable' | 'fixed' | 'none';
+    human: 'read-only' | 'editable' | 'fixed' | 'none';
   };
   code: string; // Short form like "AI-RO:HU-ED"
-  status: "success" | "error";
+  status: 'success' | 'error';
 };
 
 export type ExtensionItem = {
@@ -32,7 +32,7 @@ export type ExtensionItemInput = {
   isHuman?: boolean | null;
 };
 
-export type GitAPIState = "uninitialized" | "initialized";
+export type GitAPIState = 'uninitialized' | 'initialized';
 
 export interface GitRepository {
   state: GitRepositoryState;

@@ -1,12 +1,10 @@
-import type { Uri } from "vscode";
-import { commands } from "vscode";
-import { clearAclStatus, getExtensionWithOptionalName, removeAllFromConfig, removePathFromConfig, setAclStatus, updateConfigForAll } from "@/utils";
-import { filterUris } from "@/utils/fs";
-import type { FileCustomizationProvider } from "@/tools/file-customization-provider";
-import { cleanPath } from "@/utils";
+import { type Uri, commands } from 'vscode';
+import { clearAclStatus, getExtensionWithOptionalName, removeAllFromConfig, removePathFromConfig, setAclStatus, updateConfigForAll, cleanPath } from '@/utils';
+import { filterUris } from '@/utils/fs';
+import type { FileCustomizationProvider } from '@/tools/file-customization-provider';
 
 export const clearColor = (provider: FileCustomizationProvider) =>
-  commands.registerCommand(getExtensionWithOptionalName("clearColor"), async (_, uris: Array<Uri>) => {
+  commands.registerCommand(getExtensionWithOptionalName('clearColor'), async (_, uris: Array<Uri>) => {
     const filtered = await filterUris(uris);
     if (!filtered.length) {
       return;
@@ -22,7 +20,7 @@ export const clearColor = (provider: FileCustomizationProvider) =>
   });
 
 export const blockBadge = (provider: FileCustomizationProvider) =>
-  commands.registerCommand(getExtensionWithOptionalName("blockBadge"), async (_, uris: Array<Uri>) => {
+  commands.registerCommand(getExtensionWithOptionalName('blockBadge'), async (_, uris: Array<Uri>) => {
     const filtered = await filterUris(uris);
     if (!filtered.length) {
       return;
@@ -31,14 +29,14 @@ export const blockBadge = (provider: FileCustomizationProvider) =>
     updateConfigForAll(
       filtered.map((uri) => ({
         path: cleanPath(uri.fsPath),
-        badge: "__blocked__",
+        badge: '__blocked__',
       })),
       { provider },
     );
   });
 
 export const clearBadge = (provider: FileCustomizationProvider) =>
-  commands.registerCommand(getExtensionWithOptionalName("clearBadge"), async (_, uris: Array<Uri>) => {
+  commands.registerCommand(getExtensionWithOptionalName('clearBadge'), async (_, uris: Array<Uri>) => {
     const filtered = await filterUris(uris);
     if (!filtered.length) {
       return;
@@ -54,7 +52,7 @@ export const clearBadge = (provider: FileCustomizationProvider) =>
   });
 
 export const clearTooltip = (provider: FileCustomizationProvider) =>
-  commands.registerCommand(getExtensionWithOptionalName("clearTooltip"), async (_, uris: Array<Uri>) => {
+  commands.registerCommand(getExtensionWithOptionalName('clearTooltip'), async (_, uris: Array<Uri>) => {
     const filtered = await filterUris(uris);
     if (!filtered.length) {
       return;
@@ -70,7 +68,7 @@ export const clearTooltip = (provider: FileCustomizationProvider) =>
   });
 
 export const clearCustomization = (provider: FileCustomizationProvider) =>
-  commands.registerCommand(getExtensionWithOptionalName("clearCustomization"), async (_, uris: Array<Uri>) => {
+  commands.registerCommand(getExtensionWithOptionalName('clearCustomization'), async (_, uris: Array<Uri>) => {
     const filtered = await filterUris(uris);
     if (!filtered.length) {
       return;
@@ -82,75 +80,75 @@ export const clearCustomization = (provider: FileCustomizationProvider) =>
   });
 
 export const resetWorkspace = (provider: FileCustomizationProvider) =>
-  commands.registerCommand(getExtensionWithOptionalName("resetWorkspace"), async () => {
+  commands.registerCommand(getExtensionWithOptionalName('resetWorkspace'), () => {
     removeAllFromConfig({ provider });
   });
 
 export const setAsHuman = (provider: FileCustomizationProvider) =>
-  commands.registerCommand(getExtensionWithOptionalName("setAsHuman"), async (_, uris: Array<Uri>) => {
+  commands.registerCommand(getExtensionWithOptionalName('setAsHuman'), async (_, uris: Array<Uri>) => {
     const filtered = await filterUris(uris);
     if (!filtered.length) {
       return;
     }
 
-    filtered.forEach(async (uri) => {
+    await Promise.all(filtered.map(async (uri) => {
       const path = cleanPath(uri.fsPath);
-      
+
       // Set ACL using the command-line tool
-      await setAclStatus(path, "HU", "ED");
-      
+      await setAclStatus(path, 'HU', 'ED');
+
       // Update visual customization
       updateConfigForAll(
         [{
           path: path,
           isHuman: true,
           isAI: false,
-          color: "tumee.human"
+          color: 'tumee.human'
         }],
         { provider },
       );
-    });
+    }));
   });
 
 export const setAsAI = (provider: FileCustomizationProvider) =>
-  commands.registerCommand(getExtensionWithOptionalName("setAsAI"), async (_, uris: Array<Uri>) => {
+  commands.registerCommand(getExtensionWithOptionalName('setAsAI'), async (_, uris: Array<Uri>) => {
     const filtered = await filterUris(uris);
     if (!filtered.length) {
       return;
     }
 
-    filtered.forEach(async (uri) => {
+    await Promise.all(filtered.map(async (uri) => {
       const path = cleanPath(uri.fsPath);
-      
+
       // Set ACL using the command-line tool
-      await setAclStatus(path, "AI", "ED");
-      
+      await setAclStatus(path, 'AI', 'ED');
+
       // Update visual customization
       updateConfigForAll(
         [{
           path: path,
           isHuman: false,
           isAI: true,
-          color: "tumee.ai"
+          color: 'tumee.ai'
         }],
         { provider },
       );
-    });
+    }));
   });
 
 export const clearACL = (provider: FileCustomizationProvider) =>
-  commands.registerCommand(getExtensionWithOptionalName("clearACL"), async (_, uris: Array<Uri>) => {
+  commands.registerCommand(getExtensionWithOptionalName('clearACL'), async (_, uris: Array<Uri>) => {
     const filtered = await filterUris(uris);
     if (!filtered.length) {
       return;
     }
 
-    filtered.forEach(async (uri) => {
+    await Promise.all(filtered.map(async (uri) => {
       const path = cleanPath(uri.fsPath);
-      
+
       // Clear ACL using the command-line tool
       await clearAclStatus(path);
-      
+
       // Update visual customization
       updateConfigForAll(
         [{
@@ -161,5 +159,5 @@ export const clearACL = (provider: FileCustomizationProvider) =>
         }],
         { provider },
       );
-    });
+    }));
   });

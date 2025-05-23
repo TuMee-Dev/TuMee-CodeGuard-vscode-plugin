@@ -28,11 +28,7 @@
   ],
   "pricing": "Free",
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:tumee-vscode-plugin.setAIReadOnly",
-    "onCommand:tumee-vscode-plugin.setAIWrite",
-    "onCommand:tumee-vscode-plugin.setAINoAccess",
-    "onCommand:tumee-vscode-plugin.toggleAIAccess"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "snippets": [
@@ -62,8 +58,8 @@
           "type": "number",
           "description": "The opacity of the code region decorations (0.0 to 1.0)",
           "default": 0.1,
-          "minimum": 0.0,
-          "maximum": 1.0
+          "minimum": 0,
+          "maximum": 1
         },
         "tumee-vscode-plugin.items": {
           "type": "array",
@@ -320,7 +316,11 @@
     "watch": "webpack --watch --mode development",
     "package": "webpack --mode production --devtool hidden-source-map",
     "lint": "eslint src --ext ts",
-    "test": "node ./tests/line-count/focused-fix.js"
+    "lint:fix": "eslint src --ext ts --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "node ./tests/integration.test.js",
+    "test:old": "node ./tests/line-count/focused-fix.js",
+    "precommit": "npm run lint && npm run typecheck && npm run test"
   },
   "devDependencies": {
     "@types/node": "^20.17.46",
@@ -332,5 +332,8 @@
     "typescript": "^5.4.5",
     "webpack": "^5.99.8",
     "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "web-tree-sitter": "^0.25.4"
   }
 }
