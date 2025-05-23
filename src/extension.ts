@@ -14,6 +14,9 @@ import { UTILITY_PATTERNS } from '@/utils/regexCache';
 import { registerColorCustomizerCommand, type GuardColors } from '@/tools/colorCustomizer';
 import { disposeACLCache } from '@/utils/aclCache';
 import { performanceMonitor } from '@/utils/performanceMonitor';
+import { configValidator } from '@/utils/configValidator';
+import { backgroundProcessor } from '@/utils/backgroundProcessor';
+import { incrementalParser } from '@/utils/incrementalParser';
 
 let disposables: Disposable[] = [];
 let aiOnlyDecoration: TextEditorDecorationType;
@@ -29,6 +32,10 @@ let decorationUpdateTimer: NodeJS.Timeout | undefined;
 
 // Performance optimization: track document versions to avoid redundant processing
 const processedDocumentVersions = new WeakMap<TextDocument, number>();
+
+// Track document change events for incremental parsing
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const documentChangeEvents = new WeakMap<TextDocument, any>();
 
 export async function activate(context: ExtensionContext) {
   try {
@@ -92,6 +99,21 @@ export async function activate(context: ExtensionContext) {
         })
       );
 
+      // Validate configuration on startup
+      const validationResult = configValidator.validateConfiguration();
+      if (!validationResult.valid) {
+        configValidator.showValidationErrors(validationResult);
+        // Auto-fix if possible
+        void configValidator.autoFixConfiguration();
+      }
+
+      // Watch for configuration changes
+      disposables.push(
+        workspace.onDidChangeConfiguration(event => {
+          configValidator.handleConfigurationChange(event);
+        })
+      );
+
       // Set up listeners for active editor
       const activeEditor = window.activeTextEditor;
       if (activeEditor) {
@@ -104,6 +126,9 @@ export async function activate(context: ExtensionContext) {
         workspace.onDidChangeTextDocument(event => {
           const activeEditor = window.activeTextEditor;
           if (activeEditor && event.document === activeEditor.document) {
+            // Store the change event for incremental parsing
+            documentChangeEvents.set(event.document, event);
+
             // Track modified lines for partial cache invalidation
             for (const change of event.contentChanges) {
               const startLine = change.range.start.line;
@@ -128,6 +153,15 @@ export async function activate(context: ExtensionContext) {
             triggerUpdateDecorations(editor.document);
             void updateStatusBarItem(editor.document);
           }
+        })
+      );
+
+      // Clear incremental parser cache when documents are closed
+      disposables.push(
+        workspace.onDidCloseTextDocument(document => {
+          incrementalParser.clearCache(document);
+          documentChangeEvents.delete(document);
+          processedDocumentVersions.delete(document);
         })
       );
 
@@ -260,11 +294,26 @@ function triggerUpdateDecorations(document: TextDocument) {
 
   // Debounce the update
   decorationUpdateTimer = setTimeout(() => {
-    updateCodeDecorations(document);
+    // For large files, queue as background task
+    const text = document.getText();
+    const isLargeFile = text.length > 100000; // 100KB
+
+    if (isLargeFile) {
+      void backgroundProcessor.queueTask({
+        id: `updateDecorations-${document.fileName}`,
+        execute: async () => {
+          await updateCodeDecorations(document);
+        },
+        priority: 1,
+        showProgress: false
+      });
+    } else {
+      void updateCodeDecorations(document);
+    }
   }, delay);
 }
 
-function updateCodeDecorations(document: TextDocument) {
+async function updateCodeDecorations(document: TextDocument): Promise<void> {
   // Check if we've already processed this document version
   const currentVersion = document.version;
   const lastProcessedVersion = processedDocumentVersions.get(document);
@@ -293,7 +342,7 @@ function updateCodeDecorations(document: TextDocument) {
   processedDocumentVersions.set(document, currentVersion);
 
   // Process the document to apply decorations
-  void updateCodeDecorationsImpl(document);
+  await updateCodeDecorationsImpl(document);
 }
 
 /**
@@ -362,35 +411,56 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
     try {
       const config = workspace.getConfiguration(getExtensionWithOptionalName());
+      const enableIncremental = config.get<boolean>('enableIncrementalParsing', true);
       const enableChunked = config.get<boolean>('enableChunkedProcessing', true);
       const chunkSize = config.get<number>('chunkSize', 1000);
 
-      // Use chunked processing for large files
-      if (enableChunked && lines.length > chunkSize * 2) {
-        // Show progress notification for very large files
-        const showProgress = lines.length > 10000;
+      // Use incremental parsing if enabled and we have a change event
+      if (enableIncremental) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const changeEvent = documentChangeEvents.get(document);
+        performanceMonitor.startTimer('incrementalParse');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        guardTags = await incrementalParser.parseIncremental(document, changeEvent);
+        performanceMonitor.endTimer('incrementalParse', {
+          lines: lines.length,
+          incremental: !!changeEvent,
+          cached: incrementalParser.getCacheStats()
+        });
 
-        performanceMonitor.startTimer('parseGuardTagsChunked');
-        if (showProgress) {
-          await window.withProgress({
-            location: ProgressLocation.Notification,
-            title: 'Processing guard tags...',
-            cancellable: false
-          }, async (progress) => {
-            guardTags = await parseGuardTagsChunked(document, lines, chunkSize, (processed, total) => {
-              const percentage = Math.round((processed / total) * 100);
-              progress.report({ increment: percentage / 100, message: `${percentage}%` });
-            });
-            return guardTags;
-          });
-        } else {
-          guardTags = await parseGuardTagsChunked(document, lines, chunkSize);
+        // Clear the change event after use
+        if (changeEvent) {
+          documentChangeEvents.delete(document);
         }
-        performanceMonitor.endTimer('parseGuardTagsChunked', { lines: lines.length, chunked: true });
       } else {
-        performanceMonitor.startTimer('parseGuardTags');
-        guardTags = await parseGuardTags(document, lines);
-        performanceMonitor.endTimer('parseGuardTags', { lines: lines.length, chunked: false });
+        // Fallback to regular parsing
+        // Use chunked processing for large files
+        if (enableChunked && lines.length > chunkSize * 2) {
+          // Show progress notification for very large files
+          const showProgress = lines.length > 10000;
+
+          performanceMonitor.startTimer('parseGuardTagsChunked');
+          if (showProgress) {
+            await window.withProgress({
+              location: ProgressLocation.Notification,
+              title: 'Processing guard tags...',
+              cancellable: false
+            }, async (progress) => {
+              guardTags = await parseGuardTagsChunked(document, lines, chunkSize, (processed, total) => {
+                const percentage = Math.round((processed / total) * 100);
+                progress.report({ increment: percentage / 100, message: `${percentage}%` });
+              });
+              return guardTags;
+            });
+          } else {
+            guardTags = await parseGuardTagsChunked(document, lines, chunkSize);
+          }
+          performanceMonitor.endTimer('parseGuardTagsChunked', { lines: lines.length, chunked: true });
+        } else {
+          performanceMonitor.startTimer('parseGuardTags');
+          guardTags = await parseGuardTags(document, lines);
+          performanceMonitor.endTimer('parseGuardTags', { lines: lines.length, chunked: false });
+        }
       }
 
       performanceMonitor.startTimer('computeLinePermissions');
@@ -675,4 +745,7 @@ export function deactivate(): void {
 
   // Dispose performance monitor
   performanceMonitor.dispose();
+
+  // Clear background processor queue
+  backgroundProcessor.clearQueue();
 }
