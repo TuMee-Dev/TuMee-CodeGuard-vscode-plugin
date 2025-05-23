@@ -16,11 +16,18 @@ const regexCacheSource = fs.readFileSync(
   'utf8'
 );
 
-// Extract patterns using regex
+// Extract patterns from TypeScript object notation
 const extractPattern = (name) => {
-  const match = regexCacheSource.match(new RegExp(`${name}:\\s*\/(.*?)\/([gim]*),?`, 's'));
+  // Match pattern in TypeScript object: NAME: /pattern/flags,
+  const regex = new RegExp(`${name}:\\s*\/((?:[^/\\\\]|\\\\.)*)\\/([gimsu]*)(?:,|\\s*(?:\/\/|$))`, 'm');
+  const match = regexCacheSource.match(regex);
   if (match) {
-    return new RegExp(match[1], match[2]);
+    try {
+      return new RegExp(match[1], match[2]);
+    } catch (e) {
+      console.error(`Failed to compile pattern ${name}:`, e.message);
+      return null;
+    }
   }
   return null;
 };
@@ -107,24 +114,46 @@ console.log('\n3. Line Permission Logic:');
 
 // Simulate line permission computation
 function computeSimplePermissions(lines) {
-  const permissions = new Array(lines.length).fill({ permission: 'default', target: null });
+  // Create individual objects for each line to avoid shared reference issues
+  const permissions = [];
+  const boundedLines = new Set(); // Track which lines are in bounded regions
+  
+  for (let i = 0; i < lines.length; i++) {
+    permissions.push({ permission: 'default', target: null });
+  }
+  
   let currentPermission = { permission: 'default', target: null };
   
+  // First pass: mark bounded regions
+  for (let i = 0; i < lines.length; i++) {
+    const tag = parseGuardTag(lines[i]);
+    if (tag && tag.scope && !isNaN(parseInt(tag.scope))) {
+      const lineCount = parseInt(tag.scope);
+      for (let j = i; j <= i + lineCount && j < lines.length; j++) {
+        boundedLines.add(j);
+      }
+    }
+  }
+  
+  // Second pass: apply permissions
   for (let i = 0; i < lines.length; i++) {
     const tag = parseGuardTag(lines[i]);
     
     if (tag) {
       if (tag.scope && !isNaN(parseInt(tag.scope))) {
-        // Bounded region
+        // Bounded region - applies to current line and next N lines
         const lineCount = parseInt(tag.scope);
-        for (let j = i; j <= i + lineCount && j < lines.length; j++) {
+        permissions[i] = { permission: tag.permission, target: tag.target };
+        for (let j = i + 1; j <= i + lineCount && j < lines.length; j++) {
           permissions[j] = { permission: tag.permission, target: tag.target };
         }
       } else {
-        // Unbounded region
+        // Unbounded region - update current permission and apply to this line
         currentPermission = { permission: tag.permission, target: tag.target };
+        permissions[i] = { permission: tag.permission, target: tag.target };
       }
-    } else if (currentPermission.permission !== 'default') {
+    } else if (!boundedLines.has(i) && currentPermission.permission !== 'default') {
+      // No tag on this line and not in a bounded region, use current unbounded permission
       permissions[i] = currentPermission;
     }
   }
@@ -144,19 +173,22 @@ const testDoc = [
 
 const perms = computeSimplePermissions(testDoc);
 const expectedPerms = [
-  { line: 1, permission: 'w', target: 'ai' },
-  { line: 2, permission: 'w', target: 'ai' },
-  { line: 3, permission: 'r', target: 'ai' },
-  { line: 4, permission: 'r', target: 'ai' },
-  { line: 5, permission: 'r', target: 'ai' },
-  { line: 6, permission: 'w', target: 'ai' }
+  { line: 0, permission: 'default', target: null }, // Before any guard tag
+  { line: 1, permission: 'w', target: 'ai' },       // Guard tag line itself
+  { line: 2, permission: 'w', target: 'ai' },       // Following unbounded guard
+  { line: 3, permission: 'r', target: 'ai' },       // Guard tag with .2 (line 1 of bounded region)
+  { line: 4, permission: 'r', target: 'ai' },       // Within bounded region (line 2 of bounded region)
+  { line: 5, permission: 'r', target: 'ai' },       // Last line of bounded region (line 3 total: tag + 2 more)
+  { line: 6, permission: 'w', target: 'ai' }        // Back to unbounded region
 ];
 
 let permsPassed = true;
+let debugOutput = [];
 expectedPerms.forEach(expected => {
   const actual = perms[expected.line];
   if (actual.permission !== expected.permission || actual.target !== expected.target) {
     permsPassed = false;
+    debugOutput.push(`    Line ${expected.line}: expected ${expected.target}:${expected.permission}, got ${actual.target}:${actual.permission}`);
   }
 });
 
@@ -165,6 +197,9 @@ if (permsPassed) {
   passed++;
 } else {
   console.log('  ❌ Line permission computation failed');
+  if (debugOutput.length > 0) {
+    debugOutput.forEach(line => console.log(line));
+  }
   failed++;
 }
 
@@ -190,11 +225,17 @@ console.log('\n5. Legacy Format Support:');
 const legacyPattern = PATTERNS.LEGACY_GUARD_TAG;
 if (legacyPattern) {
   legacyPattern.lastIndex = 0;
-  if (legacyPattern.test('// @guard:ai:r') && legacyPattern.test('# @guard:human:w')) {
+  const test1 = legacyPattern.test('// @guard:ai:r');
+  legacyPattern.lastIndex = 0; // Reset lastIndex for global regex
+  const test2 = legacyPattern.test('# @guard:human:w');
+  
+  if (test1 && test2) {
     console.log('  ✅ Legacy patterns work');
     passed++;
   } else {
     console.log('  ❌ Legacy pattern matching failed');
+    console.log(`    Test 1 (// @guard:ai:r): ${test1}`);
+    console.log(`    Test 2 (# @guard:human:w): ${test2}`);
     failed++;
   }
 } else {
