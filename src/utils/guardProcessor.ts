@@ -7,27 +7,80 @@ import { logError, validateDocument, GuardProcessingError, ErrorSeverity } from 
 // Cache for scope resolutions to avoid recalculating on every keystroke
 const scopeCacheMap = new WeakMap<vscode.TextDocument, ScopeCache>();
 
+// Track which lines have been modified for smarter cache invalidation
+const modifiedLinesMap = new WeakMap<vscode.TextDocument, Set<number>>();
+
 /**
  * Clear the scope cache for a document
  */
 export function clearScopeCache(document: vscode.TextDocument): void {
   scopeCacheMap.delete(document);
+  modifiedLinesMap.delete(document);
 }
 
 /**
- * Get or create scope cache for a document
+ * Mark lines as modified for partial cache invalidation
+ * @param document The document being edited
+ * @param startLine Starting line of the modification
+ * @param endLine Ending line of the modification
+ */
+export function markLinesModified(document: vscode.TextDocument, startLine: number, endLine: number): void {
+  let modifiedLines = modifiedLinesMap.get(document);
+  if (!modifiedLines) {
+    modifiedLines = new Set<number>();
+    modifiedLinesMap.set(document, modifiedLines);
+  }
+
+  // Mark range of lines as modified
+  for (let i = startLine; i <= endLine; i++) {
+    modifiedLines.add(i);
+  }
+}
+
+/**
+ * Get or create scope cache for a document with partial invalidation
  */
 function getScopeCache(document: vscode.TextDocument): ScopeCache {
   const version = document.version;
   let cache = scopeCacheMap.get(document);
 
-  // If cache doesn't exist or document version changed, create new cache
-  if (!cache || cache.documentVersion !== version) {
+  // If cache doesn't exist, create new cache
+  if (!cache) {
     cache = {
       documentVersion: version,
       scopes: new Map()
     };
     scopeCacheMap.set(document, cache);
+  } else if (cache.documentVersion !== version) {
+    // Document version changed - perform partial invalidation
+    const modifiedLines = modifiedLinesMap.get(document);
+
+    if (modifiedLines && modifiedLines.size > 0) {
+      // Only invalidate cache entries for modified lines
+      const newScopes = new Map<string, ScopeBoundary | null>();
+
+      for (const [key, value] of cache.scopes) {
+        const lineNum = parseInt(key.split(':')[0]);
+
+        // Keep cache entry if line wasn't modified
+        if (!modifiedLines.has(lineNum)) {
+          newScopes.set(key, value);
+        }
+      }
+
+      cache.scopes = newScopes;
+      cache.documentVersion = version;
+
+      // Clear modified lines tracking
+      modifiedLines.clear();
+    } else {
+      // No tracking info, fall back to full invalidation
+      cache = {
+        documentVersion: version,
+        scopes: new Map()
+      };
+      scopeCacheMap.set(document, cache);
+    }
   }
 
   return cache;
@@ -55,6 +108,121 @@ async function resolveSemanticWithCache(
   const result = await resolveSemantic(document, line, scope, addScopes, removeScopes);
   cache.scopes.set(cacheKey, result);
   return result;
+}
+
+/**
+ * Parse guard tags from document lines in chunks for better performance
+ * @param document The document to parse
+ * @param lines All lines in the document
+ * @param chunkSize Number of lines to process at once (default: 1000)
+ * @param onProgress Optional callback to report progress
+ */
+export async function parseGuardTagsChunked(
+  document: vscode.TextDocument,
+  lines: string[],
+  chunkSize: number = 1000,
+  onProgress?: (processed: number, total: number) => void
+): Promise<GuardTag[]> {
+  // Validate input
+  if (!validateDocument(document)) {
+    throw new GuardProcessingError('Invalid document object', ErrorSeverity.ERROR);
+  }
+
+  if (!Array.isArray(lines)) {
+    throw new GuardProcessingError('Invalid lines array', ErrorSeverity.ERROR);
+  }
+
+  const guardTags: GuardTag[] = [];
+  const totalLines = lines.length;
+
+  try {
+    for (let chunkStart = 0; chunkStart < totalLines; chunkStart += chunkSize) {
+      const chunkEnd = Math.min(chunkStart + chunkSize, totalLines);
+
+      // Process chunk
+      for (let i = chunkStart; i < chunkEnd; i++) {
+        const line = lines[i];
+
+        // Skip empty or invalid lines
+        if (typeof line !== 'string') {
+          logError(
+            new GuardProcessingError(`Invalid line at index ${i}`, ErrorSeverity.WARNING),
+            'parseGuardTagsChunked'
+          );
+          continue;
+        }
+
+        const tagInfo = parseGuardTag(line);
+
+        if (tagInfo) {
+          // If there's a semantic scope, resolve it to line numbers
+          if (tagInfo.scope && !tagInfo.lineCount) {
+            const scopeBoundary = await resolveSemanticWithCache(
+              document,
+              i,
+              tagInfo.scope,
+              tagInfo.addScopes,
+              tagInfo.removeScopes
+            );
+
+            if (scopeBoundary) {
+              // For semantic scopes, we need to handle the range differently
+              guardTags.push({
+                lineNumber: scopeBoundary.startLine,
+                target: tagInfo.target as 'ai' | 'human',
+                identifier: tagInfo.identifier,
+                permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
+                scope: tagInfo.scope,
+                lineCount: scopeBoundary.endLine - scopeBoundary.startLine + 1,
+                addScopes: tagInfo.addScopes,
+                removeScopes: tagInfo.removeScopes,
+                scopeStart: scopeBoundary.startLine,
+                scopeEnd: scopeBoundary.endLine
+              });
+            } else {
+              // If scope resolution fails, treat as unbounded
+              guardTags.push({
+                lineNumber: i,
+                target: tagInfo.target as 'ai' | 'human',
+                identifier: tagInfo.identifier,
+                permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
+                scope: tagInfo.scope,
+                lineCount: tagInfo.lineCount,
+                addScopes: tagInfo.addScopes,
+                removeScopes: tagInfo.removeScopes
+              });
+            }
+          } else {
+            // Regular line count or unbounded
+            guardTags.push({
+              lineNumber: i,
+              target: tagInfo.target as 'ai' | 'human',
+              identifier: tagInfo.identifier,
+              permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
+              scope: tagInfo.scope,
+              lineCount: tagInfo.lineCount,
+              addScopes: tagInfo.addScopes,
+              removeScopes: tagInfo.removeScopes
+            });
+          }
+        } // Close if (tagInfo)
+      }
+
+      // Report progress if callback provided
+      if (onProgress) {
+        onProgress(chunkEnd, totalLines);
+      }
+
+      // Yield to allow other operations
+      await new Promise(resolve => setImmediate(resolve));
+    }
+  } catch (error) {
+    logError(error, 'parseGuardTagsChunked', { showUser: false });
+    // Return what we've parsed so far
+    return guardTags;
+  }
+
+  return guardTags;
 }
 
 /**

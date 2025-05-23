@@ -23,30 +23,83 @@ This extension integrates with the CodeGuard ACL system to automatically coloriz
 
 The extension highlights code regions based on @guard tags with different colors:
 
-- 🟢 **Human-editable regions**: Light green background
-- 🟣 **AI-editable regions**: Light purple background
-- 🔵 **Both human and AI editable**: Light blue background
+- 🔴 **AI Write Access** (`@guard:ai:w`): Red background - AI can modify this code
+- 🟢 **AI No Access** (`@guard:ai:n`): Green background - AI should not access this code
+- 🟣 **Human Read-Only** (`@guard:human:r`): Purple background - Humans can read but not modify
+- 🟠 **Human No Access** (`@guard:human:n`): Orange background - Humans should not modify this code
+- 🔵 **Context Information** (`@guard:ai:context`): Cyan background - Provides context for AI/humans
 
 Example of guard tag usage:
 
 ```js
-// @guard:ai:r
-// This region can only be read by AI (AI read-only)
-function aiReadOnlyFunction() {
-    // AI can read but not modify this code
-}
-
 // @guard:ai:w
-// This region can be written by AI (AI can edit)
-function aiWritableFunction() {
+// This region can be written by AI (AI can edit) - RED highlight
+function aiEditableFunction() {
     // AI can modify this code
+    return processData();
 }
 
 // @guard:ai:n
-// This region cannot be accessed by AI at all
-const noAiAccessConfig = {
+// This region cannot be accessed by AI at all - GREEN highlight
+const secretApiKey = 'sk-12345';
+const privateConfig = {
     // AI should not use or reference this code
 };
+
+// @guard:human:r
+// This region is read-only for humans - PURPLE highlight
+function criticalSystemFunction() {
+    // Humans can read but not modify this code
+    performCriticalOperation();
+}
+
+// @guard:ai:w
+// Another AI-editable region - RED highlight
+class DataProcessor {
+    processInput(data) {
+        // AI can help improve this logic
+        return data.map(item => item * 2);
+    }
+}
+
+// @guard:human:n
+// This region cannot be accessed by humans - ORANGE highlight
+const aiInternalState = {
+    modelVersion: '3.0',
+    internalCache: new Map()
+};
+
+// @guard:ai:context
+// This region provides context information - CYAN highlight
+// Documentation: This module handles user authentication
+// Dependencies: crypto, jwt, bcrypt
+// Last reviewed: 2024-01-15
+
+// @guard:ai:n
+// Another AI no-access region - GREEN highlight
+function validateUserCredentials(username, password) {
+    // Security-critical code that AI should not modify
+    return bcrypt.compare(password, hashedPassword);
+}
+
+// @guard:human:r
+// Another human read-only region - PURPLE highlight
+const systemConstants = {
+    MAX_RETRIES: 3,
+    TIMEOUT_MS: 5000
+};
+
+// @guard:human:n
+// Another human no-access region - ORANGE highlight
+function aiOptimizedAlgorithm() {
+    // Complex AI-generated code humans shouldn't modify
+    return optimizedMatrix.multiply(vectorSpace);
+}
+
+// @guard:ai:context
+// Another context region - CYAN highlight
+// Performance notes: This function runs in O(n log n) time
+// Memory usage: Approximately 2MB for typical inputs
 ```
 
 #### Markdown Files
@@ -54,18 +107,56 @@ const noAiAccessConfig = {
 For markdown files, guard tags must be placed inside HTML comments to be recognized:
 
 ```markdown
-<!-- @guard:ai:r -->
-This markdown content is read-only for AI.
-
-<!-- @guard:ai:w.5 -->
-This content and the next 4 lines can be edited by AI.
-Line 2 of 5
-Line 3 of 5
-Line 4 of 5
-Line 5 of 5
+<!-- @guard:ai:w -->
+## AI-Editable Section (RED highlight)
+This content can be modified by AI to improve clarity and structure.
 
 <!-- @guard:ai:n -->
-This content is not accessible to AI.
+## Private Information (GREEN highlight)
+API Keys: sk-prod-12345
+Database passwords and other sensitive data AI should not access.
+
+<!-- @guard:human:r -->
+## Legal Notice (PURPLE highlight)
+This legal text must not be modified by humans without approval.
+Terms and conditions apply.
+
+<!-- @guard:ai:w.3 -->
+## Another AI Section (RED highlight)
+AI can edit this paragraph and the next 2 lines.
+Line 2 of 3
+Line 3 of 3
+
+<!-- @guard:human:n -->
+## AI-Generated Report (ORANGE highlight)
+[Complex AI-generated analysis that humans shouldn't modify]
+Statistical models and predictions based on ML algorithms.
+
+<!-- @guard:ai:context -->
+## Documentation Context (CYAN highlight)
+Project: TuMee VSCode Plugin
+Last Updated: 2024-01-23
+Dependencies: vscode, tree-sitter
+
+<!-- @guard:ai:n -->
+## Security Configuration (GREEN highlight)
+Production server IPs and credentials
+Critical infrastructure details
+
+<!-- @guard:human:r -->
+## Compliance Documentation (PURPLE highlight)
+GDPR compliance statement
+ISO 27001 certification details
+
+<!-- @guard:human:n -->
+## AI Optimization Results (ORANGE highlight)
+Performance metrics from AI optimization runs
+Auto-generated benchmark data
+
+<!-- @guard:ai:context -->
+## Additional Context (CYAN highlight)
+Performance baseline: 100ms response time
+Memory limit: 512MB
 ```
 
 Guard tags that appear in regular markdown text (not in HTML comments) will not be recognized or highlighted.
@@ -74,6 +165,9 @@ The permissions follow the CodeGuard format:
 - `@guard:ai:r` - AI Read-Only (can read but not modify) - no highlighting
 - `@guard:ai:w` - AI Write (can read and modify) - red highlighting (#F44336)
 - `@guard:ai:n` - AI None (should not access at all) - green highlighting (#4CAF50)
+- `@guard:human:r` - Human Read-Only (can read but not modify) - purple highlighting (#9C27B0)
+- `@guard:human:n` - Human None (should not modify) - orange highlighting (#FF9800)
+- `@guard:ai:context` - Context information for AI/humans - cyan highlighting (#00BCD4)
 
 #### Line Count Feature
 

@@ -1,16 +1,19 @@
 // The final extension.ts file with thoroughly verified line count handling
 
-import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, type StatusBarItem, window, workspace, commands, ThemeColor, Position, Range, StatusBarAlignment } from 'vscode';
+import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, type StatusBarItem, window, workspace, commands, ThemeColor, Position, Range, StatusBarAlignment, ProgressLocation } from 'vscode';
 import { registerFileDecorationProvider } from '@/tools/file-customization-provider';
 import { registerContextMenu } from '@/tools/register-context-menu';
 import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
 import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
-import { parseGuardTags, computeLinePermissions } from '@/utils/guardProcessor';
+import { parseGuardTags, parseGuardTagsChunked, computeLinePermissions, markLinesModified } from '@/utils/guardProcessor';
 import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
 import type { GuardTag } from '@/types/guardTypes';
 import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
+import { registerColorCustomizerCommand, type GuardColors } from '@/tools/colorCustomizer';
+import { disposeACLCache } from '@/utils/aclCache';
+import { performanceMonitor } from '@/utils/performanceMonitor';
 
 let disposables: Disposable[] = [];
 let aiOnlyDecoration: TextEditorDecorationType;
@@ -23,7 +26,9 @@ let statusBarItem: StatusBarItem;
 
 // Debounce timer for decoration updates
 let decorationUpdateTimer: NodeJS.Timeout | undefined;
-const DECORATION_UPDATE_DELAY = 100; // milliseconds
+
+// Performance optimization: track document versions to avoid redundant processing
+const processedDocumentVersions = new WeakMap<TextDocument, number>();
 
 export async function activate(context: ExtensionContext) {
   try {
@@ -49,11 +54,43 @@ export async function activate(context: ExtensionContext) {
       const guardDisposables = registerGuardTagCommands(context);
       disposables.push(...guardDisposables);
 
+      // Register color customizer command
+      disposables.push(registerColorCustomizerCommand(context));
+
+      // Register refresh decorations command
+      disposables.push(
+        commands.registerCommand('tumee-vscode-plugin.refreshDecorations', () => {
+          // Dispose old decorations
+          aiOnlyDecoration?.dispose();
+          humanOnlyDecoration?.dispose();
+          mixedDecoration?.dispose();
+          humanReadOnlyDecoration?.dispose();
+          humanNoAccessDecoration?.dispose();
+          contextDecoration?.dispose();
+
+          // Reinitialize with new colors
+          initializeCodeDecorations(context);
+
+          // Update current editor
+          const activeEditor = window.activeTextEditor;
+          if (activeEditor) {
+            triggerUpdateDecorations(activeEditor.document);
+          }
+        })
+      );
+
       // Create decorations for code regions
       initializeCodeDecorations(context);
 
       // Create status bar item
       createStatusBarItem(context);
+
+      // Register performance report command
+      disposables.push(
+        commands.registerCommand('tumee-vscode-plugin.showPerformanceReport', () => {
+          performanceMonitor.showReport();
+        })
+      );
 
       // Set up listeners for active editor
       const activeEditor = window.activeTextEditor;
@@ -67,6 +104,17 @@ export async function activate(context: ExtensionContext) {
         workspace.onDidChangeTextDocument(event => {
           const activeEditor = window.activeTextEditor;
           if (activeEditor && event.document === activeEditor.document) {
+            // Track modified lines for partial cache invalidation
+            for (const change of event.contentChanges) {
+              const startLine = change.range.start.line;
+              const endLine = change.range.end.line;
+              const linesAdded = change.text.split('\n').length - 1;
+              // const linesRemoved = endLine - startLine; // kept for future use
+
+              // Mark affected lines as modified
+              markLinesModified(event.document, startLine, Math.max(endLine, startLine + linesAdded));
+            }
+
             triggerUpdateDecorations(event.document);
             void updateStatusBarItem(event.document);
           }
@@ -79,6 +127,15 @@ export async function activate(context: ExtensionContext) {
           if (editor) {
             triggerUpdateDecorations(editor.document);
             void updateStatusBarItem(editor.document);
+          }
+        })
+      );
+
+      // Update decorations when visible ranges change (scrolling)
+      disposables.push(
+        window.onDidChangeTextEditorVisibleRanges(event => {
+          if (event.textEditor === window.activeTextEditor) {
+            triggerUpdateDecorations(event.textEditor.document);
           }
         })
       );
@@ -96,27 +153,45 @@ export async function activate(context: ExtensionContext) {
 }
 
 function initializeCodeDecorations(_context: ExtensionContext) {
-  // Get configured opacity
-  const opacity = workspace.getConfiguration(getExtensionWithOptionalName()).get<number>('codeDecorationOpacity') || 0.1;
+  // Get configured colors and opacity
+  const config = workspace.getConfiguration(getExtensionWithOptionalName());
+  const colors = config.get<GuardColors>('guardColors') || {
+    aiWrite: '#FFA500',      // Yellow/Amber for AI write
+    aiNoAccess: '#90EE90',   // Light green for AI no access
+    humanReadOnly: '#D3D3D3', // Light grey for human read-only
+    humanNoAccess: '#FF0000', // Red for human no access
+    context: '#00CED1',      // Light blue/cyan for AI context
+    opacity: 0.3
+  };
 
-  // AI Write regions (red with transparency)
+  const opacity = colors.opacity || config.get<number>('codeDecorationOpacity') || 0.1;
+
+  // Helper function to convert hex to rgba
+  const hexToRgba = (hex: string, alpha: number): string => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  // AI Write regions
   aiOnlyDecoration = window.createTextEditorDecorationType({
-    backgroundColor: `rgba(244, 67, 54, ${opacity})`, // Red color for AI Write
+    backgroundColor: hexToRgba(colors.aiWrite, opacity),
     isWholeLine: true,
     borderWidth: '0 0 0 3px',
     borderStyle: 'solid',
-    borderColor: 'rgba(244, 67, 54, 0.6)',
+    borderColor: hexToRgba(colors.aiWrite, 0.6),
     overviewRulerColor: new ThemeColor('tumee.ai'),
     overviewRulerLane: 2,
   });
 
-  // AI No Access regions (green with transparency)
+  // AI No Access regions
   humanOnlyDecoration = window.createTextEditorDecorationType({
-    backgroundColor: `rgba(76, 175, 80, ${opacity})`, // Green color for AI No Access
+    backgroundColor: hexToRgba(colors.aiNoAccess, opacity),
     isWholeLine: true,
     borderWidth: '0 0 0 3px',
     borderStyle: 'solid',
-    borderColor: 'rgba(76, 175, 80, 0.6)',
+    borderColor: hexToRgba(colors.aiNoAccess, 0.6),
     overviewRulerColor: new ThemeColor('tumee.human'),
     overviewRulerLane: 2,
   });
@@ -132,35 +207,35 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     overviewRulerLane: 2,
   });
 
-  // Human Read-Only regions (purple with transparency)
+  // Human Read-Only regions
   humanReadOnlyDecoration = window.createTextEditorDecorationType({
-    backgroundColor: `rgba(156, 39, 176, ${opacity})`, // Purple color for Human Read-Only
+    backgroundColor: hexToRgba(colors.humanReadOnly, opacity),
     isWholeLine: true,
     borderWidth: '0 0 0 3px',
     borderStyle: 'solid',
-    borderColor: 'rgba(156, 39, 176, 0.6)',
+    borderColor: hexToRgba(colors.humanReadOnly, 0.6),
     overviewRulerColor: new ThemeColor('tumee.humanReadOnly'),
     overviewRulerLane: 2,
   });
 
-  // Human No Access regions (orange with transparency)
+  // Human No Access regions
   humanNoAccessDecoration = window.createTextEditorDecorationType({
-    backgroundColor: `rgba(255, 152, 0, ${opacity})`, // Orange color for Human No Access
+    backgroundColor: hexToRgba(colors.humanNoAccess, opacity),
     isWholeLine: true,
     borderWidth: '0 0 0 3px',
     borderStyle: 'solid',
-    borderColor: 'rgba(255, 152, 0, 0.6)',
+    borderColor: hexToRgba(colors.humanNoAccess, 0.6),
     overviewRulerColor: new ThemeColor('tumee.humanNoAccess'),
     overviewRulerLane: 2,
   });
 
-  // Context regions (light blue with transparency)
+  // Context regions
   contextDecoration = window.createTextEditorDecorationType({
-    backgroundColor: `rgba(0, 188, 212, ${opacity})`, // Light blue color for Context
+    backgroundColor: hexToRgba(colors.context, opacity),
     isWholeLine: true,
     borderWidth: '0 0 0 3px',
     borderStyle: 'solid',
-    borderColor: 'rgba(0, 188, 212, 0.6)',
+    borderColor: hexToRgba(colors.context, 0.6),
     overviewRulerColor: new ThemeColor('tumee.context'),
     overviewRulerLane: 2,
   });
@@ -179,22 +254,43 @@ function triggerUpdateDecorations(document: TextDocument) {
     clearTimeout(decorationUpdateTimer);
   }
 
+  // Get debounce delay from configuration
+  const config = workspace.getConfiguration(getExtensionWithOptionalName());
+  const delay = config.get<number>('decorationUpdateDelay', 300);
+
   // Debounce the update
   decorationUpdateTimer = setTimeout(() => {
     updateCodeDecorations(document);
-  }, DECORATION_UPDATE_DELAY);
+  }, delay);
 }
 
 function updateCodeDecorations(document: TextDocument) {
+  // Check if we've already processed this document version
+  const currentVersion = document.version;
+  const lastProcessedVersion = processedDocumentVersions.get(document);
+
+  if (lastProcessedVersion === currentVersion) {
+    return; // Skip if already processed
+  }
+
   const text = document.getText();
   if (!text) return;
 
   // Performance optimization - skip large files over threshold
-  const MAX_FILE_SIZE = 1000000; // ~1MB
-  if (text.length > MAX_FILE_SIZE) {
-    console.warn(`File too large for decoration (${text.length} bytes). Skipping.`);
+  const config = workspace.getConfiguration(getExtensionWithOptionalName());
+  const maxFileSize = config.get<number>('maxFileSize', 1000000);
+
+  if (text.length > maxFileSize) {
+    console.warn(`File too large for decoration (${text.length} bytes, max: ${maxFileSize}). Skipping.`);
+    // Show warning to user
+    void window.showWarningMessage(
+      `File too large for guard tag decorations (${Math.round(text.length / 1024)}KB). Increase max file size in settings if needed.`
+    );
     return;
   }
+
+  // Mark this version as being processed
+  processedDocumentVersions.set(document, currentVersion);
 
   // Process the document to apply decorations
   void updateCodeDecorationsImpl(document);
@@ -234,6 +330,8 @@ function findLastNonEmptyLine(lines: string[], startLine: number, endLine: numbe
  * @param document The active document
  */
 async function updateCodeDecorationsImpl(document: TextDocument) {
+  performanceMonitor.startTimer('updateCodeDecorations');
+
   try {
     if (!document) return;
 
@@ -263,8 +361,41 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     let linePermissions: ReturnType<typeof computeLinePermissions> = [];
 
     try {
-      guardTags = await parseGuardTags(document, lines);
+      const config = workspace.getConfiguration(getExtensionWithOptionalName());
+      const enableChunked = config.get<boolean>('enableChunkedProcessing', true);
+      const chunkSize = config.get<number>('chunkSize', 1000);
+
+      // Use chunked processing for large files
+      if (enableChunked && lines.length > chunkSize * 2) {
+        // Show progress notification for very large files
+        const showProgress = lines.length > 10000;
+
+        performanceMonitor.startTimer('parseGuardTagsChunked');
+        if (showProgress) {
+          await window.withProgress({
+            location: ProgressLocation.Notification,
+            title: 'Processing guard tags...',
+            cancellable: false
+          }, async (progress) => {
+            guardTags = await parseGuardTagsChunked(document, lines, chunkSize, (processed, total) => {
+              const percentage = Math.round((processed / total) * 100);
+              progress.report({ increment: percentage / 100, message: `${percentage}%` });
+            });
+            return guardTags;
+          });
+        } else {
+          guardTags = await parseGuardTagsChunked(document, lines, chunkSize);
+        }
+        performanceMonitor.endTimer('parseGuardTagsChunked', { lines: lines.length, chunked: true });
+      } else {
+        performanceMonitor.startTimer('parseGuardTags');
+        guardTags = await parseGuardTags(document, lines);
+        performanceMonitor.endTimer('parseGuardTags', { lines: lines.length, chunked: false });
+      }
+
+      performanceMonitor.startTimer('computeLinePermissions');
       linePermissions = computeLinePermissions(lines, guardTags);
+      performanceMonitor.endTimer('computeLinePermissions', { lines: lines.length, guardTags: guardTags.length });
     } catch (error) {
       errorHandler.handleError(
         error instanceof Error ? error : new Error(String(error)),
@@ -296,14 +427,28 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       const target = typeof perm === 'object' ? perm.target : 'ai';
       const permission = typeof perm === 'object' ? perm.permission : perm;
 
+      // Treat all default permissions as AI writable
+      let effectivePermission = permission;
+      let effectiveTarget = target || 'ai';
+      if (permission === 'default') {
+        effectivePermission = 'w';
+        effectiveTarget = 'ai';
+      }
+
       // Check if we need to end the current range
-      if (target !== currentTarget || permission !== currentPermission) {
+      if (effectiveTarget !== currentTarget || effectivePermission !== currentPermission) {
       // End previous range if it exists
         if (currentStart >= 0) {
-          const lastContentLine = findLastNonEmptyLine(lines, currentStart, i - 1);
+          // Only trim whitespace for read-only and no-access sections
+          const shouldTrimWhitespace = (currentTarget === 'ai' && currentPermission === 'n') ||
+                                       (currentTarget === 'human' && (currentPermission === 'r' || currentPermission === 'n'));
+          const lastLine = shouldTrimWhitespace
+            ? findLastNonEmptyLine(lines, currentStart, i - 1)
+            : i - 1;
+
           const range = new Range(
             new Position(currentStart, 0),
-            new Position(lastContentLine, lines[lastContentLine] ? lines[lastContentLine].length : 0)
+            new Position(lastLine, lines[lastLine] ? lines[lastLine].length : 0)
           );
 
           // Add range to appropriate decoration array
@@ -325,10 +470,14 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
         }
 
         // Start new range if this is a highlighted permission
-        if (permission !== 'default' && permission !== 'r' && target) {
+        const shouldHighlight =
+          (effectiveTarget === 'ai' && (effectivePermission === 'w' || effectivePermission === 'n' || effectivePermission === 'context')) ||
+          (effectiveTarget === 'human' && (effectivePermission === 'r' || effectivePermission === 'n'));
+
+        if (shouldHighlight) {
           currentStart = i;
-          currentTarget = target;
-          currentPermission = permission;
+          currentTarget = effectiveTarget;
+          currentPermission = effectivePermission;
         } else {
           currentStart = -1;
           currentTarget = '';
@@ -339,10 +488,16 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
     // Handle the last range if it extends to the end of the file
     if (currentStart >= 0 && currentTarget && currentPermission) {
-      const lastContentLine = findLastNonEmptyLine(lines, currentStart, lines.length - 1);
+      // Only trim whitespace for read-only and no-access sections
+      const shouldTrimWhitespace = (currentTarget === 'ai' && currentPermission === 'n') ||
+                                   (currentTarget === 'human' && (currentPermission === 'r' || currentPermission === 'n'));
+      const lastLine = shouldTrimWhitespace
+        ? findLastNonEmptyLine(lines, currentStart, lines.length - 1)
+        : lines.length - 1;
+
       const range = new Range(
         new Position(currentStart, 0),
-        new Position(lastContentLine, lines[lastContentLine] ? lines[lastContentLine].length : 0)
+        new Position(lastLine, lines[lastLine] ? lines[lastLine].length : 0)
       );
 
       if (currentTarget === 'ai') {
@@ -369,6 +524,12 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     activeEditor.setDecorations(humanReadOnlyDecoration, decorationRanges.humanReadOnly);
     activeEditor.setDecorations(humanNoAccessDecoration, decorationRanges.humanNoAccess);
     activeEditor.setDecorations(contextDecoration, decorationRanges.context);
+
+    performanceMonitor.endTimer('updateCodeDecorations', {
+      lines: lines.length,
+      guardTags: guardTags.length,
+      fileName: document.fileName
+    });
   } catch (error) {
     errorHandler.handleError(
       error instanceof Error ? error : new Error(String(error)),
@@ -378,6 +539,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       }
     );
     clearDecorations();
+    performanceMonitor.endTimer('updateCodeDecorations', { error: true });
   }
 }
 
@@ -507,4 +669,10 @@ export function deactivate(): void {
   if (statusBarItem) {
     statusBarItem.dispose();
   }
+
+  // Dispose ACL cache
+  disposeACLCache();
+
+  // Dispose performance monitor
+  performanceMonitor.dispose();
 }

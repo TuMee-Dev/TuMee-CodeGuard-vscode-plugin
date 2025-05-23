@@ -1,8 +1,9 @@
 import type { Event, ExtensionContext, FileDecorationProvider, Uri } from 'vscode';
 import { EventEmitter, FileDecoration, ThemeColor, extensions, window, workspace } from 'vscode';
 import type { Change, ExtensionItem, GitAPIState, GitRepository } from '@/types';
-import { cleanPath, getAclStatus, getExtensionWithOptionalName } from '@/utils';
+import { cleanPath, getExtensionWithOptionalName } from '@/utils';
 import { isCliAvailable, getAclCliPath } from '@/utils/acl';
+import { getACLCache } from '@/utils/aclCache';
 import { commands } from 'vscode';
 import { errorHandler } from '@/utils/errorHandler';
 
@@ -231,8 +232,9 @@ export class FileCustomizationProvider implements FileDecorationProvider {
       // Don't apply ACL-based coloring when CLI is not available
       aclColorId = undefined;
     } else {
-      // Get the ACL status from CodeGuard CLI
-      const aclStatus = await getAclStatus(projectPath);
+      // Get the ACL status from CodeGuard CLI (using cache)
+      const aclCache = getACLCache();
+      const aclStatus = await aclCache.getACLStatus(projectPath);
       aclColorId = this.getColorFromACL(aclStatus?.code || null);
 
       // Create tooltip string based on ACL status

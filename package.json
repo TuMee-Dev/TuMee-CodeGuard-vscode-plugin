@@ -61,6 +61,94 @@
           "minimum": 0,
           "maximum": 1
         },
+        "tumee-vscode-plugin.decorationUpdateDelay": {
+          "title": "Decoration Update Delay",
+          "type": "number",
+          "description": "Delay in milliseconds before updating decorations after document changes (100-1000ms)",
+          "default": 300,
+          "minimum": 100,
+          "maximum": 1000
+        },
+        "tumee-vscode-plugin.maxFileSize": {
+          "title": "Maximum File Size for Decorations",
+          "type": "number",
+          "description": "Maximum file size in bytes for applying decorations (default: 1MB)",
+          "default": 1000000,
+          "minimum": 100000,
+          "maximum": 10000000
+        },
+        "tumee-vscode-plugin.enableChunkedProcessing": {
+          "title": "Enable Chunked Processing",
+          "type": "boolean",
+          "description": "Process large files in chunks to improve responsiveness",
+          "default": true
+        },
+        "tumee-vscode-plugin.chunkSize": {
+          "title": "Chunk Size",
+          "type": "number",
+          "description": "Number of lines to process per chunk (default: 1000)",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 5000
+        },
+        "tumee-vscode-plugin.enablePerformanceMonitoring": {
+          "title": "Enable Performance Monitoring",
+          "type": "boolean",
+          "description": "Track and log performance metrics for debugging",
+          "default": false
+        },
+        "tumee-vscode-plugin.guardColors": {
+          "type": "object",
+          "title": "Guard Tag Colors",
+          "description": "Custom colors for guard tag highlighting",
+          "properties": {
+            "aiWrite": {
+              "type": "string",
+              "format": "color",
+              "default": "#F44336",
+              "description": "Color for AI write access regions"
+            },
+            "aiNoAccess": {
+              "type": "string",
+              "format": "color",
+              "default": "#4CAF50",
+              "description": "Color for AI no access regions"
+            },
+            "humanReadOnly": {
+              "type": "string",
+              "format": "color",
+              "default": "#9C27B0",
+              "description": "Color for human read-only regions"
+            },
+            "humanNoAccess": {
+              "type": "string",
+              "format": "color",
+              "default": "#FF9800",
+              "description": "Color for human no access regions"
+            },
+            "context": {
+              "type": "string",
+              "format": "color",
+              "default": "#00BCD4",
+              "description": "Color for context information regions"
+            },
+            "opacity": {
+              "type": "number",
+              "default": 0.1,
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Background opacity for all guard tag highlights"
+            }
+          },
+          "default": {
+            "aiWrite": "#F44336",
+            "aiNoAccess": "#4CAF50",
+            "humanReadOnly": "#9C27B0",
+            "humanNoAccess": "#FF9800",
+            "context": "#00BCD4",
+            "opacity": 0.1
+          }
+        },
         "tumee-vscode-plugin.items": {
           "type": "array",
           "title": "Files and Folders",
@@ -275,6 +363,18 @@
         "command": "tumee-vscode-plugin.resetWorkspace",
         "title": "Reset Workspace",
         "category": "TuMee Customization"
+      },
+      {
+        "command": "tumee-vscode-plugin.customizeColors",
+        "title": "Customize Guard Tag Colors",
+        "category": "TuMee Customization",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "tumee-vscode-plugin.showPerformanceReport",
+        "title": "Show Performance Report",
+        "category": "TuMee Customization",
+        "icon": "$(graph)"
       }
     ],
     "colors": [
@@ -307,6 +407,36 @@
           "highContrastLight": "#2196F3"
         },
         "description": "Mixed access color (blue, not currently used)"
+      },
+      {
+        "id": "tumee.humanReadOnly",
+        "defaults": {
+          "dark": "#9C27B0",
+          "light": "#9C27B0",
+          "highContrast": "#9C27B0",
+          "highContrastLight": "#9C27B0"
+        },
+        "description": "Human read-only access color (purple)"
+      },
+      {
+        "id": "tumee.humanNoAccess",
+        "defaults": {
+          "dark": "#FF9800",
+          "light": "#FF9800",
+          "highContrast": "#FF9800",
+          "highContrastLight": "#FF9800"
+        },
+        "description": "Human no access color (orange)"
+      },
+      {
+        "id": "tumee.context",
+        "defaults": {
+          "dark": "#00BCD4",
+          "light": "#00BCD4",
+          "highContrast": "#00BCD4",
+          "highContrastLight": "#00BCD4"
+        },
+        "description": "Context information color (cyan)"
       }
     ]
   },
