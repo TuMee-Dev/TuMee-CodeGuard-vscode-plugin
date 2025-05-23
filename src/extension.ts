@@ -37,6 +37,15 @@ const processedDocumentVersions = new WeakMap<TextDocument, number>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const documentChangeEvents = new WeakMap<TextDocument, any>();
 
+// Cache decoration ranges to prevent flashing when switching tabs
+const decorationCache = new WeakMap<TextDocument, {
+  aiWrite: { range: Range }[];
+  aiNoAccess: { range: Range }[];
+  humanReadOnly: { range: Range }[];
+  humanNoAccess: { range: Range }[];
+  context: { range: Range }[];
+}>();
+
 export async function activate(context: ExtensionContext) {
   try {
     disposables = [];
@@ -117,7 +126,8 @@ export async function activate(context: ExtensionContext) {
       // Set up listeners for active editor
       const activeEditor = window.activeTextEditor;
       if (activeEditor) {
-        triggerUpdateDecorations(activeEditor.document);
+        // Update immediately without debounce for initial load
+        void updateCodeDecorations(activeEditor.document);
         void updateStatusBarItem(activeEditor.document);
       }
 
@@ -150,18 +160,30 @@ export async function activate(context: ExtensionContext) {
       disposables.push(
         window.onDidChangeActiveTextEditor(editor => {
           if (editor) {
-            triggerUpdateDecorations(editor.document);
+            // Apply cached decorations immediately to prevent flashing
+            const cachedDecorations = decorationCache.get(editor.document);
+            if (cachedDecorations) {
+              editor.setDecorations(aiOnlyDecoration, cachedDecorations.aiWrite);
+              editor.setDecorations(humanOnlyDecoration, cachedDecorations.aiNoAccess);
+              editor.setDecorations(humanReadOnlyDecoration, cachedDecorations.humanReadOnly);
+              editor.setDecorations(humanNoAccessDecoration, cachedDecorations.humanNoAccess);
+              editor.setDecorations(contextDecoration, cachedDecorations.context);
+            }
+
+            // Then trigger a proper update (no debounce for tab switches)
+            void updateCodeDecorations(editor.document);
             void updateStatusBarItem(editor.document);
           }
         })
       );
 
-      // Clear incremental parser cache when documents are closed
+      // Clear caches when documents are closed
       disposables.push(
         workspace.onDidCloseTextDocument(document => {
           incrementalParser.clearCache(document);
           documentChangeEvents.delete(document);
           processedDocumentVersions.delete(document);
+          decorationCache.delete(document);
         })
       );
 
@@ -358,6 +380,11 @@ function clearDecorations() {
   activeEditor.setDecorations(humanReadOnlyDecoration, []);
   activeEditor.setDecorations(humanNoAccessDecoration, []);
   activeEditor.setDecorations(contextDecoration, []);
+
+  // Also clear the cache for this document
+  if (activeEditor.document) {
+    decorationCache.delete(activeEditor.document);
+  }
 }
 
 /**
@@ -594,6 +621,15 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     activeEditor.setDecorations(humanReadOnlyDecoration, decorationRanges.humanReadOnly);
     activeEditor.setDecorations(humanNoAccessDecoration, decorationRanges.humanNoAccess);
     activeEditor.setDecorations(contextDecoration, decorationRanges.context);
+
+    // Cache the decoration ranges to prevent flashing when switching tabs
+    decorationCache.set(document, {
+      aiWrite: decorationRanges.aiWrite,
+      aiNoAccess: decorationRanges.aiNoAccess,
+      humanReadOnly: decorationRanges.humanReadOnly,
+      humanNoAccess: decorationRanges.humanNoAccess,
+      context: decorationRanges.context
+    });
 
     performanceMonitor.endTimer('updateCodeDecorations', {
       lines: lines.length,

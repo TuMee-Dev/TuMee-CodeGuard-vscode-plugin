@@ -2,7 +2,7 @@
 
 ## Current Status
 Date: 2025-01-23
-Last Task: Implemented incremental guard tag parsing
+Last Task: Fixed decoration flashing when switching tabs
 
 ## Todo List Status
 
@@ -22,6 +22,7 @@ Last Task: Implemented incremental guard tag parsing
 13. Implement configuration validation with auto-fix capabilities
 14. Move heavy operations to background processing with progress
 15. Add incremental guard tag parsing for better performance
+16. Fix decoration flashing when switching tabs
 
 ### 🚀 In Progress
 - **None currently** - Ready for next task
@@ -50,6 +51,7 @@ Last Task: Implemented incremental guard tag parsing
 6. **Configuration Validation** - Validates settings with auto-fix for common issues
 7. **Background Processing** - Heavy operations run asynchronously with progress
 8. **Incremental Parsing** - Only re-parses changed lines instead of full document
+9. **Flash-Free Tab Switching** - Caches decorations to eliminate flashing when switching tabs
 
 ### New Commands:
 - `Show Performance Report` - Display performance metrics in output channel
