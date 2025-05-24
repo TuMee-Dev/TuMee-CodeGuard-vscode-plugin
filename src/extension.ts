@@ -1,11 +1,11 @@
 // The final extension.ts file with thoroughly verified line count handling
 
-import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, type StatusBarItem, window, workspace, commands, ThemeColor, Position, Range, StatusBarAlignment, ProgressLocation } from 'vscode';
+import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, type StatusBarItem, window, workspace, commands, ThemeColor, Position, Range, StatusBarAlignment } from 'vscode';
 import { registerFileDecorationProvider } from '@/tools/file-customization-provider';
 import { registerContextMenu } from '@/tools/register-context-menu';
 import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
 import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
-import { parseGuardTagsChunked, getLinePermissions, markLinesModified } from '@/utils/guardProcessor';
+import { parseGuardTags, getLinePermissions, markLinesModified } from '@/utils/guardProcessor';
 import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
 import type { GuardTag } from '@/types/guardTypes';
 import { errorHandler } from '@/utils/errorHandler';
@@ -16,7 +16,6 @@ import { disposeACLCache } from '@/utils/aclCache';
 import { performanceMonitor } from '@/utils/performanceMonitor';
 import { configValidator } from '@/utils/configValidator';
 import { backgroundProcessor } from '@/utils/backgroundProcessor';
-import { incrementalParser } from '@/utils/incrementalParser';
 import { registerValidationCommands } from '@/utils/validationMode';
 
 let disposables: Disposable[] = [];
@@ -34,9 +33,6 @@ let decorationUpdateTimer: NodeJS.Timeout | undefined;
 // Performance optimization: track document versions to avoid redundant processing
 const processedDocumentVersions = new WeakMap<TextDocument, number>();
 
-// Track document change events for incremental parsing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const documentChangeEvents = new WeakMap<TextDocument, any>();
 
 // Cache decoration ranges to prevent flashing when switching tabs
 const decorationCache = new WeakMap<TextDocument, {
@@ -141,9 +137,6 @@ export async function activate(context: ExtensionContext) {
         workspace.onDidChangeTextDocument(event => {
           const activeEditor = window.activeTextEditor;
           if (activeEditor && event.document === activeEditor.document) {
-            // Store the change event for incremental parsing
-            documentChangeEvents.set(event.document, event);
-
             // Track modified lines for partial cache invalidation
             for (const change of event.contentChanges) {
               const startLine = change.range.start.line;
@@ -185,8 +178,6 @@ export async function activate(context: ExtensionContext) {
       // Clear caches when documents are closed
       disposables.push(
         workspace.onDidCloseTextDocument(document => {
-          incrementalParser.clearCache(document);
-          documentChangeEvents.delete(document);
           processedDocumentVersions.delete(document);
           decorationCache.delete(document);
         })
@@ -442,62 +433,10 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     let linePermissions = new Map<number, import('@/types/guardTypes').LinePermission>();
 
     try {
-      const config = workspace.getConfiguration(getExtensionWithOptionalName());
-      const enableIncremental = config.get<boolean>('enableIncrementalParsing', true);
-      const enableChunked = config.get<boolean>('enableChunkedProcessing', true);
-      const chunkSize = config.get<number>('chunkSize', 1000);
+      // Parse guard tags - simple and direct
+      guardTags = await parseGuardTags(document, lines);
 
-      // Use incremental parsing if enabled and we have a change event
-      if (enableIncremental) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const changeEvent = documentChangeEvents.get(document);
-        performanceMonitor.startTimer('incrementalParse');
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        guardTags = await incrementalParser.parseIncremental(document, changeEvent);
-        performanceMonitor.endTimer('incrementalParse', {
-          lines: lines.length,
-          incremental: !!changeEvent,
-          cached: incrementalParser.getCacheStats()
-        });
-
-        // Clear the change event after use
-        if (changeEvent) {
-          documentChangeEvents.delete(document);
-        }
-      } else {
-        // Fallback to regular parsing
-        // Use chunked processing for large files
-        if (enableChunked && lines.length > chunkSize * 2) {
-          // Show progress notification for very large files
-          const showProgress = lines.length > 10000;
-
-          performanceMonitor.startTimer('parseGuardTagsChunked');
-          if (showProgress) {
-            await window.withProgress({
-              location: ProgressLocation.Notification,
-              title: 'Processing guard tags...',
-              cancellable: false
-            }, async (progress) => {
-              guardTags = await parseGuardTagsChunked(document, lines, chunkSize, (processed, total) => {
-                const percentage = Math.round((processed / total) * 100);
-                progress.report({ increment: percentage / 100, message: `${percentage}%` });
-              });
-              return guardTags;
-            });
-          } else {
-            guardTags = await parseGuardTagsChunked(document, lines, chunkSize);
-          }
-          performanceMonitor.endTimer('parseGuardTagsChunked', { lines: lines.length, chunked: true });
-        } else {
-          performanceMonitor.startTimer('parseGuardTagsChunked');
-          guardTags = await parseGuardTagsChunked(document, lines);
-          performanceMonitor.endTimer('parseGuardTagsChunked', { lines: lines.length, chunked: false });
-        }
-      }
-
-      performanceMonitor.startTimer('getLinePermissions');
       linePermissions = getLinePermissions(document, guardTags);
-      performanceMonitor.endTimer('getLinePermissions', { lines: lines.length, guardTags: guardTags.length });
     } catch (error) {
       errorHandler.handleError(
         error instanceof Error ? error : new Error(String(error)),

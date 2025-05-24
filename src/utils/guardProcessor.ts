@@ -253,17 +253,13 @@ async function resolveSemanticWithCache(
 }
 
 /**
- * Parse guard tags using stack-based approach for proper precedence
+ * Parse guard tags from document lines
  * @param document The document to parse
  * @param lines All lines in the document
- * @param chunkSize Number of lines to process at once (for progress reporting)
- * @param onProgress Optional callback to report progress
  */
-export async function parseGuardTagsChunked(
+export async function parseGuardTags(
   document: vscode.TextDocument,
-  lines: string[],
-  chunkSize: number = 1000,
-  onProgress?: (processed: number, total: number) => void
+  lines: string[]
 ): Promise<GuardTag[]> {
   // Validate input
   if (!validateDocument(document)) {
@@ -279,11 +275,7 @@ export async function parseGuardTagsChunked(
   const guardStack: GuardStackEntry[] = [];
 
   try {
-    for (let chunkStart = 0; chunkStart < totalLines; chunkStart += chunkSize) {
-      const chunkEnd = Math.min(chunkStart + chunkSize, totalLines);
-
-      // Process chunk
-      for (let i = chunkStart; i < chunkEnd; i++) {
+    for (let i = 0; i < totalLines; i++) {
         const line = lines[i];
 
         // Skip empty or invalid lines
@@ -368,12 +360,6 @@ export async function parseGuardTagsChunked(
 
           guardTags.push(guardTag);
         }
-      }
-
-      // Report progress
-      if (onProgress) {
-        onProgress(chunkEnd, totalLines);
-      }
     }
 
     return guardTags;
@@ -389,6 +375,9 @@ export async function parseGuardTagsChunked(
     );
   }
 }
+
+// Export alias for backward compatibility
+export const parseGuardTagsChunked = parseGuardTags;
 
 /**
  * Create guard regions from parsed tags using stack-based precedence

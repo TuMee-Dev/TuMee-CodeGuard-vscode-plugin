@@ -21,8 +21,7 @@ Last Task: Fixed decoration flashing when switching tabs
 12. Add telemetry and performance monitoring with output channel
 13. Implement configuration validation with auto-fix capabilities
 14. Move heavy operations to background processing with progress
-15. Add incremental guard tag parsing for better performance
-16. Fix decoration flashing when switching tabs
+15. Fix decoration flashing when switching tabs
 
 ### 🚀 In Progress
 - **None currently** - Ready for next task
@@ -40,7 +39,6 @@ Last Task: Fixed decoration flashing when switching tabs
 - `enableChunkedProcessing` - Toggle chunk processing (default true)
 - `chunkSize` - Lines per chunk (100-5000, default 1000)
 - `enablePerformanceMonitoring` - Toggle performance tracking (default false)
-- `enableIncrementalParsing` - Toggle incremental parsing (default true)
 
 ### Performance Features:
 1. **ACL Query Caching** - 5-minute TTL cache with intelligent invalidation
@@ -50,8 +48,7 @@ Last Task: Fixed decoration flashing when switching tabs
 5. **Progress Indicators** - Shows progress for files >10,000 lines
 6. **Configuration Validation** - Validates settings with auto-fix for common issues
 7. **Background Processing** - Heavy operations run asynchronously with progress
-8. **Incremental Parsing** - Only re-parses changed lines instead of full document
-9. **Flash-Free Tab Switching** - Caches decorations to eliminate flashing when switching tabs
+8. **Flash-Free Tab Switching** - Caches decorations to eliminate flashing when switching tabs
 
 ### New Commands:
 - `Show Performance Report` - Display performance metrics in output channel
@@ -60,11 +57,10 @@ Last Task: Fixed decoration flashing when switching tabs
 - `/src/utils/regexCache.ts` - Added PARSE_GUARD_TAG, UTILITY_PATTERNS
 - `/src/utils/acl.ts` - Uses cached regex patterns
 - `/src/utils/index.ts` - Uses UTILITY_PATTERNS for path ops
-- `/src/extension.ts` - Uses UTILITY_PATTERNS.LINE_SPLIT, integrated incremental parser
+- `/src/extension.ts` - Uses UTILITY_PATTERNS.LINE_SPLIT
 - `/src/utils/scopeResolver.ts` - Uses cached patterns
 - `/src/utils/configValidator.ts` - NEW: Configuration validation with auto-fix
 - `/src/utils/backgroundProcessor.ts` - NEW: Background task processing
-- `/src/utils/incrementalParser.ts` - NEW: Incremental guard tag parsing
 - `/src/utils/performanceMonitor.ts` - NEW: Performance tracking and reporting
 
 ## Important Notes
