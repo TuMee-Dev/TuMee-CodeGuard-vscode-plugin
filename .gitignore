@@ -16,4 +16,4 @@ backups/
 .DS_Store
 Thumbs.db
 codeguard
-test.out
+*.out
