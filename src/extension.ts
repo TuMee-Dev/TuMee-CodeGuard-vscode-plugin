@@ -395,6 +395,23 @@ function findLastNonEmptyLine(lines: string[], startLine: number, endLine: numbe
 }
 
 /**
+ * Determine if whitespace should be trimmed for a given guard permission
+ * @param target The guard target ('ai' or 'human')
+ * @param permission The guard permission ('r', 'w', 'n', 'context')
+ * @returns true if trailing whitespace should be trimmed from the decoration range
+ */
+function shouldTrimWhitespaceForGuard(target: string, permission: string): boolean {
+  // Define which permissions should have their trailing whitespace trimmed
+  const trimWhitespacePermissions = {
+    'ai': ['n', 'context'],      // AI no-access and context guards
+    'human': ['r', 'n']          // Human read-only and no-access guards
+  };
+
+  const permissions = trimWhitespacePermissions[target as keyof typeof trimWhitespacePermissions];
+  return permissions ? permissions.includes(permission) : false;
+}
+
+/**
  * Implementation of code decoration updates
  * This now uses the shared guard processing logic
  *
@@ -478,11 +495,10 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       if (effectiveTarget !== currentTarget || effectivePermission !== currentPermission) {
       // End previous range if it exists
         if (currentStart >= 0) {
-          // Only trim whitespace for read-only and no-access sections
-          const shouldTrimWhitespace = (currentTarget === 'ai' && currentPermission === 'n') ||
-                                       (currentTarget === 'human' && (currentPermission === 'r' || currentPermission === 'n'));
+          // Determine if whitespace should be trimmed based on permission type
+          const shouldTrim = shouldTrimWhitespaceForGuard(currentTarget, currentPermission);
           // currentStart and i are both 0-based line indices
-          const lastLine = shouldTrimWhitespace
+          const lastLine = shouldTrim
             ? findLastNonEmptyLine(lines, currentStart, i - 1)
             : i - 1;
 
@@ -531,11 +547,10 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
     // Handle the last range if it extends to the end of the file
     if (currentStart >= 0 && currentTarget && currentPermission) {
-      // Only trim whitespace for read-only and no-access sections
-      const shouldTrimWhitespace = (currentTarget === 'ai' && currentPermission === 'n') ||
-                                   (currentTarget === 'human' && (currentPermission === 'r' || currentPermission === 'n'));
+      // Determine if whitespace should be trimmed based on permission type
+      const shouldTrim = shouldTrimWhitespaceForGuard(currentTarget, currentPermission);
       // currentStart is 0-based line index
-      const lastLine = shouldTrimWhitespace
+      const lastLine = shouldTrim
         ? findLastNonEmptyLine(lines, currentStart, lines.length - 1)
         : lines.length - 1;
 

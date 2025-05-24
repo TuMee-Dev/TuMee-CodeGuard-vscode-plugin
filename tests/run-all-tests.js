@@ -14,7 +14,8 @@ const testFiles = [
   'semantic-scopes.test.js',
   'validation-mode.test.js',
   'validation-integration.test.js',
-  'context-guards.test.js'
+  'context-guards.test.js',
+  'context-scope-trimming.test.js'
 ];
 
 console.log('TuMee VSCode Plugin Test Suite\n==============================\n');

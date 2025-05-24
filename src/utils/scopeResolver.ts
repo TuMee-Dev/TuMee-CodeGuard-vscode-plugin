@@ -395,33 +395,43 @@ function findContextScopeTreeSitter(
 
   // Start from the line after the guard tag
   const startLine = line + 1;
-  let endLine = startLine;
+  let lastContentLine = -1;  // Track last line with actual content
 
   // Check each line to see if it's documentation
   for (let currentLine = startLine; currentLine < document.lineCount; currentLine++) {
+    // First check if the line is empty
+    const lineText = document.lineAt(currentLine).text.trim();
+    if (lineText === '') {
+      // Empty line, continue but don't update lastContentLine
+      continue;
+    }
+
     const node = findNodeAtPosition(tree, currentLine);
-    if (!node) break;
+    if (!node) {
+      // No node found - this might be an empty line or end of file
+      break;
+    }
 
     // Check if this is a documentation node
     const isDocumentation = isDocumentationNode(node, languageId);
 
     if (!isDocumentation) {
       // Found code, stop here
-      endLine = currentLine - 1;
       break;
     }
 
-    // Still in documentation
-    endLine = currentLine;
+    // Still in documentation with content
+    lastContentLine = currentLine;
   }
 
-  // If we found any documentation lines
-  if (endLine >= startLine) {
-    return {
+  // If we found any documentation lines with content
+  if (lastContentLine >= startLine) {
+    const result = {
       startLine: startLine + 1,  // Convert to 1-based
-      endLine: endLine + 1,      // Convert to 1-based
+      endLine: lastContentLine + 1,  // Use last content line instead of endLine
       type: 'context'
     };
+    return result;
   }
 
   return null;
@@ -854,7 +864,7 @@ function getIndentLevel(line: string): number {
 function findContextScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
   // Start from the line after the guard tag
   const startLine = guardLine + 1;
-  let endLine = startLine;
+  let lastContentLine = -1;  // Track last line with actual content
 
   // Pattern for detecting comments based on language
   let commentPattern: RegExp;
@@ -889,16 +899,18 @@ function findContextScope(lines: string[], guardLine: number, language: string):
       if (trimmed.startsWith('"""') || trimmed.startsWith("'''")) {
         if (!inDocstring) {
           inDocstring = true;
-          endLine = i;
+          lastContentLine = i;
           continue;
         } else if (trimmed.endsWith('"""') || trimmed.endsWith("'''")) {
           inDocstring = false;
-          endLine = i;
+          lastContentLine = i;
           continue;
         }
       }
       if (inDocstring) {
-        endLine = i;
+        if (trimmed !== '') {
+          lastContentLine = i;
+        }
         continue;
       }
     }
@@ -906,11 +918,13 @@ function findContextScope(lines: string[], guardLine: number, language: string):
     // Handle block comments
     if (trimmed.startsWith('/*')) {
       inBlockComment = true;
-      endLine = i;
+      lastContentLine = i;
       continue;
     }
     if (inBlockComment) {
-      endLine = i;
+      if (trimmed !== '') {
+        lastContentLine = i;
+      }
       if (trimmed.endsWith('*/')) {
         inBlockComment = false;
       }
@@ -923,7 +937,7 @@ function findContextScope(lines: string[], guardLine: number, language: string):
       if (trimmed.includes(GUARD_TAG_PREFIX)) {
         break;
       }
-      endLine = i;
+      lastContentLine = i;
       continue;
     }
 
@@ -932,19 +946,17 @@ function findContextScope(lines: string[], guardLine: number, language: string):
       break;
     }
 
-    // Empty lines in documentation context
-    if (trimmed === '' && endLine > startLine - 1) {
-      endLine = i;
-    }
+    // Empty lines are included in the range but don't update lastContentLine
   }
 
   // If we found any documentation lines
-  if (endLine >= startLine) {
-    return {
+  if (lastContentLine >= startLine) {
+    const result = {
       startLine: startLine + 1,  // Convert to 1-based
-      endLine: endLine + 1,      // Convert to 1-based
+      endLine: lastContentLine + 1,  // Use last content line instead of endLine
       type: 'context'
     };
+    return result;
   }
 
   return null;
