@@ -11,6 +11,110 @@ const scopeCacheMap = new WeakMap<vscode.TextDocument, ScopeCache>();
 const modifiedLinesMap = new WeakMap<vscode.TextDocument, Set<number>>();
 
 /**
+ * Check if a line is a comment based on language
+ */
+function isLineAComment(line: string, languageId: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  switch (languageId) {
+    case 'javascript':
+    case 'typescript':
+    case 'javascriptreact':
+    case 'typescriptreact':
+    case 'java':
+    case 'c':
+    case 'cpp':
+    case 'csharp':
+    case 'go':
+    case 'rust':
+    case 'swift':
+    case 'kotlin':
+    case 'scala':
+    case 'php':
+      return trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*');
+    case 'python':
+    case 'ruby':
+    case 'perl':
+    case 'shellscript':
+    case 'yaml':
+    case 'dockerfile':
+    case 'makefile':
+    case 'r':
+      return trimmed.startsWith('#');
+    case 'html':
+    case 'xml':
+    case 'markdown':
+      return trimmed.startsWith('<!--');
+    case 'css':
+    case 'scss':
+    case 'less':
+      return trimmed.startsWith('/*');
+    case 'sql':
+      return trimmed.startsWith('--') || trimmed.startsWith('/*');
+    case 'lua':
+      return trimmed.startsWith('--');
+    case 'vb':
+      return trimmed.startsWith("'");
+    case 'fortran':
+      return trimmed.startsWith('!') || trimmed.startsWith('C') || trimmed.startsWith('c');
+    default:
+      // Default to common comment patterns
+      return trimmed.startsWith('//') || trimmed.startsWith('#') || trimmed.startsWith('/*');
+  }
+}
+
+/**
+ * Find the end of an implicit scope (until next guard tag or end of current code block)
+ */
+function findImplicitScopeEnd(lines: string[], startLine: number, languageId: string): number {
+  const totalLines = lines.length;
+  const currentIndent = getIndentLevel(lines[startLine]);
+  let endLine = startLine;
+
+  // For Python and other indent-based languages, track indent level
+  const isIndentBased = ['python', 'yaml', 'coffeescript', 'slim', 'pug', 'haml'].includes(languageId);
+
+  for (let i = startLine + 1; i < totalLines; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Stop at next guard tag
+    if (trimmed.includes('@guard:')) {
+      return endLine;
+    }
+
+    // Skip empty lines
+    if (trimmed === '') {
+      continue;
+    }
+
+    // For indent-based languages, check if we've left the current block
+    if (isIndentBased) {
+      const lineIndent = getIndentLevel(line);
+      if (lineIndent < currentIndent && !isLineAComment(trimmed, languageId)) {
+        return endLine;
+      }
+    }
+
+    // Update end line for non-empty, non-comment lines
+    if (!isLineAComment(trimmed, languageId)) {
+      endLine = i;
+    }
+  }
+
+  return endLine;
+}
+
+/**
+ * Get the indentation level of a line
+ */
+function getIndentLevel(line: string): number {
+  const match = line.match(/^(\s*)/);
+  return match ? match[1].length : 0;
+}
+
+/**
  * Clear the scope cache for a document
  */
 export function clearScopeCache(document: vscode.TextDocument): void {
@@ -193,17 +297,62 @@ export async function parseGuardTagsChunked(
               });
             }
           } else {
-            // Regular line count or unbounded
-            guardTags.push({
-              lineNumber: i,
-              target: tagInfo.target as 'ai' | 'human',
-              identifier: tagInfo.identifier,
-              permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-              scope: tagInfo.scope,
-              lineCount: tagInfo.lineCount,
-              addScopes: tagInfo.addScopes,
-              removeScopes: tagInfo.removeScopes
-            });
+            // For guard tags without explicit scope, check if they're on a comment line
+            // If so, they should apply to the following code block
+            const trimmedLine = line.trim();
+            const isCommentLine = isLineAComment(trimmedLine, document.languageId);
+
+            if (isCommentLine && !tagInfo.lineCount) {
+              // Find the next non-comment, non-empty line as the start of the guarded region
+              let startLine = i + 1;
+              while (startLine < totalLines &&
+                     (lines[startLine].trim() === '' ||
+                      isLineAComment(lines[startLine].trim(), document.languageId))) {
+                startLine++;
+              }
+
+              if (startLine < totalLines) {
+                // Find the end of the current scope or next guard tag
+                const endLine = findImplicitScopeEnd(lines, startLine, document.languageId);
+
+                guardTags.push({
+                  lineNumber: i + 1,  // Line numbers are 1-based
+                  target: tagInfo.target as 'ai' | 'human',
+                  identifier: tagInfo.identifier,
+                  permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
+                  scope: tagInfo.scope,
+                  lineCount: endLine - startLine + 1,
+                  addScopes: tagInfo.addScopes,
+                  removeScopes: tagInfo.removeScopes,
+                  scopeStart: startLine + 1,  // Convert to 1-based
+                  scopeEnd: endLine + 1       // Convert to 1-based
+                });
+              } else {
+                // No code follows, treat as single line
+                guardTags.push({
+                  lineNumber: i + 1,
+                  target: tagInfo.target as 'ai' | 'human',
+                  identifier: tagInfo.identifier,
+                  permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
+                  scope: tagInfo.scope,
+                  lineCount: tagInfo.lineCount || 1,
+                  addScopes: tagInfo.addScopes,
+                  removeScopes: tagInfo.removeScopes
+                });
+              }
+            } else {
+              // Regular line count or on code line
+              guardTags.push({
+                lineNumber: i + 1,
+                target: tagInfo.target as 'ai' | 'human',
+                identifier: tagInfo.identifier,
+                permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
+                scope: tagInfo.scope,
+                lineCount: tagInfo.lineCount,
+                addScopes: tagInfo.addScopes,
+                removeScopes: tagInfo.removeScopes
+              });
+            }
           }
         } // Close if (tagInfo)
       }

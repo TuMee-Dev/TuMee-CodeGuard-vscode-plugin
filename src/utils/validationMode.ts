@@ -159,8 +159,9 @@ async function buildValidationPackage(
     const raw = `@guard:${tag.target}${tag.identifier ? `:${  tag.identifier}` : ''}:${tag.permission}${tag.scope ? `.${  tag.scope}` : ''}`;
 
     // Calculate region boundaries
-    const startLine = tag.lineNumber;
-    const endLine = tag.scopeEnd || (tag.lineNumber + (tag.lineCount || 0)) || totalLines;
+    // Use scopeStart/scopeEnd if available (from implicit scope resolution)
+    const startLine = tag.scopeStart || tag.lineNumber;
+    const endLine = tag.scopeEnd || (tag.lineNumber + (tag.lineCount || 1) - 1) || totalLines;
 
     const contentLines = lines.slice(startLine - 1, endLine);
     const regionContent = contentLines.join('\n');
