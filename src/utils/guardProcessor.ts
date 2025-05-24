@@ -11,13 +11,16 @@ const scopeCacheMap = new WeakMap<vscode.TextDocument, Map<string, ScopeBoundary
 const modifiedLinesMap = new WeakMap<vscode.TextDocument, Set<number>>();
 
 /**
- * Stack entry for guard processing
+ * Stack entry for guard processing - contains complete permission state
  */
 interface GuardStackEntry {
-  guard: GuardTag;
+  permissions: {
+    [target: string]: string;  // e.g., { ai: 'w', human: 'r' }
+  };
   startLine: number;
-  endLine: number; // For line-limited guards
+  endLine: number;
   isLineLimited: boolean;
+  sourceGuard?: GuardTag;  // The guard that triggered this state change
 }
 
 /**
@@ -31,7 +34,9 @@ function popGuardWithContextCleanup(guardStack: GuardStackEntry[]): void {
   // Context guards cannot resume after being interrupted
   while (guardStack.length > 0) {
     const next = guardStack[guardStack.length - 1];
-    if (next.guard.permission === 'context') {
+    // Check if any permission in this entry is 'context'
+    const hasContextPermission = Object.values(next.permissions).includes('context');
+    if (hasContextPermission) {
       guardStack.pop();
     } else {
       break;
@@ -46,7 +51,9 @@ function popGuardWithContextCleanup(guardStack: GuardStackEntry[]): void {
 function removeInterruptedContextGuards(guardStack: GuardStackEntry[]): void {
   while (guardStack.length > 0) {
     const top = guardStack[guardStack.length - 1];
-    if (top.guard.permission === 'context') {
+    // Check if any permission in this entry is 'context'
+    const hasContextPermission = Object.values(top.permissions).includes('context');
+    if (hasContextPermission) {
       guardStack.pop();
     } else {
       break;
@@ -336,12 +343,21 @@ export async function parseGuardTags(
         // Before pushing new guard, remove any interrupted context guards
         removeInterruptedContextGuards(guardStack);
 
-        // Push to stack
+        // Push to stack with current permissions
+        // Get current permissions from top of stack or use defaults
+        const currentPermissions = guardStack.length > 0 
+          ? { ...guardStack[guardStack.length - 1].permissions }
+          : { ai: 'r', human: 'w' };  // Default permissions
+        
+        // Update only the permission for this guard's target
+        currentPermissions[guardTag.target] = guardTag.permission;
+        
         guardStack.push({
-          guard: guardTag,
+          permissions: currentPermissions,
           startLine: startLine,
           endLine: endLine,
-          isLineLimited: isLineLimited
+          isLineLimited: isLineLimited,
+          sourceGuard: guardTag
         });
 
         guardTags.push(guardTag);
@@ -366,12 +382,13 @@ export async function parseGuardTags(
 export const parseGuardTagsChunked = parseGuardTags;
 
 /**
- * Core guard stack processing logic - single source of truth for guard precedence
+ * Core guard stack processing logic - tracks all permission types independently
  */
 function processGuardStack(
   guardTags: GuardTag[],
   totalLines: number,
-  getLineText: (lineNumber: number) => string
+  getLineText: (lineNumber: number) => string,
+  defaultPermissions: { [target: string]: string } = { ai: 'r', human: 'w' }
 ): Map<number, GuardTag> {
   const linePermissions = new Map<number, GuardTag>();
   const guardStack: GuardStackEntry[] = [];
@@ -390,42 +407,89 @@ function processGuardStack(
     // Add new guards starting on this line
     for (const tag of guardTags) {
       if (tag.lineNumber === line) {
+        // Get current permissions from top of stack or use defaults
+        const currentPermissions = guardStack.length > 0 
+          ? { ...guardStack[guardStack.length - 1].permissions }
+          : { ...defaultPermissions };
+        
+        // Update only the permission for this guard's target
+        currentPermissions[tag.target] = tag.permission;
+        
         const entry: GuardStackEntry = {
-          guard: tag,
+          permissions: currentPermissions,
           startLine: tag.scopeStart || line,
           endLine: tag.scopeEnd || (tag.lineCount ? line + tag.lineCount - 1 : totalLines),
-          isLineLimited: !!tag.lineCount
+          isLineLimited: !!tag.lineCount,
+          sourceGuard: tag
         };
+        
         // Before pushing new guard, remove any interrupted context guards
         removeInterruptedContextGuards(guardStack);
         guardStack.push(entry);
       }
     }
 
-    // Top of stack determines effective permission
+    // Determine effective permissions for this line
     if (guardStack.length > 0) {
       const lineText = getLineText(line);
       const isWhitespaceOnly = lineText.trim().length === 0;
       
-      // Find the effective guard for this line
-      // If line is whitespace-only, skip all context guards in the stack
-      let effectiveGuard: GuardStackEntry | null = null;
-      
-      for (let i = guardStack.length - 1; i >= 0; i--) {
-        const guard = guardStack[i];
-        if (line >= guard.startLine && line <= guard.endLine) {
-          // Skip context guards for whitespace-only lines
-          if (isWhitespaceOnly && guard.guard.permission === 'context') {
-            continue;
+      // Get the current state from the stack
+      const top = guardStack[guardStack.length - 1];
+      if (line >= top.startLine && line <= top.endLine) {
+        // For whitespace-only lines, check if we need to skip context guards
+        let effectivePermissions = top.permissions;
+        
+        if (isWhitespaceOnly) {
+          // Look for non-context permissions in the stack
+          const nonContextPermissions: { [target: string]: string } = {};
+          
+          // Collect all non-context permissions from applicable stack entries
+          for (let i = guardStack.length - 1; i >= 0; i--) {
+            const entry = guardStack[i];
+            if (line >= entry.startLine && line <= entry.endLine) {
+              // Add any non-context permissions we haven't seen yet
+              for (const [target, permission] of Object.entries(entry.permissions)) {
+                if (permission !== 'context' && !nonContextPermissions[target]) {
+                  nonContextPermissions[target] = permission;
+                }
+              }
+            }
           }
-          effectiveGuard = guard;
-          break;
+          
+          // If we found any non-context permissions, use them
+          if (Object.keys(nonContextPermissions).length > 0) {
+            effectivePermissions = nonContextPermissions;
+          }
+        }
+        
+        // For now, we need to pick one guard to display
+        // Priority: ai permissions > human permissions
+        if (effectivePermissions.ai) {
+          linePermissions.set(line, {
+            lineNumber: line,
+            target: 'ai',
+            permission: effectivePermissions.ai as 'r' | 'w' | 'n' | 'context',
+            identifier: top.sourceGuard?.identifier
+          });
+        } else if (effectivePermissions.human) {
+          linePermissions.set(line, {
+            lineNumber: line,
+            target: 'human',
+            permission: effectivePermissions.human as 'r' | 'w' | 'n' | 'context',
+            identifier: top.sourceGuard?.identifier
+          });
         }
       }
-      
-      if (effectiveGuard) {
-        linePermissions.set(line, effectiveGuard.guard);
-      }
+    } else {
+      // No guards on stack - use defaults
+      // Show AI permission by default (this matches current behavior)
+      linePermissions.set(line, {
+        lineNumber: line,
+        target: 'ai',
+        permission: defaultPermissions.ai as 'r' | 'w' | 'n' | 'context',
+        identifier: undefined
+      });
     }
   }
 
