@@ -7,7 +7,7 @@ import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
 import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
 import { parseGuardTags, getLinePermissions, markLinesModified } from '@/utils/guardProcessor';
 import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
-import type { GuardTag } from '@/types/guardTypes';
+import type { GuardTag, LinePermission } from '@/types/guardTypes';
 import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
@@ -32,7 +32,6 @@ let decorationUpdateTimer: NodeJS.Timeout | undefined;
 
 // Performance optimization: track document versions to avoid redundant processing
 const processedDocumentVersions = new WeakMap<TextDocument, number>();
-
 
 // Cache decoration ranges to prevent flashing when switching tabs
 const decorationCache = new WeakMap<TextDocument, {
@@ -430,7 +429,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
     // Use shared functions to parse guard tags and compute line permissions
     let guardTags: GuardTag[] = [];
-    let linePermissions = new Map<number, import('@/types/guardTypes').LinePermission>();
+    let linePermissions = new Map<number, LinePermission>();
 
     try {
       // Parse guard tags - simple and direct
@@ -466,14 +465,14 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     for (let i = 0; i < document.lineCount; i++) {
       const lineNumber = i + 1; // Convert to 1-based for permission lookup
       const perm = linePermissions.get(lineNumber);
-      
+
       // Determine effective target and permission for this line
       const target = perm?.target;
       const permission = perm?.permission;
 
       // For comparison purposes, treat undefined as a specific state
-      let effectivePermission = permission || '';
-      let effectiveTarget = target || '';
+      const effectivePermission = permission || '';
+      const effectiveTarget = target || '';
 
       // Check if we need to end the current range
       if (effectiveTarget !== currentTarget || effectivePermission !== currentPermission) {
@@ -650,14 +649,14 @@ async function updateStatusBarItem(document: TextDocument) {
 
     const lines = text.split(UTILITY_PATTERNS.LINE_SPLIT);
     let currentAccess = 'Default';
-    let lineCount: number | undefined = undefined;
+    const lineCount: number | undefined = undefined;
 
     // Use shared functions to parse guard tags
     let guardTags: GuardTag[] = [];
-    let linePermissions = new Map<number, import('@/types/guardTypes').LinePermission>();
+    let linePermissions = new Map<number, LinePermission>();
 
     try {
-      guardTags = await parseGuardTagsChunked(document, lines);
+      guardTags = await parseGuardTags(document, lines);
       linePermissions = getLinePermissions(document, guardTags);
     } catch (error) {
       errorHandler.handleError(
@@ -686,7 +685,7 @@ async function updateStatusBarItem(document: TextDocument) {
     }
 
     // Set status bar text with line count if present
-    const lineCountText = lineCount ? ` (${lineCount} lines)` : '';
+    const lineCountText = lineCount ? ` (${String(lineCount)} lines)` : '';
     statusBarItem.text = `$(shield) AI: ${currentAccess}${lineCountText}`;
 
     // Set color based on permission

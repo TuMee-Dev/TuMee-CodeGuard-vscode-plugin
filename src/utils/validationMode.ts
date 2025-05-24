@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { getAclCliPath, isCliAvailable } from './acl';
-import { parseGuardTagsChunked } from './guardProcessor';
+import { parseGuardTags } from './guardProcessor';
 // import { getLanguageForDocument } from './scopeResolver';
 import { showValidationReport } from './validationReportView';
 import { ValidationStatus, ValidationExitCode } from '@/types/validationTypes';
@@ -448,7 +448,7 @@ export async function validateGuardSections(context: ExtensionContext): Promise<
       progress.report({ message: 'Parsing guard tags...', increment: 20 });
       const fileContent = document.getText();
       const lines = fileContent.split('\n');
-      const guardTags = await parseGuardTagsChunked(document, lines);
+      const guardTags = await parseGuardTags(document, lines);
       logInfo(`Found ${guardTags.length} guard regions`);
 
       // Step 2: Build validation package
