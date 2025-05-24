@@ -21,6 +21,40 @@ interface GuardStackEntry {
 }
 
 /**
+ * Pop expired guards from stack and clean up any context guards below
+ * Context guards cannot resume after being interrupted
+ */
+function popGuardWithContextCleanup(guardStack: GuardStackEntry[]): void {
+  guardStack.pop();
+
+  // After popping, also pop any context guards below
+  // Context guards cannot resume after being interrupted
+  while (guardStack.length > 0) {
+    const next = guardStack[guardStack.length - 1];
+    if (next.guard.permission === 'context') {
+      guardStack.pop();
+    } else {
+      break;
+    }
+  }
+}
+
+/**
+ * Remove any context guards from the top of the stack
+ * Context guards cannot be interrupted and resumed later
+ */
+function removeInterruptedContextGuards(guardStack: GuardStackEntry[]): void {
+  while (guardStack.length > 0) {
+    const top = guardStack[guardStack.length - 1];
+    if (top.guard.permission === 'context') {
+      guardStack.pop();
+    } else {
+      break;
+    }
+  }
+}
+
+/**
  * Check if a line is a comment based on language
  */
 function isLineAComment(line: string, languageId: string): boolean {
@@ -232,7 +266,7 @@ export async function parseGuardTags(
       while (guardStack.length > 0) {
         const top = guardStack[guardStack.length - 1];
         if (top.isLineLimited && i >= top.endLine) {
-          guardStack.pop();
+          popGuardWithContextCleanup(guardStack);
         } else {
           break;
         }
@@ -282,16 +316,20 @@ export async function parseGuardTags(
           endLine = startLine + tagInfo.lineCount - 1;
           isLineLimited = true;
         } else if (guardTag.scopeStart && guardTag.scopeEnd) {
-          // Semantic scope - use the boundaries from scope resolution
-          startLine = guardTag.scopeStart;
+          // Semantic scope - guard starts from the guard tag line
+          // but ends at the scope end
+          startLine = lineNumber;  // Always start from guard tag
           endLine = guardTag.scopeEnd;
         }
-        // For simple guards without scope or line count, 
+        // For simple guards without scope or line count,
         // the guard starts from the current line and goes to end of file
 
         // Update guard tag with calculated boundaries
         guardTag.scopeStart = startLine;
         guardTag.scopeEnd = endLine;
+
+        // Before pushing new guard, remove any interrupted context guards
+        removeInterruptedContextGuards(guardStack);
 
         // Push to stack
         guardStack.push({
@@ -337,8 +375,8 @@ export function createGuardRegions(guardTags: GuardTag[], totalLines: number): G
     // Remove expired guards from stack
     while (guardStack.length > 0) {
       const top = guardStack[guardStack.length - 1];
-      if (top.isLineLimited && line > top.endLine) {
-        guardStack.pop();
+      if (line > top.endLine) {
+        popGuardWithContextCleanup(guardStack);
       } else {
         break;
       }
@@ -353,6 +391,8 @@ export function createGuardRegions(guardTags: GuardTag[], totalLines: number): G
           endLine: tag.scopeEnd || (tag.lineCount ? line + tag.lineCount - 1 : totalLines),
           isLineLimited: !!tag.lineCount
         };
+        // Before pushing new guard, remove any interrupted context guards
+        removeInterruptedContextGuards(guardStack);
         guardStack.push(entry);
       }
     }
@@ -426,8 +466,8 @@ export function getLinePermissions(
     // Remove expired guards from stack
     while (guardStack.length > 0) {
       const top = guardStack[guardStack.length - 1];
-      if (top.isLineLimited && line > top.endLine) {
-        guardStack.pop();
+      if (line > top.endLine) {
+        popGuardWithContextCleanup(guardStack);
       } else {
         break;
       }
@@ -442,6 +482,8 @@ export function getLinePermissions(
           endLine: tag.scopeEnd || (tag.lineCount ? line + tag.lineCount - 1 : totalLines),
           isLineLimited: !!tag.lineCount
         };
+        // Before pushing new guard, remove any interrupted context guards
+        removeInterruptedContextGuards(guardStack);
         guardStack.push(entry);
       }
     }

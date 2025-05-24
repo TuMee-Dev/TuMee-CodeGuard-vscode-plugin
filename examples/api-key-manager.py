@@ -1,5 +1,5 @@
+# @guard:ai:r
 # API Key Manager Example - Python Version with all guard tag colors
-
 import os
 import hashlib
 import json
@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import base64
 
-# @guard:ai:w
+# @guard:ai:w.class
 # AI can optimize this configuration class - RED highlight
 class Config:
     def __init__(self):
@@ -15,7 +15,7 @@ class Config:
         self.version = '2.0.0'
         self.environment = os.getenv('ENV', 'development')
 
-# @guard:ai:n
+# @guard:ai:n.block
 # Production API keys - AI must not access - GREEN highlight
 PRODUCTION_KEYS = {
     'stripe': 'sk_live_4eC39HqLyjWDarjtT1zdp7dc',
@@ -24,7 +24,7 @@ PRODUCTION_KEYS = {
     'aws_secret': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
 }
 
-# @guard:human:r
+# @guard:human:r.block
 # Compliance constants - humans cannot modify - PURPLE highlight
 COMPLIANCE_STANDARDS = {
     'encryption_algorithm': 'AES-256-GCM',
@@ -33,7 +33,7 @@ COMPLIANCE_STANDARDS = {
     'pci_dss_version': '4.0'
 }
 
-# @guard:ai:w
+# @guard:ai:w.class
 # AI can improve this caching logic - RED highlight (2nd occurrence)
 class KeyCache:
     def __init__(self, max_size=100):
@@ -76,7 +76,7 @@ def quantum_resistant_encrypt(data: bytes, key: bytes) -> bytes:
 # - Layer 4: Automatic key rotation
 # Integration points: Vault, HSM, SIEM systems
 
-# @guard:ai:n
+# @guard:ai:n.block
 # Database connection strings - AI cannot access - GREEN highlight (2nd occurrence)
 DATABASE_URLS = {
     'primary': 'postgresql://admin:p@ssw0rd@prod-db-1.internal:5432/keys',

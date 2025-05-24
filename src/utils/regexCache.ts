@@ -2,6 +2,9 @@
  * Cached and compiled regex patterns for better performance
  */
 
+// Guard tag prefix constant
+export const GUARD_TAG_PREFIX = '@guard:';
+
 // Guard tag patterns - compile once and reuse
 export const GUARD_TAG_PATTERNS = {
   // Main guard tag pattern with new format support

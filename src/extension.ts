@@ -486,9 +486,12 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
             ? findLastNonEmptyLine(lines, currentStart, i - 1)
             : i - 1;
 
+          // Create range, but ensure we don't extend past the actual content
+          // VSCode can extend decorations to the next line if we go to end of line
+          const endChar = lines[lastLine] ? lines[lastLine].length : 0;
           const range = new Range(
             new Position(currentStart, 0),
-            new Position(lastLine, lines[lastLine] ? lines[lastLine].length : 0)
+            new Position(lastLine, endChar > 0 ? endChar : 0)
           );
 
           // Add range to appropriate decoration array
@@ -536,9 +539,11 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
         ? findLastNonEmptyLine(lines, currentStart, lines.length - 1)
         : lines.length - 1;
 
+      // Create range, ensuring we don't extend to next line
+      const endChar = lines[lastLine] ? lines[lastLine].length : 0;
       const range = new Range(
         new Position(currentStart, 0),
-        new Position(lastLine, lines[lastLine] ? lines[lastLine].length : 0)
+        new Position(lastLine, endChar > 0 ? endChar : 0)
       );
 
       if (currentTarget === 'ai') {

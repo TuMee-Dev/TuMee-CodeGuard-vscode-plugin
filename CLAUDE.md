@@ -70,6 +70,10 @@ Last Task: Fixed decoration flashing when switching tabs
 - Extension passes all ESLint checks
 - All tests passing including acceptance tests
 
+## Memories
+- Never commit changes without testing
+- Always quote shell paths
+
 ## Commands to Run
 ```bash
 # Compile and lint

@@ -13,7 +13,8 @@ const testFiles = [
   'line-permissions.test.js', 
   'semantic-scopes.test.js',
   'validation-mode.test.js',
-  'validation-integration.test.js'
+  'validation-integration.test.js',
+  'context-guards.test.js'
 ];
 
 console.log('TuMee VSCode Plugin Test Suite\n==============================\n');

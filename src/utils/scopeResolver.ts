@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
-import { getLanguagePatterns, UTILITY_PATTERNS } from './regexCache';
+import { getLanguagePatterns, UTILITY_PATTERNS, GUARD_TAG_PREFIX } from './regexCache';
 import { parseDocument, findNodeAtPosition, findParentOfType, getNodeBoundaries, initializeTreeSitter } from './treeSitterParser';
-import type { Node } from 'web-tree-sitter';
+import type { Node, Tree } from 'web-tree-sitter';
 
 // Semantic scope to tree-sitter node type mappings
 const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
@@ -203,6 +203,45 @@ async function resolveSemanticWithTreeSitter(
   const nodeTypes = scopeMap[scope] || scopeMap[scope.toLowerCase()];
   if (!nodeTypes || nodeTypes.length === 0) return null;
 
+  // For scoped guards, we need to search forward from the guard line
+  // to find the next occurrence of the scope type
+  if (scope === 'class' || scope === 'func' || scope === 'function') {
+    // Start searching from the line after the guard
+    for (let searchLine = line + 1; searchLine < document.lineCount; searchLine++) {
+      const searchNode = findNodeAtPosition(tree, searchLine);
+      if (searchNode) {
+        const parentNode = findParentOfType(searchNode, nodeTypes);
+        if (parentNode && parentNode.startPosition.row >= line) {
+          const bounds = getNodeBoundaries(parentNode);
+
+          // For Python classes, trim trailing whitespace
+          if (scope === 'class' && document.languageId === 'python') {
+            const lines = document.getText().split('\n');
+            let endLine = bounds.endLine - 1; // Convert to 0-based
+
+            // Walk backwards from the end to find the last non-empty line
+            while (endLine > bounds.startLine - 1 && lines[endLine].trim() === '') {
+              endLine--;
+            }
+
+            return {
+              startLine: bounds.startLine,
+              endLine: endLine + 1, // Convert back to 1-based
+              type: scope
+            };
+          }
+
+          return {
+            startLine: bounds.startLine,
+            endLine: bounds.endLine,
+            type: scope
+          };
+        }
+      }
+    }
+    return null;
+  }
+
   // Find the node at the guard tag line
   const node = findNodeAtPosition(tree, line);
   if (!node) return null;
@@ -219,6 +258,10 @@ async function resolveSemanticWithTreeSitter(
     case 'stmt':
     case 'statement':
       return findStatementScopeTreeSitter(node, line);
+
+    case 'context':
+      // Context applies only to documentation nodes
+      return findContextScopeTreeSitter(tree, line, document);
 
     default: {
       // For other scopes, find the nearest parent of the specified type
@@ -340,6 +383,99 @@ function findStatementScopeTreeSitter(
 }
 
 /**
+ * Find context scope using tree-sitter
+ * Context applies only to documentation (comments and docstrings)
+ */
+function findContextScopeTreeSitter(
+  tree: Tree,
+  line: number,
+  document: vscode.TextDocument
+): ScopeBoundary | null {
+  const languageId = document.languageId;
+
+  // Start from the line after the guard tag
+  const startLine = line + 1;
+  let endLine = startLine;
+
+  // Check each line to see if it's documentation
+  for (let currentLine = startLine; currentLine < document.lineCount; currentLine++) {
+    const node = findNodeAtPosition(tree, currentLine);
+    if (!node) break;
+
+    // Check if this is a documentation node
+    const isDocumentation = isDocumentationNode(node, languageId);
+
+    if (!isDocumentation) {
+      // Found code, stop here
+      endLine = currentLine - 1;
+      break;
+    }
+
+    // Still in documentation
+    endLine = currentLine;
+  }
+
+  // If we found any documentation lines
+  if (endLine >= startLine) {
+    return {
+      startLine: startLine + 1,  // Convert to 1-based
+      endLine: endLine + 1,      // Convert to 1-based
+      type: 'context'
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Check if a node represents documentation (comment or docstring)
+ */
+function isDocumentationNode(node: Node, languageId: string): boolean {
+  // Check node type
+  if (node.type === 'comment' || node.type === 'line_comment' || node.type === 'block_comment') {
+    // Check if this comment contains a guard tag - if so, it's not part of the context
+    if (node.text && node.text.includes(GUARD_TAG_PREFIX)) {
+      return false;
+    }
+    return true;
+  }
+
+  // Language-specific docstring detection
+  if (languageId === 'python') {
+    // Check for docstrings (string as first statement in function/class)
+    if (node.type === 'expression_statement') {
+      const stringChild = node.children.find(child => child && child.type === 'string');
+      if (stringChild) {
+        // Check if this is the first non-comment statement in a function/class
+        const parent = node.parent;
+        if (parent && (parent.type === 'function_definition' || parent.type === 'class_definition')) {
+          // Find the first non-comment child
+          for (const sibling of parent.children) {
+            if (sibling && (sibling.type === 'expression_statement' || sibling.type.includes('statement'))) {
+              return sibling === node;  // It's a docstring if it's the first statement
+            }
+          }
+        }
+        // Standalone string at module level could be documentation
+        if (parent && parent.type === 'module') {
+          return true;
+        }
+      }
+    }
+  }
+
+  // JavaScript/TypeScript JSDoc comments
+  if (languageId === 'javascript' || languageId === 'typescript' || languageId === 'tsx') {
+    // JSDoc nodes might be parsed as comments
+    if (node.text && node.text.trim().startsWith('/**')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Resolve semantic scope using regex (fallback)
  */
 function resolveSemanticWithRegex(
@@ -377,6 +513,9 @@ function resolveSemanticWithRegex(
     case 'statement':
       return findStatementScope(lines, line);
 
+    case 'context':
+      return findContextScope(lines, line, languageId);
+
     default:
       return null;
   }
@@ -390,9 +529,9 @@ function findFunctionScope(lines: string[], guardLine: number, language: string)
   const langPatterns = getLanguagePatterns(language);
   const pattern = langPatterns?.FUNCTION || /^\s*(async\s+)?function\s+\w+\s*\(|^\s*(const|let|var)\s+\w+\s*=\s*(async\s*)?\(/;
 
-  // Search for function start before guard line
+  // Search for function start after guard line
   let functionStart = -1;
-  for (let i = guardLine; i >= 0; i--) {
+  for (let i = guardLine + 1; i < lines.length; i++) {
     if (pattern.test(lines[i])) {
       functionStart = i;
       break;
@@ -419,9 +558,9 @@ function findClassScope(lines: string[], guardLine: number, language: string): S
   const langPatterns = getLanguagePatterns(language);
   const pattern = langPatterns?.CLASS || /^\s*class\s+\w+/;
 
-  // Search for class start before guard line
+  // Search for class start after guard line
   let classStart = -1;
-  for (let i = guardLine; i >= 0; i--) {
+  for (let i = guardLine + 1; i < lines.length; i++) {
     if (pattern.test(lines[i])) {
       classStart = i;
       break;
@@ -443,44 +582,58 @@ function findClassScope(lines: string[], guardLine: number, language: string): S
  * Find block scope boundaries using regex
  */
 function findBlockScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
-  // For languages with braces, find the nearest enclosing brace pair
-  if (['javascript', 'typescript', 'java', 'csharp', 'c', 'cpp'].includes(language)) {
-    // Search backwards for opening brace
-    let blockStart = -1;
-    let braceCount = 0;
+  // For block scopes, search FORWARD for the next brace-delimited block
+  // This works for all languages including Python dictionaries/lists/sets
 
-    for (let i = guardLine; i >= 0; i--) {
-      const line = lines[i];
-      for (let j = line.length - 1; j >= 0; j--) {
-        if (line[j] === '}') braceCount++;
-        if (line[j] === '{') {
-          if (braceCount === 0) {
-            blockStart = i;
-            break;
-          }
-          braceCount--;
+  // Search forward for opening brace/bracket
+  let blockStart = -1;
+  let openChar = '';
+  let closeChar = '';
+
+  for (let i = guardLine + 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Check for various block delimiters
+    if (line.includes('{')) {
+      blockStart = i;
+      openChar = '{';
+      closeChar = '}';
+      break;
+    } else if (line.includes('[') && language === 'python') {
+      blockStart = i;
+      openChar = '[';
+      closeChar = ']';
+      break;
+    }
+  }
+
+  if (blockStart === -1) return null;
+
+  // Find the matching closing brace/bracket
+  let nestCount = 0;
+  let blockEnd = -1;
+
+  for (let i = blockStart; i < lines.length; i++) {
+    const line = lines[i];
+    for (const char of line) {
+      if (char === openChar) nestCount++;
+      if (char === closeChar) {
+        nestCount--;
+        if (nestCount === 0) {
+          blockEnd = i;
+          break;
         }
       }
-      if (blockStart !== -1) break;
     }
-
-    if (blockStart === -1) return null;
-
-    const blockEnd = findScopeEnd(lines, blockStart, language);
-
-    return {
-      startLine: blockStart + 1,  // Convert to 1-based
-      endLine: blockEnd + 1,      // Convert to 1-based
-      type: 'block'
-    };
+    if (blockEnd !== -1) break;
   }
 
-  // For Python, use indentation
-  if (language === 'python') {
-    return findPythonBlock(lines, guardLine);
-  }
+  if (blockEnd === -1) return null;
 
-  return null;
+  return {
+    startLine: blockStart + 1,  // Convert to 1-based
+    endLine: blockEnd + 1,      // Convert to 1-based
+    type: 'block'
+  };
 }
 
 /**
@@ -624,22 +777,27 @@ function findPythonScopeEnd(lines: string[], startLine: number): number {
   }
 
   // Find where the indentation returns to base level or less
+  let lastNonEmptyLine = startLine;
   for (; i < lines.length; i++) {
     const line = lines[i];
-    if (line.trim() === '') continue; // Skip empty lines
 
-    if (getIndentLevel(line) <= baseIndent) {
-      return i - 1;
+    if (line.trim() !== '') {
+      if (getIndentLevel(line) <= baseIndent) {
+        // Return the last non-empty line before the dedent
+        return lastNonEmptyLine;
+      }
+      // Update last non-empty line if still within scope
+      lastNonEmptyLine = i;
     }
   }
 
-  return lines.length - 1;
+  return lastNonEmptyLine;
 }
 
 /**
  * Find Python block based on indentation
  */
-function findPythonBlock(lines: string[], guardLine: number): ScopeBoundary | null {
+function _findPythonBlock(lines: string[], guardLine: number): ScopeBoundary | null {
   // Find the line that starts the current indentation block
   const currentIndent = getIndentLevel(lines[guardLine]);
 
@@ -687,4 +845,107 @@ function getIndentLevel(line: string): number {
     else break;
   }
   return indent;
+}
+
+/**
+ * Find context scope boundaries using regex (fallback)
+ * Context applies only to documentation (comments and docstrings)
+ */
+function findContextScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
+  // Start from the line after the guard tag
+  const startLine = guardLine + 1;
+  let endLine = startLine;
+
+  // Pattern for detecting comments based on language
+  let commentPattern: RegExp;
+  switch (language) {
+    case 'python':
+      commentPattern = /^\s*#|^\s*"""|^\s*'''/;
+      break;
+    case 'javascript':
+    case 'typescript':
+    case 'tsx':
+      commentPattern = /^\s*\/\/|^\s*\/\*|^\s*\*/;
+      break;
+    case 'java':
+    case 'c':
+    case 'cpp':
+      commentPattern = /^\s*\/\/|^\s*\/\*|^\s*\*/;
+      break;
+    default:
+      commentPattern = /^\s*\/\/|^\s*#/;
+  }
+
+  // Check each line to see if it's documentation
+  let inBlockComment = false;
+  let inDocstring = false;
+
+  for (let i = startLine; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Handle Python docstrings
+    if (language === 'python') {
+      if (trimmed.startsWith('"""') || trimmed.startsWith("'''")) {
+        if (!inDocstring) {
+          inDocstring = true;
+          endLine = i;
+          continue;
+        } else if (trimmed.endsWith('"""') || trimmed.endsWith("'''")) {
+          inDocstring = false;
+          endLine = i;
+          continue;
+        }
+      }
+      if (inDocstring) {
+        endLine = i;
+        continue;
+      }
+    }
+
+    // Handle block comments
+    if (trimmed.startsWith('/*')) {
+      inBlockComment = true;
+      endLine = i;
+      continue;
+    }
+    if (inBlockComment) {
+      endLine = i;
+      if (trimmed.endsWith('*/')) {
+        inBlockComment = false;
+      }
+      continue;
+    }
+
+    // Handle line comments
+    if (commentPattern.test(line)) {
+      // Check if this is a guard tag - if so, context ends
+      if (trimmed.includes(GUARD_TAG_PREFIX)) {
+        break;
+      }
+      endLine = i;
+      continue;
+    }
+
+    // If we hit a non-comment, non-empty line, stop
+    if (trimmed !== '') {
+      break;
+    }
+
+    // Empty lines in documentation context
+    if (trimmed === '' && endLine > startLine - 1) {
+      endLine = i;
+    }
+  }
+
+  // If we found any documentation lines
+  if (endLine >= startLine) {
+    return {
+      startLine: startLine + 1,  // Convert to 1-based
+      endLine: endLine + 1,      // Convert to 1-based
+      type: 'context'
+    };
+  }
+
+  return null;
 }
