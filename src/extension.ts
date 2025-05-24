@@ -5,7 +5,7 @@ import { registerFileDecorationProvider } from '@/tools/file-customization-provi
 import { registerContextMenu } from '@/tools/register-context-menu';
 import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
 import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
-import { parseGuardTags, parseGuardTagsChunked, computeLinePermissions, markLinesModified } from '@/utils/guardProcessor';
+import { parseGuardTagsChunked, getLinePermissions, markLinesModified } from '@/utils/guardProcessor';
 import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
 import type { GuardTag } from '@/types/guardTypes';
 import { errorHandler } from '@/utils/errorHandler';
@@ -439,7 +439,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
     // Use shared functions to parse guard tags and compute line permissions
     let guardTags: GuardTag[] = [];
-    let linePermissions: ReturnType<typeof computeLinePermissions> = [];
+    let linePermissions = new Map<number, import('@/types/guardTypes').LinePermission>();
 
     try {
       const config = workspace.getConfiguration(getExtensionWithOptionalName());
@@ -489,15 +489,15 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
           }
           performanceMonitor.endTimer('parseGuardTagsChunked', { lines: lines.length, chunked: true });
         } else {
-          performanceMonitor.startTimer('parseGuardTags');
-          guardTags = await parseGuardTags(document, lines);
-          performanceMonitor.endTimer('parseGuardTags', { lines: lines.length, chunked: false });
+          performanceMonitor.startTimer('parseGuardTagsChunked');
+          guardTags = await parseGuardTagsChunked(document, lines);
+          performanceMonitor.endTimer('parseGuardTagsChunked', { lines: lines.length, chunked: false });
         }
       }
 
-      performanceMonitor.startTimer('computeLinePermissions');
-      linePermissions = computeLinePermissions(lines, guardTags);
-      performanceMonitor.endTimer('computeLinePermissions', { lines: lines.length, guardTags: guardTags.length });
+      performanceMonitor.startTimer('getLinePermissions');
+      linePermissions = getLinePermissions(document, guardTags);
+      performanceMonitor.endTimer('getLinePermissions', { lines: lines.length, guardTags: guardTags.length });
     } catch (error) {
       errorHandler.handleError(
         error instanceof Error ? error : new Error(String(error)),
@@ -524,18 +524,17 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     let currentTarget = '';
     let currentPermission = '';
 
-    for (let i = 0; i < linePermissions.length; i++) {
-      const perm = linePermissions[i];
-      const target = typeof perm === 'object' ? perm.target : 'ai';
-      const permission = typeof perm === 'object' ? perm.permission : perm;
+    for (let i = 0; i < document.lineCount; i++) {
+      const lineNumber = i + 1; // Convert to 1-based for permission lookup
+      const perm = linePermissions.get(lineNumber);
+      
+      // Determine effective target and permission for this line
+      const target = perm?.target;
+      const permission = perm?.permission;
 
-      // Treat all default permissions as AI writable
-      let effectivePermission = permission;
-      let effectiveTarget = target || 'ai';
-      if (permission === 'default') {
-        effectivePermission = 'w';
-        effectiveTarget = 'ai';
-      }
+      // For comparison purposes, treat undefined as a specific state
+      let effectivePermission = permission || '';
+      let effectiveTarget = target || '';
 
       // Check if we need to end the current range
       if (effectiveTarget !== currentTarget || effectivePermission !== currentPermission) {
@@ -544,8 +543,9 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
           // Only trim whitespace for read-only and no-access sections
           const shouldTrimWhitespace = (currentTarget === 'ai' && currentPermission === 'n') ||
                                        (currentTarget === 'human' && (currentPermission === 'r' || currentPermission === 'n'));
+          // Note: currentStart is already adjusted by +1, so we need to adjust our range accordingly
           const lastLine = shouldTrimWhitespace
-            ? findLastNonEmptyLine(lines, currentStart, i - 1)
+            ? findLastNonEmptyLine(lines, currentStart - 1, i - 1)
             : i - 1;
 
           const range = new Range(
@@ -577,7 +577,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
           (effectiveTarget === 'human' && (effectivePermission === 'r' || effectivePermission === 'n'));
 
         if (shouldHighlight) {
-          currentStart = i;
+          currentStart = i + 1;  // Fix off-by-one: decorations were starting one line too early
           currentTarget = effectiveTarget;
           currentPermission = effectivePermission;
         } else {
@@ -593,8 +593,9 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       // Only trim whitespace for read-only and no-access sections
       const shouldTrimWhitespace = (currentTarget === 'ai' && currentPermission === 'n') ||
                                    (currentTarget === 'human' && (currentPermission === 'r' || currentPermission === 'n'));
+      // Note: currentStart is already adjusted by +1, so we need to adjust our range accordingly
       const lastLine = shouldTrimWhitespace
-        ? findLastNonEmptyLine(lines, currentStart, lines.length - 1)
+        ? findLastNonEmptyLine(lines, currentStart - 1, lines.length - 1)
         : lines.length - 1;
 
       const range = new Range(
@@ -714,11 +715,11 @@ async function updateStatusBarItem(document: TextDocument) {
 
     // Use shared functions to parse guard tags
     let guardTags: GuardTag[] = [];
-    let linePermissions: ReturnType<typeof computeLinePermissions> = [];
+    let linePermissions = new Map<number, import('@/types/guardTypes').LinePermission>();
 
     try {
-      guardTags = await parseGuardTags(document, lines);
-      linePermissions = computeLinePermissions(lines, guardTags);
+      guardTags = await parseGuardTagsChunked(document, lines);
+      linePermissions = getLinePermissions(document, guardTags);
     } catch (error) {
       errorHandler.handleError(
         error instanceof Error ? error : new Error(String(error)),
@@ -732,7 +733,7 @@ async function updateStatusBarItem(document: TextDocument) {
     }
 
     // Get the permission at the cursor line
-    const cursorPermission = linePermissions[cursorLine];
+    const cursorPermission = linePermissions.get(cursorLine + 1); // 1-based
 
     // Only show AI permissions in the status bar for now
     if (cursorPermission && cursorPermission.target === 'ai') {
@@ -742,7 +743,7 @@ async function updateStatusBarItem(document: TextDocument) {
           cursorPermission.permission === 'n' ? 'No Access' :
             cursorPermission.permission === 'context' ? 'Context' : 'Default';
 
-      lineCount = cursorPermission.lineCount;
+      // lineCount is not available in LinePermission anymore
     }
 
     // Set status bar text with line count if present

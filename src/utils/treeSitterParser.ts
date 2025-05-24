@@ -222,8 +222,8 @@ export function findParentOfType(
  */
 export function getNodeBoundaries(node: Node): { startLine: number; endLine: number } {
   return {
-    startLine: node.startPosition.row,
-    endLine: node.endPosition.row
+    startLine: node.startPosition.row + 1,  // Convert to 1-based line numbers
+    endLine: node.endPosition.row + 1        // Convert to 1-based line numbers
   };
 }
 

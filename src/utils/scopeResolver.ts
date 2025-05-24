@@ -250,13 +250,13 @@ function findSignatureScopeTreeSitter(
   if (!funcNode) return null;
 
   // For signatures, we want just the declaration line(s), not the body
-  const startLine = funcNode.startPosition.row;
+  const startLine = funcNode.startPosition.row + 1;  // Convert to 1-based
 
   // Find where the body starts (usually after '{' or ':')
   let endLine = startLine;
   for (const child of funcNode.children) {
     if (child && ['statement_block', 'block', 'compound_statement', 'code_block'].includes(child.type)) {
-      endLine = child.startPosition.row - 1;
+      endLine = child.startPosition.row;  // Convert to 1-based (row is 0-based, so +1-1=+0)
       break;
     }
   }
@@ -405,8 +405,8 @@ function findFunctionScope(lines: string[], guardLine: number, language: string)
   const functionEnd = findScopeEnd(lines, functionStart, language);
 
   return {
-    startLine: functionStart,
-    endLine: functionEnd,
+    startLine: functionStart + 1,  // Convert to 1-based
+    endLine: functionEnd + 1,      // Convert to 1-based
     type: 'function'
   };
 }
@@ -433,8 +433,8 @@ function findClassScope(lines: string[], guardLine: number, language: string): S
   const classEnd = findScopeEnd(lines, classStart, language);
 
   return {
-    startLine: classStart,
-    endLine: classEnd,
+    startLine: classStart + 1,  // Convert to 1-based
+    endLine: classEnd + 1,      // Convert to 1-based
     type: 'class'
   };
 }
@@ -469,8 +469,8 @@ function findBlockScope(lines: string[], guardLine: number, language: string): S
     const blockEnd = findScopeEnd(lines, blockStart, language);
 
     return {
-      startLine: blockStart,
-      endLine: blockEnd,
+      startLine: blockStart + 1,  // Convert to 1-based
+      endLine: blockEnd + 1,      // Convert to 1-based
       type: 'block'
     };
   }
@@ -502,8 +502,8 @@ function findSignatureScope(lines: string[], guardLine: number, language: string
   // If the guard is inline with the signature, only highlight that line
   if (pattern.test(currentLine)) {
     return {
-      startLine: guardLine,
-      endLine: guardLine,
+      startLine: guardLine + 1,  // Convert to 1-based
+      endLine: guardLine + 1,    // Convert to 1-based
       type: 'signature'
     };
   }
@@ -512,8 +512,8 @@ function findSignatureScope(lines: string[], guardLine: number, language: string
   for (let i = guardLine + 1; i < lines.length && i <= guardLine + 3; i++) {
     if (pattern.test(lines[i])) {
       return {
-        startLine: i,
-        endLine: i,
+        startLine: i + 1,  // Convert to 1-based
+        endLine: i + 1,    // Convert to 1-based
         type: 'signature'
       };
     }
@@ -524,8 +524,8 @@ function findSignatureScope(lines: string[], guardLine: number, language: string
   if (!functionScope) return null;
 
   return {
-    startLine: functionScope.startLine,
-    endLine: functionScope.startLine,
+    startLine: functionScope.startLine,  // Already 1-based from findFunctionScope
+    endLine: functionScope.startLine,    // Already 1-based from findFunctionScope
     type: 'signature'
   };
 }
@@ -549,8 +549,8 @@ function findBodyScope(lines: string[], guardLine: number, language: string): Sc
   }
 
   return {
-    startLine: bodyStart,
-    endLine: functionScope.endLine,
+    startLine: bodyStart + 1,  // Convert to 1-based
+    endLine: functionScope.endLine,  // Already 1-based from findFunctionScope
     type: 'body'
   };
 }
@@ -574,8 +574,8 @@ function findStatementScope(lines: string[], guardLine: number): ScopeBoundary |
   // For now, just return the current line
   // A full implementation would parse multi-line statements
   return {
-    startLine: guardLine,
-    endLine: guardLine,
+    startLine: guardLine + 1,  // Convert to 1-based
+    endLine: guardLine + 1,    // Convert to 1-based
     type: 'statement'
   };
 }
@@ -670,8 +670,8 @@ function findPythonBlock(lines: string[], guardLine: number): ScopeBoundary | nu
   }
 
   return {
-    startLine: blockStart,
-    endLine: blockEnd,
+    startLine: blockStart + 1,  // Convert to 1-based
+    endLine: blockEnd + 1,      // Convert to 1-based
     type: 'block'
   };
 }

@@ -16,9 +16,10 @@ export interface GuardTag {
 }
 
 export interface LinePermission {
-  target: 'ai' | 'human' | null;
-  permission: string;
-  lineCount?: number;
+  line: number;
+  target: 'ai' | 'human';
+  permission: 'r' | 'w' | 'n' | 'context';
+  identifier?: string;
 }
 
 export interface ParsedGuardTag {
@@ -42,7 +43,7 @@ export interface DecorationRanges {
 
 // Cache types
 export interface ScopeCache {
-  documentVersion: number;
+  version: number;
   scopes: Map<string, ScopeBoundary | null>;
 }
 

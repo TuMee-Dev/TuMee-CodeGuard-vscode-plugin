@@ -11,6 +11,16 @@ const scopeCacheMap = new WeakMap<vscode.TextDocument, ScopeCache>();
 const modifiedLinesMap = new WeakMap<vscode.TextDocument, Set<number>>();
 
 /**
+ * Stack entry for guard processing
+ */
+interface GuardStackEntry {
+  guard: GuardTag;
+  startLine: number;
+  endLine: number; // For line-limited guards
+  isLineLimited: boolean;
+}
+
+/**
  * Check if a line is a comment based on language
  */
 function isLineAComment(line: string, languageId: string): boolean {
@@ -49,60 +59,79 @@ function isLineAComment(line: string, languageId: string): boolean {
     case 'css':
     case 'scss':
     case 'less':
+    case 'sass':
       return trimmed.startsWith('/*');
-    case 'sql':
-      return trimmed.startsWith('--') || trimmed.startsWith('/*');
     case 'lua':
       return trimmed.startsWith('--');
+    case 'sql':
+      return trimmed.startsWith('--') || trimmed.startsWith('/*');
     case 'vb':
+    case 'vbnet':
       return trimmed.startsWith("'");
+    case 'fsharp':
+      return trimmed.startsWith('//') || trimmed.startsWith('(*');
+    case 'clojure':
+    case 'lisp':
+    case 'scheme':
+      return trimmed.startsWith(';');
+    case 'haskell':
+      return trimmed.startsWith('--');
+    case 'matlab':
+    case 'octave':
+      return trimmed.startsWith('%');
     case 'fortran':
-      return trimmed.startsWith('!') || trimmed.startsWith('C') || trimmed.startsWith('c');
+      return !!trimmed.match(/^[cC!]/);
+    case 'pascal':
+    case 'delphi':
+      return trimmed.startsWith('//') || trimmed.startsWith('{') || trimmed.startsWith('(*');
     default:
       // Default to common comment patterns
-      return trimmed.startsWith('//') || trimmed.startsWith('#') || trimmed.startsWith('/*');
+      return trimmed.startsWith('#') || trimmed.startsWith('//') || 
+             trimmed.startsWith('/*') || trimmed.startsWith('*');
   }
 }
 
 /**
- * Find the end of an implicit scope (until next guard tag or end of current code block)
+ * Find the end of an implicit scope (no longer used in stack-based approach)
+ * @deprecated Use stack-based approach instead
  */
 function findImplicitScopeEnd(lines: string[], startLine: number, languageId: string): number {
-  const totalLines = lines.length;
-  const currentIndent = getIndentLevel(lines[startLine]);
+  if (startLine >= lines.length) {
+    return startLine;
+  }
+  
+  const baseIndent = lines[startLine].match(/^(\s*)/)?.[1]?.length || 0;
   let endLine = startLine;
-
-  // For Python and other indent-based languages, track indent level
-  const isIndentBased = ['python', 'yaml', 'coffeescript', 'slim', 'pug', 'haml'].includes(languageId);
-
-  for (let i = startLine + 1; i < totalLines; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    // Stop at next guard tag
-    if (trimmed.includes('@guard:')) {
-      return endLine;
-    }
-
-    // Skip empty lines
-    if (trimmed === '') {
-      continue;
-    }
-
-    // For indent-based languages, check if we've left the current block
-    if (isIndentBased) {
-      const lineIndent = getIndentLevel(line);
-      if (lineIndent < currentIndent && !isLineAComment(trimmed, languageId)) {
-        return endLine;
+  
+  // For indent-based languages like Python
+  if (languageId === 'python' || languageId === 'ruby' || languageId === 'yaml') {
+    for (let i = startLine + 1; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      // Skip empty lines
+      if (trimmed === '') continue;
+      
+      // If we hit another guard tag, stop
+      if (trimmed.includes('@guard:')) {
+        break;
+      }
+      
+      // Check indentation
+      const currentIndent = line.match(/^(\s*)/)?.[1]?.length || 0;
+      
+      // If indentation is less than or equal to base, we're out of the block
+      if (currentIndent < baseIndent && trimmed !== '') {
+        break;
+      }
+      
+      // Update end line for non-empty, non-comment lines
+      if (!isLineAComment(trimmed, languageId)) {
+        endLine = i;
       }
     }
-
-    // Update end line for non-empty, non-comment lines
-    if (!isLineAComment(trimmed, languageId)) {
-      endLine = i;
-    }
   }
-
+  
   return endLine;
 }
 
@@ -148,42 +177,51 @@ function getScopeCache(document: vscode.TextDocument): ScopeCache {
   const version = document.version;
   let cache = scopeCacheMap.get(document);
 
-  // If cache doesn't exist, create new cache
-  if (!cache) {
-    cache = {
-      documentVersion: version,
-      scopes: new Map()
-    };
-    scopeCacheMap.set(document, cache);
-  } else if (cache.documentVersion !== version) {
-    // Document version changed - perform partial invalidation
-    const modifiedLines = modifiedLinesMap.get(document);
-
-    if (modifiedLines && modifiedLines.size > 0) {
-      // Only invalidate cache entries for modified lines
-      const newScopes = new Map<string, ScopeBoundary | null>();
-
-      for (const [key, value] of cache.scopes) {
-        const lineNum = parseInt(key.split(':')[0]);
-
-        // Keep cache entry if line wasn't modified
-        if (!modifiedLines.has(lineNum)) {
-          newScopes.set(key, value);
-        }
-      }
-
-      cache.scopes = newScopes;
-      cache.documentVersion = version;
-
-      // Clear modified lines tracking
-      modifiedLines.clear();
-    } else {
-      // No tracking info, fall back to full invalidation
+  if (!cache || cache.version !== version) {
+    // Create new cache or handle version mismatch
+    if (!cache) {
       cache = {
-        documentVersion: version,
-        scopes: new Map()
+        version,
+        scopes: new Map<string, ScopeBoundary | null>()
       };
       scopeCacheMap.set(document, cache);
+    } else {
+      // Version changed - invalidate only modified lines
+      const modifiedLines = modifiedLinesMap.get(document);
+      if (modifiedLines && modifiedLines.size > 0) {
+        // Create new cache with non-modified entries preserved
+        const newCache: ScopeCache = {
+          version,
+          scopes: new Map<string, ScopeBoundary | null>()
+        };
+
+        // Copy entries that weren't affected by modifications
+        cache.scopes.forEach((value, key) => {
+          const [lineStr] = key.split(':');
+          const line = parseInt(lineStr, 10);
+          if (!modifiedLines.has(line) && value) {
+            // Also check if the scope boundary itself was modified
+            let scopeModified = false;
+            for (let l = value.startLine; l <= value.endLine; l++) {
+              if (modifiedLines.has(l)) {
+                scopeModified = true;
+                break;
+              }
+            }
+            if (!scopeModified) {
+              newCache.scopes.set(key, value);
+            }
+          }
+        });
+
+        cache = newCache;
+        scopeCacheMap.set(document, cache);
+        modifiedLines.clear();
+      } else {
+        // Full invalidation
+        cache.version = version;
+        cache.scopes.clear();
+      }
     }
   }
 
@@ -215,10 +253,10 @@ async function resolveSemanticWithCache(
 }
 
 /**
- * Parse guard tags from document lines in chunks for better performance
+ * Parse guard tags using stack-based approach for proper precedence
  * @param document The document to parse
  * @param lines All lines in the document
- * @param chunkSize Number of lines to process at once (default: 1000)
+ * @param chunkSize Number of lines to process at once (for progress reporting)
  * @param onProgress Optional callback to report progress
  */
 export async function parseGuardTagsChunked(
@@ -238,6 +276,7 @@ export async function parseGuardTagsChunked(
 
   const guardTags: GuardTag[] = [];
   const totalLines = lines.length;
+  const guardStack: GuardStackEntry[] = [];
 
   try {
     for (let chunkStart = 0; chunkStart < totalLines; chunkStart += chunkSize) {
@@ -256,197 +295,24 @@ export async function parseGuardTagsChunked(
           continue;
         }
 
+        // Check for expired line-limited guards
+        while (guardStack.length > 0) {
+          const top = guardStack[guardStack.length - 1];
+          if (top.isLineLimited && i >= top.endLine) {
+            guardStack.pop();
+          } else {
+            break;
+          }
+        }
+
         const tagInfo = parseGuardTag(line);
 
         if (tagInfo) {
-          // If there's a semantic scope, resolve it to line numbers
-          if (tagInfo.scope && !tagInfo.lineCount) {
-            const scopeBoundary = await resolveSemanticWithCache(
-              document,
-              i,
-              tagInfo.scope,
-              tagInfo.addScopes,
-              tagInfo.removeScopes
-            );
-
-            if (scopeBoundary) {
-              // For semantic scopes, we need to handle the range differently
-              guardTags.push({
-                lineNumber: scopeBoundary.startLine,
-                target: tagInfo.target as 'ai' | 'human',
-                identifier: tagInfo.identifier,
-                permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-                scope: tagInfo.scope,
-                lineCount: scopeBoundary.endLine - scopeBoundary.startLine + 1,
-                addScopes: tagInfo.addScopes,
-                removeScopes: tagInfo.removeScopes,
-                scopeStart: scopeBoundary.startLine,
-                scopeEnd: scopeBoundary.endLine
-              });
-            } else {
-              // If scope resolution fails, treat as unbounded
-              guardTags.push({
-                lineNumber: i,
-                target: tagInfo.target as 'ai' | 'human',
-                identifier: tagInfo.identifier,
-                permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-                scope: tagInfo.scope,
-                lineCount: tagInfo.lineCount,
-                addScopes: tagInfo.addScopes,
-                removeScopes: tagInfo.removeScopes
-              });
-            }
-          } else {
-            // For guard tags without explicit scope, check if they're on a comment line
-            // If so, they should apply to the following code block
-            const trimmedLine = line.trim();
-            const isCommentLine = isLineAComment(trimmedLine, document.languageId);
-
-            if (isCommentLine && !tagInfo.lineCount) {
-              // Find the next non-comment, non-empty line as the start of the guarded region
-              let startLine = i + 1;
-              while (startLine < totalLines &&
-                     (lines[startLine].trim() === '' ||
-                      isLineAComment(lines[startLine].trim(), document.languageId))) {
-                startLine++;
-              }
-
-              if (startLine < totalLines) {
-                // Find the end of the current scope or next guard tag
-                const endLine = findImplicitScopeEnd(lines, startLine, document.languageId);
-
-                guardTags.push({
-                  lineNumber: i + 1,  // Line numbers are 1-based
-                  target: tagInfo.target as 'ai' | 'human',
-                  identifier: tagInfo.identifier,
-                  permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-                  scope: tagInfo.scope,
-                  lineCount: endLine - startLine + 1,
-                  addScopes: tagInfo.addScopes,
-                  removeScopes: tagInfo.removeScopes,
-                  scopeStart: startLine + 1,  // Convert to 1-based
-                  scopeEnd: endLine + 1       // Convert to 1-based
-                });
-              } else {
-                // No code follows, treat as single line
-                guardTags.push({
-                  lineNumber: i + 1,
-                  target: tagInfo.target as 'ai' | 'human',
-                  identifier: tagInfo.identifier,
-                  permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-                  scope: tagInfo.scope,
-                  lineCount: tagInfo.lineCount || 1,
-                  addScopes: tagInfo.addScopes,
-                  removeScopes: tagInfo.removeScopes
-                });
-              }
-            } else {
-              // Regular line count or on code line
-              guardTags.push({
-                lineNumber: i + 1,
-                target: tagInfo.target as 'ai' | 'human',
-                identifier: tagInfo.identifier,
-                permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-                scope: tagInfo.scope,
-                lineCount: tagInfo.lineCount,
-                addScopes: tagInfo.addScopes,
-                removeScopes: tagInfo.removeScopes
-              });
-            }
-          }
-        } // Close if (tagInfo)
-      }
-
-      // Report progress if callback provided
-      if (onProgress) {
-        onProgress(chunkEnd, totalLines);
-      }
-
-      // Yield to allow other operations
-      await new Promise(resolve => setImmediate(resolve));
-    }
-  } catch (error) {
-    logError(error, 'parseGuardTagsChunked', { showUser: false });
-    // Return what we've parsed so far
-    return guardTags;
-  }
-
-  return guardTags;
-}
-
-/**
- * Parse guard tags from document lines
- * This is the unified function that both updateCodeDecorations and updateStatusBarItem will use
- */
-export async function parseGuardTags(document: vscode.TextDocument, lines: string[]): Promise<GuardTag[]> {
-  // Validate input
-  if (!validateDocument(document)) {
-    throw new GuardProcessingError('Invalid document object', ErrorSeverity.ERROR);
-  }
-
-  if (!Array.isArray(lines)) {
-    throw new GuardProcessingError('Invalid lines array', ErrorSeverity.ERROR);
-  }
-
-  const guardTags: GuardTag[] = [];
-
-  try {
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
-      // Skip empty or invalid lines
-      if (typeof line !== 'string') {
-        logError(
-          new GuardProcessingError(`Invalid line at index ${i}`, ErrorSeverity.WARNING),
-          'parseGuardTags'
-        );
-        continue;
-      }
-
-      const tagInfo = parseGuardTag(line);
-
-      if (tagInfo) {
-        // If there's a semantic scope, resolve it to line numbers
-        if (tagInfo.scope && !tagInfo.lineCount) {
-          const scopeBoundary = await resolveSemanticWithCache(
-            document,
-            i,
-            tagInfo.scope,
-            tagInfo.addScopes,
-            tagInfo.removeScopes
-          );
-
-          if (scopeBoundary) {
-          // For semantic scopes, we need to handle the range differently
-            guardTags.push({
-              lineNumber: scopeBoundary.startLine,
-              target: tagInfo.target as 'ai' | 'human',
-              identifier: tagInfo.identifier,
-              permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-              scope: tagInfo.scope,
-              lineCount: scopeBoundary.endLine - scopeBoundary.startLine + 1,
-              addScopes: tagInfo.addScopes,
-              removeScopes: tagInfo.removeScopes,
-              scopeStart: scopeBoundary.startLine,
-              scopeEnd: scopeBoundary.endLine
-            });
-          } else {
-          // If scope resolution fails, treat as unbounded
-            guardTags.push({
-              lineNumber: i,
-              target: tagInfo.target as 'ai' | 'human',
-              identifier: tagInfo.identifier,
-              permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-              scope: tagInfo.scope,
-              lineCount: tagInfo.lineCount,
-              addScopes: tagInfo.addScopes,
-              removeScopes: tagInfo.removeScopes
-            });
-          }
-        } else {
-        // Regular line count or unbounded
-          guardTags.push({
-            lineNumber: i,
+          const lineNumber = i + 1; // 1-based line number
+          
+          // Create guard tag entry
+          const guardTag: GuardTag = {
+            lineNumber: lineNumber,
             target: tagInfo.target as 'ai' | 'human',
             identifier: tagInfo.identifier,
             permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
@@ -454,144 +320,219 @@ export async function parseGuardTags(document: vscode.TextDocument, lines: strin
             lineCount: tagInfo.lineCount,
             addScopes: tagInfo.addScopes,
             removeScopes: tagInfo.removeScopes
-          });
-        }
-      } // Close if (tagInfo)
-    }
-  } catch (error) {
-    logError(error, 'parseGuardTags', { showUser: false });
-    // Return what we've parsed so far
-    return guardTags;
-  }
+          };
 
-  return guardTags;
+          // Handle semantic scope resolution
+          if (tagInfo.scope && !tagInfo.lineCount) {
+            const scopeBoundary = await resolveSemanticWithCache(
+              document,
+              lineNumber - 1,  // Convert back to 0-based for the resolver
+              tagInfo.scope,
+              tagInfo.addScopes,
+              tagInfo.removeScopes
+            );
+
+            if (scopeBoundary) {
+              guardTag.scopeStart = scopeBoundary.startLine;
+              guardTag.scopeEnd = scopeBoundary.endLine;
+              guardTag.lineCount = scopeBoundary.endLine - scopeBoundary.startLine + 1;
+            }
+          }
+
+          // Determine guard boundaries
+          let startLine = lineNumber;
+          let endLine = totalLines;
+          let isLineLimited = false;
+
+          if (tagInfo.lineCount) {
+            // Line-limited guard
+            endLine = startLine + tagInfo.lineCount - 1;
+            isLineLimited = true;
+          } else if (guardTag.scopeStart && guardTag.scopeEnd) {
+            // Semantic scope
+            startLine = guardTag.scopeStart;
+            endLine = guardTag.scopeEnd;
+          }
+
+          // Update guard tag with calculated boundaries
+          guardTag.scopeStart = startLine;
+          guardTag.scopeEnd = endLine;
+
+          // Push to stack
+          guardStack.push({
+            guard: guardTag,
+            startLine: startLine,
+            endLine: endLine,
+            isLineLimited: isLineLimited
+          });
+
+          guardTags.push(guardTag);
+        }
+      }
+
+      // Report progress
+      if (onProgress) {
+        onProgress(chunkEnd, totalLines);
+      }
+    }
+
+    return guardTags;
+
+  } catch (error) {
+    if (error instanceof GuardProcessingError) {
+      throw error;
+    }
+    
+    throw new GuardProcessingError(
+      `Unexpected error parsing guard tags: ${error instanceof Error ? error.message : String(error)}`,
+      ErrorSeverity.ERROR
+    );
+  }
 }
 
 /**
- * Compute line permissions from guard tags
- * This unifies the permission processing logic
+ * Create guard regions from parsed tags using stack-based precedence
+ * This function is used to create non-overlapping regions for visualization
  */
-export function computeLinePermissions(lines: string[], guardTags: GuardTag[]): LinePermission[] {
-  // Validate input
-  if (!Array.isArray(lines)) {
-    throw new GuardProcessingError('Invalid lines array', ErrorSeverity.ERROR);
-  }
-
-  if (!Array.isArray(guardTags)) {
-    throw new GuardProcessingError('Invalid guardTags array', ErrorSeverity.ERROR);
-  }
-
-  try {
-    // Initialize line permissions
-    const linePermissions: LinePermission[] = new Array(lines.length)
-      .fill(null)
-      .map(() => ({ target: null, permission: 'default' }));
-
-    // Sort guard tags by line number to ensure we process them in order
-    const sortedTags = [...guardTags].sort((a, b) => a.lineNumber - b.lineNumber);
-
-    // STEP 1: Process all unbounded regions to establish base permissions
-    const basePermissions: (LinePermission | null)[] = new Array(lines.length).fill(null) as (LinePermission | null)[];
-
-    for (let i = 0; i < sortedTags.length; i++) {
-      const tag = sortedTags[i];
-
-      // Skip bounded regions for now
-      if (tag.lineCount !== undefined) continue;
-
-      // For unbounded regions, apply from this line to the next guard tag
-      const startLine = tag.lineNumber;
-      let endLine: number;
-
-      // Find the next guard tag (bounded or unbounded)
-      if (i < sortedTags.length - 1) {
-        endLine = sortedTags[i + 1].lineNumber;
+export function createGuardRegions(guardTags: GuardTag[], totalLines: number): GuardTag[] {
+  const regions: GuardTag[] = [];
+  const linePermissions: Map<number, GuardTag> = new Map();
+  
+  // Process guards to determine effective permission for each line
+  const guardStack: GuardStackEntry[] = [];
+  
+  for (let line = 1; line <= totalLines; line++) {
+    // Remove expired guards from stack
+    while (guardStack.length > 0) {
+      const top = guardStack[guardStack.length - 1];
+      if (top.isLineLimited && line > top.endLine) {
+        guardStack.pop();
       } else {
-        endLine = lines.length;
-      }
-
-      // Apply this permission to all lines in the range
-      for (let j = startLine; j < endLine; j++) {
-        const perm = { target: tag.target, permission: tag.permission };
-        basePermissions[j] = perm;
-        linePermissions[j] = perm;
+        break;
       }
     }
-
-    // STEP 2: Determine parent permissions for bounded regions
-    const parentPermissions = new Map<number, LinePermission>();
-
-    for (let i = 0; i < sortedTags.length; i++) {
-      const tag = sortedTags[i];
-      if (tag.lineCount === undefined) continue; // Skip unbounded regions
-
-      // Find the most recent unbounded region before this one
-      let parentPermission: LinePermission = { target: null, permission: 'default' };
-      for (let j = 0; j < i; j++) {
-        const prevTag = sortedTags[j];
-        if (prevTag.lineCount === undefined && prevTag.lineNumber < tag.lineNumber) {
-          parentPermission = { target: prevTag.target, permission: prevTag.permission };
-        }
-      }
-
-      parentPermissions.set(tag.lineNumber, parentPermission);
-    }
-
-    // STEP 3: Process bounded regions (with line counts)
-    for (const tag of sortedTags) {
-      if (tag.lineCount === undefined) continue; // Skip unbounded regions
-
-      const startLine = tag.lineNumber;
-      // For semantic scopes, lineCount already includes the exact range
-      // For numeric line counts, we add +1 to include the guard tag line
-      const isSemanticScope = tag.scope && isNaN(parseInt(tag.scope));
-      const endLine = isSemanticScope
-        ? Math.min(startLine + tag.lineCount, lines.length)
-        : Math.min(startLine + tag.lineCount + 1, lines.length);
-
-      // Apply the bounded region's permission
-      for (let i = startLine; i < endLine; i++) {
-        linePermissions[i] = {
-          target: tag.target,
-          permission: tag.permission,
-          lineCount: tag.lineCount
+    
+    // Add new guards starting on this line
+    for (const tag of guardTags) {
+      if (tag.lineNumber === line) {
+        const entry: GuardStackEntry = {
+          guard: tag,
+          startLine: tag.scopeStart || line,
+          endLine: tag.scopeEnd || (tag.lineCount ? line + tag.lineCount - 1 : totalLines),
+          isLineLimited: !!tag.lineCount
         };
-      }
-
-      // After a bounded region ends, revert to the parent permission
-      if (endLine < lines.length) {
-        const parentPerm = parentPermissions.get(startLine);
-        if (parentPerm) {
-          linePermissions[endLine] = parentPerm;
-        }
+        guardStack.push(entry);
       }
     }
-
-    // STEP 4: Apply base permissions to any lines that haven't been set yet
-    for (let i = 0; i < lines.length; i++) {
-      const perm = linePermissions[i];
-      const basePerm = basePermissions[i];
-      if (perm && perm.permission === 'default' && basePerm) {
-        linePermissions[i] = basePerm;
+    
+    // Top of stack determines effective permission
+    if (guardStack.length > 0) {
+      const top = guardStack[guardStack.length - 1];
+      if (line >= top.startLine && line <= top.endLine) {
+        linePermissions.set(line, top.guard);
       }
     }
-
-    // STEP 5: Make sure empty lines inherit permissions
-    for (let i = 1; i < lines.length; i++) {
-      const currentPerm = linePermissions[i];
-      const prevPerm = linePermissions[i - 1];
-      if (currentPerm && currentPerm.permission === 'default' && prevPerm && prevPerm.permission !== 'default') {
-      // An empty or unprocessed line inherits from the previous line
-        linePermissions[i] = linePermissions[i - 1];
-      }
-    }
-
-    return linePermissions;
-  } catch (error) {
-    logError(error, 'computeLinePermissions', { showUser: false });
-    // Return default permissions for all lines
-    return new Array(lines.length)
-      .fill(null)
-      .map(() => ({ target: null, permission: 'default' }));
   }
+  
+  // Create contiguous regions from line permissions
+  let currentRegion: GuardTag | null = null;
+  let regionStart = 1;
+  
+  for (let line = 1; line <= totalLines + 1; line++) {
+    const permission = line <= totalLines ? linePermissions.get(line) : null;
+    
+    if (currentRegion) {
+      // Check if we need to end the current region
+      const needNewRegion = !permission || 
+        permission.target !== currentRegion.target ||
+        permission.permission !== currentRegion.permission ||
+        permission.identifier !== currentRegion.identifier;
+        
+      if (needNewRegion) {
+        // End current region
+        currentRegion.scopeStart = regionStart;
+        currentRegion.scopeEnd = line - 1;
+        currentRegion.lineCount = line - regionStart;
+        regions.push(currentRegion);
+        currentRegion = null;
+      }
+    }
+    
+    if (permission && !currentRegion) {
+      // Start new region
+      currentRegion = {
+        lineNumber: line,
+        target: permission.target,
+        identifier: permission.identifier,
+        permission: permission.permission,
+        scope: permission.scope,
+        addScopes: permission.addScopes,
+        removeScopes: permission.removeScopes
+      };
+      regionStart = line;
+    }
+  }
+  
+  return regions;
 }
+
+/**
+ * Get line permissions for a document (used for decorations)
+ * @param document The document to analyze
+ * @param guardTags The parsed guard tags
+ * @returns Map of line numbers to their effective guard permission
+ */
+export function getLinePermissions(
+  document: vscode.TextDocument,
+  guardTags: GuardTag[]
+): Map<number, LinePermission> {
+  const permissions = new Map<number, LinePermission>();
+  const totalLines = document.lineCount;
+  const guardStack: GuardStackEntry[] = [];
+  
+  for (let line = 1; line <= totalLines; line++) {
+    // Remove expired guards from stack
+    while (guardStack.length > 0) {
+      const top = guardStack[guardStack.length - 1];
+      if (top.isLineLimited && line > top.endLine) {
+        guardStack.pop();
+      } else {
+        break;
+      }
+    }
+    
+    // Add new guards starting on this line
+    for (const tag of guardTags) {
+      if (tag.lineNumber === line) {
+        const entry: GuardStackEntry = {
+          guard: tag,
+          startLine: tag.scopeStart || line,
+          endLine: tag.scopeEnd || (tag.lineCount ? line + tag.lineCount - 1 : totalLines),
+          isLineLimited: !!tag.lineCount
+        };
+        guardStack.push(entry);
+      }
+    }
+    
+    // Top of stack determines effective permission
+    if (guardStack.length > 0) {
+      const top = guardStack[guardStack.length - 1];
+      if (line >= top.startLine && line <= top.endLine) {
+        permissions.set(line, {
+          line: line,
+          permission: top.guard.permission,
+          target: top.guard.target,
+          identifier: top.guard.identifier
+        });
+      }
+    }
+  }
+  
+  return permissions;
+}
+
+/**
+ * Export utility functions
+ */
+export { parseGuardTag } from './acl';
+export { isLineAComment };
