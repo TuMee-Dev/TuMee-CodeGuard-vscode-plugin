@@ -5,7 +5,8 @@ import type {
   WebviewPanel,
   ExtensionContext,
   TextEditorDecorationType,
-  DecorationOptions } from 'vscode';
+  DecorationOptions,
+  OutputChannel } from 'vscode';
 import {
   window,
   ViewColumn,
@@ -29,6 +30,7 @@ import type {
 let validationPanel: WebviewPanel | undefined;
 let errorDecorationType: TextEditorDecorationType;
 let warningDecorationType: TextEditorDecorationType;
+let debugChannel: OutputChannel | undefined;
 
 // Initialize decoration types for highlighting mismatches
 function initializeDecorationTypes(): void {
@@ -67,29 +69,69 @@ export function showValidationReport(
   context: ExtensionContext,
   result: ValidationResult
 ): void {
+  // Create debug channel if needed
+  if (!debugChannel) {
+    debugChannel = window.createOutputChannel('TuMee Debug');
+  }
+
   initializeDecorationTypes();
+
+  // Validate result object
+  if (!result) {
+    void window.showErrorMessage('Validation result is undefined');
+    return;
+  }
+
+  // Ensure required fields exist with defaults
+  result.file_path = result.file_path || 'Unknown file';
+  result.status = result.status || ValidationStatus.ErrorInternal;
+  result.timestamp = result.timestamp || new Date();
+  result.discrepancies = result.discrepancies || [];
+  result.statistics = result.statistics || {
+    total_lines: 0,
+    plugin_guard_regions: 0,
+    tool_guard_regions: 0,
+    matching_regions: 0,
+    max_overlapping_guards: 0,
+    lines_with_multiple_guards: 0,
+    discrepancy_count: 0,
+    affected_lines: 0
+  };
 
   // Create or reveal the webview panel
   if (validationPanel) {
-    validationPanel.reveal(ViewColumn.Two);
+    // Panel exists, just reveal and update
+    validationPanel.reveal(ViewColumn.Two, false);
+    validationPanel.webview.html = getWebviewContent(result);
   } else {
+    // Create new panel
     validationPanel = window.createWebviewPanel(
       'codeGuardValidation',
       'CodeGuard Validation Report',
-      ViewColumn.Two,
+      ViewColumn.Two,  // Create in column 2 to avoid conflicts
       {
         enableScripts: true,
         retainContextWhenHidden: true
       }
     );
 
+    // Set up dispose handler
     validationPanel.onDidDispose(() => {
       validationPanel = undefined;
     });
-  }
 
-  // Update the webview content
-  validationPanel.webview.html = getWebviewContent(result);
+    // Set content FIRST
+    const html = getWebviewContent(result);
+
+    // WORKAROUND: Delay setting HTML content to ensure panel is ready
+    // This fixes the first-time display issue
+    setTimeout(() => {
+      if (validationPanel) {
+        validationPanel.webview.html = html;
+        validationPanel.reveal(ViewColumn.Two, true);  // true = preserve focus
+      }
+    }, 100);  // 100ms delay is usually sufficient
+  }
 
   // Handle messages from the webview
   validationPanel.webview.onDidReceiveMessage(
@@ -118,7 +160,7 @@ export function showValidationReport(
   );
 
   // Highlight mismatched regions in the editor
-  highlightMismatchedRegions(result.discrepancies);
+  highlightMismatchedRegions(result.discrepancies, result.file_path);
 }
 
 function getWebviewContent(result: ValidationResult): string {
@@ -386,7 +428,7 @@ function getDiscrepanciesHtml(result: ValidationResult): string {
   if (!result.discrepancies || !Array.isArray(result.discrepancies)) {
     return '<h2>No Discrepancies Found</h2>';
   }
-  
+
   const errors = result.discrepancies.filter(d => d.severity === 'ERROR');
   const warnings = result.discrepancies.filter(d => d.severity === 'WARNING');
 
@@ -496,11 +538,26 @@ function showLayerVisualization(line: number, discrepancy: Discrepancy): void {
   quickPick.show();
 }
 
-function highlightMismatchedRegions(discrepancies: Discrepancy[]): void {
-  const activeEditor = window.activeTextEditor;
-  if (!activeEditor) return;
-  
+function highlightMismatchedRegions(discrepancies: Discrepancy[], filePath?: string): void {
   if (!discrepancies || !Array.isArray(discrepancies)) return;
+
+  // Find the editor for the validated file
+  let targetEditor = window.activeTextEditor;
+
+  if (filePath) {
+    // Search all visible text editors for the one showing our file
+    for (const editor of window.visibleTextEditors) {
+      if (editor.document.fileName === filePath) {
+        targetEditor = editor;
+        break;
+      }
+    }
+  }
+
+  if (!targetEditor || (filePath && targetEditor.document.fileName !== filePath)) {
+    // No editor found for the file
+    return;
+  }
 
   const errorDecorations: DecorationOptions[] = [];
   const warningDecorations: DecorationOptions[] = [];
@@ -525,8 +582,8 @@ function highlightMismatchedRegions(discrepancies: Discrepancy[]): void {
     }
   }
 
-  activeEditor.setDecorations(errorDecorationType, errorDecorations);
-  activeEditor.setDecorations(warningDecorationType, warningDecorations);
+  targetEditor.setDecorations(errorDecorationType, errorDecorations);
+  targetEditor.setDecorations(warningDecorationType, warningDecorations);
 }
 
 async function saveValidationReport(result: ValidationResult): Promise<void> {

@@ -4,7 +4,6 @@
 import type { OutputChannel, ExtensionContext, Disposable } from 'vscode';
 import { window, workspace, ProgressLocation, commands } from 'vscode';
 import { exec } from 'child_process';
-import { promisify } from 'util';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,19 +12,69 @@ import { getAclCliPath, isCliAvailable } from './acl';
 import { parseGuardTags } from './guardProcessor';
 // import { getLanguageForDocument } from './scopeResolver';
 import { showValidationReport } from './validationReportView';
-import { ValidationStatus } from '@/types/validationTypes';
+import { ValidationStatus, ValidationExitCode } from '@/types/validationTypes';
 import type {
   ValidationPackage,
   ValidationRequest,
   GuardRegion,
   LineCoverage,
   ValidationResult,
-  ValidationExitCode,
   ParsedGuard
 } from '@/types/validationTypes';
 import type { GuardTag } from '@/types/guardTypes';
 
-const execAsync = promisify(exec);
+interface ExecResult {
+  stdout: string;
+  stderr: string;
+}
+
+interface ExecError extends Error {
+  code?: number;
+  stdout?: string;
+  stderr?: string;
+}
+
+// Better exec implementation that properly handles errors and timeouts
+function execAsync(command: string, options?: { timeout?: number; encoding?: string; maxBuffer?: number }): Promise<ExecResult> {
+  return new Promise((resolve, reject) => {
+    const execOptions = {
+      encoding: (options?.encoding || 'utf8') as BufferEncoding,
+      maxBuffer: options?.maxBuffer || 10 * 1024 * 1024,
+      timeout: options?.timeout || 0
+    };
+
+    const childProcess = exec(command, execOptions, (error: Error | null, stdout: string | Buffer, stderr: string | Buffer) => {
+      // Convert to string if needed
+      const stdoutStr = typeof stdout === 'string' ? stdout : (stdout).toString();
+      const stderrStr = typeof stderr === 'string' ? stderr : (stderr).toString();
+
+      if (error) {
+        // Include stdout/stderr in the error object
+        const enrichedError = error as ExecError;
+        enrichedError.stdout = stdoutStr;
+        enrichedError.stderr = stderrStr;
+        reject(enrichedError);
+      } else {
+        resolve({ stdout: stdoutStr, stderr: stderrStr });
+      }
+    });
+
+    // Add additional timeout handling
+    let timeoutId: NodeJS.Timeout | undefined;
+    if (options?.timeout) {
+      timeoutId = setTimeout(() => {
+        childProcess.kill();
+      }, options.timeout);
+    }
+
+    // Clear timeout when command completes
+    childProcess.on('exit', () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    });
+  });
+}
 
 let validationOutputChannel: OutputChannel;
 
@@ -162,15 +211,19 @@ async function buildValidationPackage(
 function computeLineCoverage(regions: GuardRegion[], totalLines: number): LineCoverage[] {
   const coverage: LineCoverage[] = [];
 
+  // Only include lines that actually have guards
   for (let line = 1; line <= totalLines; line++) {
     const applicableGuards = regions
       .filter(r => line >= r.start_line && line <= r.end_line)
       .map(r => r.index);
 
-    coverage.push({
-      line,
-      guards: applicableGuards
-    });
+    // Only add to coverage if this line has guards
+    if (applicableGuards.length > 0) {
+      coverage.push({
+        line,
+        guards: applicableGuards
+      });
+    }
   }
 
   return coverage;
@@ -230,6 +283,29 @@ function parseErrorResponse(output: string, exitCode: number): ValidationResult 
 }
 
 function showValidationResults(context: ExtensionContext, result: ValidationResult): void {
+  // Ensure result is valid
+  if (!result) {
+    logError('showValidationResults called with undefined result');
+    result = {
+      status: ValidationStatus.ErrorInternal,
+      exit_code: ValidationExitCode.InternalError,
+      file_path: window.activeTextEditor?.document.fileName || 'Unknown file',
+      timestamp: new Date(),
+      plugin_version: getPluginVersion(),
+      discrepancies: [],
+      statistics: {
+        total_lines: 0,
+        plugin_guard_regions: 0,
+        tool_guard_regions: 0,
+        matching_regions: 0,
+        max_overlapping_guards: 0,
+        lines_with_multiple_guards: 0,
+        discrepancy_count: 0,
+        affected_lines: 0
+      }
+    };
+  }
+
   // Log to output channel for debugging
   logInfo(`Validation completed with status: ${result.status}`);
 
@@ -326,27 +402,47 @@ async function handleValidationResponse(
 }
 
 export async function validateGuardSections(context: ExtensionContext): Promise<void> {
+  // Add immediate console log to verify function is called
+
+  // Force create and show output channel immediately
+  const channel = getOutputChannel();
+  channel.show();
+  channel.clear();
+
+  logInfo('=== Validation Mode Started ===');
+  logInfo(`Time: ${new Date().toISOString()}`);
+
   const activeEditor = window.activeTextEditor;
   if (!activeEditor) {
+    logError('No active editor found');
     await window.showErrorMessage('No active editor. Please open a file to validate.');
     return;
   }
 
+  logInfo(`Active editor found: ${activeEditor.document.fileName}`);
+
   const document = activeEditor.document;
   if (document.isUntitled) {
+    logError('Document is untitled/unsaved');
     await window.showErrorMessage('Cannot validate unsaved files. Please save the file first.');
     return;
   }
 
   const filePath = document.fileName;
+  logInfo(`File path: ${filePath}`);
+  logInfo(`Document language: ${document.languageId}`);
+  logInfo(`Document line count: ${document.lineCount}`);
+
   let tempFile: string | undefined;
 
   try {
+    logInfo('Starting validation process...');
     await window.withProgress({
       location: ProgressLocation.Notification,
       title: 'Validating Guard Sections',
       cancellable: false
     }, async (progress) => {
+
       // Step 1: Parse guard tags
       progress.report({ message: 'Parsing guard tags...', increment: 20 });
       const fileContent = document.getText();
@@ -368,20 +464,39 @@ export async function validateGuardSections(context: ExtensionContext): Promise<
       // Step 4: Execute validation command
       progress.report({ message: 'Running validation...', increment: 20 });
       const cliPath = getAclCliPath();
-      
+
       // Check if CLI exists first
       const cliAvailable = await isCliAvailable();
       if (!cliAvailable) {
         logError(`CodeGuard CLI not found at: ${cliPath}`);
-        throw new Error(`CodeGuard CLI not found. Please ensure 'codeguard' is installed and in your PATH, or configure the path in settings.`);
+        throw new Error('CodeGuard CLI not found. Please ensure \'codeguard\' is installed and in your PATH, or configure the path in settings.');
       }
-      
+
       const command = `"${cliPath}" validate-sections --json-file "${tempFile}"`;
       logDebug(`Executing: ${command}`);
+      console.error('[TuMee] Command to execute:', command);  // Keep this for debugging CLI issues
 
       try {
+
+        // First, let's test if we can run the CLI at all
+        try {
+          await execAsync(`"${cliPath}" --version`, { timeout: 5000 });
+        } catch {
+          // Ignore version check errors
+        }
+
+        // Check what commands are available
+        try {
+          await execAsync(`"${cliPath}" --help`, { timeout: 5000 });
+        } catch {
+          // Ignore help command errors
+        }
+
+        // Now try the actual command
         const { stdout, stderr } = await execAsync(command, {
-          timeout: 30000 // 30 second timeout
+          timeout: 5000, // Shorter timeout to catch hanging
+          encoding: 'utf8',
+          maxBuffer: 10 * 1024 * 1024 // 10MB buffer
         });
 
         // Step 5: Handle response
@@ -390,12 +505,13 @@ export async function validateGuardSections(context: ExtensionContext): Promise<
         showValidationResults(context, result);
 
       } catch (error) {
-        const execError = error as { code?: number; stdout?: string; stderr?: string; message?: string };
+        console.error('[TuMee] Caught error from execAsync:', error);  // Keep this for debugging execution errors
+        const execError = error as ExecError;
         logError(`Command execution failed: ${String(error)}`);
         logError(`Exit code: ${execError.code}`);
         logError(`Stdout: ${execError.stdout || 'empty'}`);
         logError(`Stderr: ${execError.stderr || 'empty'}`);
-        
+
         const exitCode = execError.code || 7;
         const result = await handleValidationResponse(
           exitCode,
@@ -429,9 +545,9 @@ export function registerValidationCommands(context: ExtensionContext): Disposabl
 
   // Register the main validation command
   disposables.push(
-    commands.registerCommand('tumee-vscode-plugin.validateSectionParsing', () =>
-      validateGuardSections(context)
-    )
+    commands.registerCommand('tumee-vscode-plugin.validateSectionParsing', () => {
+      return validateGuardSections(context);
+    })
   );
 
   // Register command to show validation output
