@@ -272,6 +272,11 @@ export async function parseGuardTags(
         }
       }
 
+      // Only parse guard tags from comment lines
+      if (!isLineAComment(line, document.languageId)) {
+        continue;
+      }
+
       const tagInfo = parseGuardTag(line);
 
       if (tagInfo) {
@@ -399,27 +404,23 @@ function processGuardStack(
 
     // Top of stack determines effective permission
     if (guardStack.length > 0) {
-      // For context guards, check if this line should be trimmed
-      let effectiveGuard: GuardStackEntry | null = null;
-      
-      // If the top guard is a context guard and this line is empty/whitespace only,
-      // we should look deeper in the stack for the underlying guard
-      const top = guardStack[guardStack.length - 1];
       const lineText = getLineText(line);
       const isWhitespaceOnly = lineText.trim().length === 0;
       
-      if (top.guard.permission === 'context' && isWhitespaceOnly) {
-        // Look for the next non-context guard in the stack
-        for (let i = guardStack.length - 2; i >= 0; i--) {
-          const guard = guardStack[i];
-          if (guard.guard.permission !== 'context' && 
-              line >= guard.startLine && line <= guard.endLine) {
-            effectiveGuard = guard;
-            break;
+      // Find the effective guard for this line
+      // If line is whitespace-only, skip all context guards in the stack
+      let effectiveGuard: GuardStackEntry | null = null;
+      
+      for (let i = guardStack.length - 1; i >= 0; i--) {
+        const guard = guardStack[i];
+        if (line >= guard.startLine && line <= guard.endLine) {
+          // Skip context guards for whitespace-only lines
+          if (isWhitespaceOnly && guard.guard.permission === 'context') {
+            continue;
           }
+          effectiveGuard = guard;
+          break;
         }
-      } else if (line >= top.startLine && line <= top.endLine) {
-        effectiveGuard = top;
       }
       
       if (effectiveGuard) {
