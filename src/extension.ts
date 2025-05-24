@@ -481,9 +481,9 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
           // Only trim whitespace for read-only and no-access sections
           const shouldTrimWhitespace = (currentTarget === 'ai' && currentPermission === 'n') ||
                                        (currentTarget === 'human' && (currentPermission === 'r' || currentPermission === 'n'));
-          // Note: currentStart is already adjusted by +1, so we need to adjust our range accordingly
+          // currentStart and i are both 0-based line indices
           const lastLine = shouldTrimWhitespace
-            ? findLastNonEmptyLine(lines, currentStart - 1, i - 1)
+            ? findLastNonEmptyLine(lines, currentStart, i - 1)
             : i - 1;
 
           const range = new Range(
@@ -515,7 +515,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
           (effectiveTarget === 'human' && (effectivePermission === 'r' || effectivePermission === 'n'));
 
         if (shouldHighlight) {
-          currentStart = i + 1;  // Fix off-by-one: decorations were starting one line too early
+          currentStart = i;  // Use 0-based line number for Position constructor
           currentTarget = effectiveTarget;
           currentPermission = effectivePermission;
         } else {
@@ -531,9 +531,9 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       // Only trim whitespace for read-only and no-access sections
       const shouldTrimWhitespace = (currentTarget === 'ai' && currentPermission === 'n') ||
                                    (currentTarget === 'human' && (currentPermission === 'r' || currentPermission === 'n'));
-      // Note: currentStart is already adjusted by +1, so we need to adjust our range accordingly
+      // currentStart is 0-based line index
       const lastLine = shouldTrimWhitespace
-        ? findLastNonEmptyLine(lines, currentStart - 1, lines.length - 1)
+        ? findLastNonEmptyLine(lines, currentStart, lines.length - 1)
         : lines.length - 1;
 
       const range = new Range(

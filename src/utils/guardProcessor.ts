@@ -278,14 +278,16 @@ export async function parseGuardTags(
         let isLineLimited = false;
 
         if (tagInfo.lineCount) {
-          // Line-limited guard
+          // Line-limited guard - starts from the guard tag line
           endLine = startLine + tagInfo.lineCount - 1;
           isLineLimited = true;
         } else if (guardTag.scopeStart && guardTag.scopeEnd) {
-          // Semantic scope
+          // Semantic scope - use the boundaries from scope resolution
           startLine = guardTag.scopeStart;
           endLine = guardTag.scopeEnd;
         }
+        // For simple guards without scope or line count, 
+        // the guard starts from the current line and goes to end of file
 
         // Update guard tag with calculated boundaries
         guardTag.scopeStart = startLine;
