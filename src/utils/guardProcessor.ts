@@ -361,14 +361,14 @@ export async function parseGuardTags(
 export const parseGuardTagsChunked = parseGuardTags;
 
 /**
- * Create guard regions from parsed tags using stack-based precedence
- * This function is used to create non-overlapping regions for visualization
+ * Core guard stack processing logic - single source of truth for guard precedence
  */
-export function createGuardRegions(guardTags: GuardTag[], totalLines: number): GuardTag[] {
-  const regions: GuardTag[] = [];
-  const linePermissions: Map<number, GuardTag> = new Map();
-
-  // Process guards to determine effective permission for each line
+function processGuardStack(
+  guardTags: GuardTag[],
+  totalLines: number,
+  getLineText: (lineNumber: number) => string
+): Map<number, GuardTag> {
+  const linePermissions = new Map<number, GuardTag>();
   const guardStack: GuardStackEntry[] = [];
 
   for (let line = 1; line <= totalLines; line++) {
@@ -399,12 +399,52 @@ export function createGuardRegions(guardTags: GuardTag[], totalLines: number): G
 
     // Top of stack determines effective permission
     if (guardStack.length > 0) {
+      // For context guards, check if this line should be trimmed
+      let effectiveGuard: GuardStackEntry | null = null;
+      
+      // If the top guard is a context guard and this line is empty/whitespace only,
+      // we should look deeper in the stack for the underlying guard
       const top = guardStack[guardStack.length - 1];
-      if (line >= top.startLine && line <= top.endLine) {
-        linePermissions.set(line, top.guard);
+      const lineText = getLineText(line);
+      const isWhitespaceOnly = lineText.trim().length === 0;
+      
+      if (top.guard.permission === 'context' && isWhitespaceOnly) {
+        // Look for the next non-context guard in the stack
+        for (let i = guardStack.length - 2; i >= 0; i--) {
+          const guard = guardStack[i];
+          if (guard.guard.permission !== 'context' && 
+              line >= guard.startLine && line <= guard.endLine) {
+            effectiveGuard = guard;
+            break;
+          }
+        }
+      } else if (line >= top.startLine && line <= top.endLine) {
+        effectiveGuard = top;
+      }
+      
+      if (effectiveGuard) {
+        linePermissions.set(line, effectiveGuard.guard);
       }
     }
   }
+
+  return linePermissions;
+}
+
+/**
+ * Create guard regions from parsed tags using stack-based precedence
+ * This function is used to create non-overlapping regions for visualization
+ */
+export function createGuardRegions(guardTags: GuardTag[], totalLines: number): GuardTag[] {
+  const regions: GuardTag[] = [];
+  
+  // Use the shared guard stack processing logic
+  // For createGuardRegions, we don't need line text so we provide a dummy function
+  const linePermissions = processGuardStack(
+    guardTags,
+    totalLines,
+    () => '' // Don't need actual line text for region creation
+  );
 
   // Create contiguous regions from line permissions
   let currentRegion: GuardTag | null = null;
@@ -460,46 +500,22 @@ export function getLinePermissions(
 ): Map<number, LinePermission> {
   const permissions = new Map<number, LinePermission>();
   const totalLines = document.lineCount;
-  const guardStack: GuardStackEntry[] = [];
+  
+  // Use the shared guard stack processing logic
+  const linePermissions = processGuardStack(
+    guardTags,
+    totalLines,
+    (line) => document.lineAt(line - 1).text
+  );
 
-  for (let line = 1; line <= totalLines; line++) {
-    // Remove expired guards from stack
-    while (guardStack.length > 0) {
-      const top = guardStack[guardStack.length - 1];
-      if (line > top.endLine) {
-        popGuardWithContextCleanup(guardStack);
-      } else {
-        break;
-      }
-    }
-
-    // Add new guards starting on this line
-    for (const tag of guardTags) {
-      if (tag.lineNumber === line) {
-        const entry: GuardStackEntry = {
-          guard: tag,
-          startLine: tag.scopeStart || line,
-          endLine: tag.scopeEnd || (tag.lineCount ? line + tag.lineCount - 1 : totalLines),
-          isLineLimited: !!tag.lineCount
-        };
-        // Before pushing new guard, remove any interrupted context guards
-        removeInterruptedContextGuards(guardStack);
-        guardStack.push(entry);
-      }
-    }
-
-    // Top of stack determines effective permission
-    if (guardStack.length > 0) {
-      const top = guardStack[guardStack.length - 1];
-      if (line >= top.startLine && line <= top.endLine) {
-        permissions.set(line, {
-          line: line,
-          permission: top.guard.permission,
-          target: top.guard.target,
-          identifier: top.guard.identifier
-        });
-      }
-    }
+  // Convert GuardTag map to LinePermission map
+  for (const [line, guard] of linePermissions) {
+    permissions.set(line, {
+      line: line,
+      permission: guard.permission,
+      target: guard.target,
+      identifier: guard.identifier
+    });
   }
 
   return permissions;
