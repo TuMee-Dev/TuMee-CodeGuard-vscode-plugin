@@ -940,8 +940,6 @@ export class ColorCustomizerPanel {
                             <div class="line-number">48</div>
                             <div class="line-number">49</div>
                             <div class="line-number">50</div>
-                            <div class="line-number">51</div>
-                            <div class="line-number">52</div>
                         </div>
                         <div class="editor-content">
                             <div class="code-line" id="line1">
@@ -1144,14 +1142,6 @@ export class ColorCustomizerPanel {
                                 <div class="line-border"></div>
                                 <div class="line-content"></div>
                             </div>
-                            <div class="code-line" id="line51">
-                                <div class="line-border"></div>
-                                <div class="line-content">// @guard:ai:w,human:r</div>
-                            </div>
-                            <div class="code-line" id="line52">
-                                <div class="line-border"></div>
-                                <div class="line-content">const result = processUserData(userPreferences, config);</div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1334,9 +1324,7 @@ export class ColorCustomizerPanel {
                     { line: 47, ai: 'contextWrite', human: null },  // Need to document
                     { line: 48, ai: 'contextWrite', human: null },  // Include examples
                     { line: 49, ai: 'contextWrite', human: null },  // @guard:end
-                    { line: 50, ai: null, human: null },  // empty
-                    { line: 51, ai: 'write', human: 'read' },  // @guard:ai:w,human:r
-                    { line: 52, ai: 'write', human: 'read' }  // const result = processUserData
+                    { line: 50, ai: null, human: null }  // empty
                 ];
                 
                 lineConfigs.forEach(config => {
