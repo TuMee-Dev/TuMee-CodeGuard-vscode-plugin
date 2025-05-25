@@ -413,7 +413,17 @@ function processGuardStack(
   defaultPermissions: { [target: string]: string } = { ai: 'r', human: 'w' }
 ): Map<number, ProcessedLinePermission> {
   const linePermissions = new Map<number, ProcessedLinePermission>();
-  const guardStack: GuardStackEntry[] = [];
+  
+  // Initialize stack with default permissions covering the entire file
+  const guardStack: GuardStackEntry[] = [{
+    permissions: { ...defaultPermissions },
+    isContext: { ai: false, human: false },
+    startLine: 1,
+    endLine: totalLines,
+    isLineLimited: false
+  }];
+  
+  console.log('[DEBUG] processGuardStack called with defaults:', defaultPermissions);
 
   for (let line = 1; line <= totalLines; line++) {
     // Remove expired guards from stack
@@ -506,6 +516,9 @@ function processGuardStack(
       }
     } else {
       // No guards on stack - use defaults
+      if (line <= 5) {
+        console.log(`[DEBUG] Line ${line}: No guards on stack, using defaults:`, defaultPermissions);
+      }
       linePermissions.set(line, {
         permissions: defaultPermissions,
         isContext: { ai: false, human: false }
@@ -539,15 +552,24 @@ export function getLinePermissions(
   const permissions = new Map<number, LinePermission>();
   const totalLines = document.lineCount;
 
-  // Use the shared guard stack processing logic
+  console.log('[DEBUG] getLinePermissions called for document:', document.fileName);
+  console.log('[DEBUG] Guard tags found:', guardTags.length);
+
+  // Use the shared guard stack processing logic with explicit defaults
   const linePermissions = processGuardStack(
     guardTags,
     totalLines,
-    (line) => document.lineAt(line - 1).text
+    (line) => document.lineAt(line - 1).text,
+    { ai: 'r', human: 'w' } // Explicit default permissions
   );
+  
+  console.log('[DEBUG] Default permissions being used:', { ai: 'r', human: 'w' });
 
   // Convert permissions dictionary to LinePermission map
   for (const [line, perms] of linePermissions) {
+    if (line <= 5) { // Debug first 5 lines
+      console.log(`[DEBUG] Line ${line} permissions:`, perms.permissions, 'isContext:', perms.isContext);
+    }
     permissions.set(line, {
       line: line,
       permissions: perms.permissions,
@@ -556,6 +578,7 @@ export function getLinePermissions(
     });
   }
 
+  console.log('[DEBUG] Total lines with permissions:', permissions.size);
   return permissions;
 }
 

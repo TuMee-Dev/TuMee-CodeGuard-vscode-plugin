@@ -264,6 +264,12 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
   // Helper function to get the color for a permission combination
   const getPermissionColor = (key: string): { color: string, opacity: number } => {
+    // Special handling for aiRead_humanWrite when humanWrite is disabled
+    if (key === 'aiRead_humanWrite' && !guardColorsComplete?.permissions?.humanWrite?.enabled) {
+      console.log('[DEBUG] aiRead_humanWrite with humanWrite disabled - returning transparent');
+      return { color: '#000000', opacity: 0 }; // Fully transparent
+    }
+    
     // Check if there's a custom color for this exact combination
     const customColor = (colors as Record<string, any>)[key] as string | undefined;
     if (customColor && typeof customColor === 'string') {
@@ -315,6 +321,12 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       
       // Use the per-permission transparency from color customizer
       effectiveOpacity = permissionTransparencies[aiKey] || opacity;
+    }
+    
+    // Debug logging
+    if (key === 'aiRead_humanWrite') {
+      console.log(`[DEBUG] Color for ${key}: baseColor=${baseColor}, opacity=${effectiveOpacity}`);
+      console.log('[DEBUG] aiColors:', aiColors);
     }
 
     return { color: baseColor, opacity: effectiveOpacity };
@@ -591,10 +603,12 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       const perm = linePermissions.get(lineNumber);
 
       // Get AI and human permissions for this line
-      const aiPerm = perm?.permissions?.ai || '';
-      const humanPerm = perm?.permissions?.human || '';
+      // Default to 'r' for AI and 'w' for human if not found
+      const aiPerm = perm?.permissions?.ai || 'r';
+      const humanPerm = perm?.permissions?.human || 'w';
       const aiContext = perm?.isContext?.ai || false;
       const humanContext = perm?.isContext?.human || false;
+      
 
       // Check if we need to end the current range
       if (aiPerm !== currentAiPerm || humanPerm !== currentHumanPerm ||
@@ -618,25 +632,17 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
           }
         }
 
-        // Start new range if we have permissions
-        if (aiPerm || humanPerm) {
-          currentStart = i;
-          currentAiPerm = aiPerm;
-          currentHumanPerm = humanPerm;
-          currentAiContext = aiContext;
-          currentHumanContext = humanContext;
-        } else {
-          currentStart = -1;
-          currentAiPerm = '';
-          currentHumanPerm = '';
-          currentAiContext = false;
-          currentHumanContext = false;
-        }
+        // Start new range (we always have permissions now)
+        currentStart = i;
+        currentAiPerm = aiPerm;
+        currentHumanPerm = humanPerm;
+        currentAiContext = aiContext;
+        currentHumanContext = humanContext;
       }
     }
 
     // Handle the last range if it extends to the end of the file
-    if (currentStart >= 0 && (currentAiPerm || currentHumanPerm)) {
+    if (currentStart >= 0) {
       const decorationType = getDecorationType(currentAiPerm, currentHumanPerm, currentAiContext, currentHumanContext);
       if (decorationType) {
         const shouldTrim = shouldTrimWhitespaceForPermissions(currentAiPerm, currentHumanPerm);
