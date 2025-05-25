@@ -77,8 +77,11 @@ export const parseGuardTag = (line: string): {
     // Check if scope is numeric (line count) or semantic
     const isLineCount = scopeOrCount && GUARD_TAG_PATTERNS.NUMERIC_SCOPE.test(scopeOrCount);
 
+    // Normalize target: 'hu' -> 'human'
+    const normalizedTarget = target.toLowerCase() === 'hu' ? 'human' : target.toLowerCase();
+    
     return {
-      target: target.toLowerCase(),
+      target: normalizedTarget,
       identifier: identifier || undefined,
       permission: permission.toLowerCase(),
       scope: isLineCount ? undefined : scopeOrCount,
