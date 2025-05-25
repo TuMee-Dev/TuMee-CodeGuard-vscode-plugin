@@ -212,22 +212,14 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     humanNoAccess: '#FF0000',
     contextRead: '#00CED1',
     contextWrite: '#1E90FF',
-    opacity: 0.3,
-    aiTransparencyLevels: {
-      write: 1.0,
-      read: 1.0,
-      noAccess: 1.0
-    },
-    humanTransparencyLevels: {
-      write: 0.3,
-      read: 0.6,
-      noAccess: 1.0
-    },
-    useAiColorAsBase: true
+    opacity: 0.3
   };
 
   // Get the complete guard colors configuration
   const guardColorsComplete = config.get<any>('guardColorsComplete');
+  
+  // Store per-permission transparency values
+  const permissionTransparencies: Record<string, number> = {};
   
   // Convert from complete format to flat format for now
   const userColors: any = {};
@@ -236,6 +228,8 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       const permission = cfg as any;
       if (permission.enabled && permission.color) {
         userColors[key] = permission.color;
+        // Store the transparency value
+        permissionTransparencies[key] = permission.transparency || 0.3;
       }
     }
   }
@@ -302,33 +296,25 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       read: colors.contextRead
     };
 
-    // Get transparency levels
-    const aiTransparency = colors.aiTransparencyLevels || defaultColors.aiTransparencyLevels;
-    const humanTransparency = colors.humanTransparencyLevels || defaultColors.humanTransparencyLevels;
-
     let baseColor: string;
     let effectiveOpacity = opacity;
 
     // Handle context colors specially
     if (isContext) {
       // For context, use the context color based on AI permission
+      const contextKey = aiPermission === 'write' ? 'contextWrite' : 'contextRead';
       baseColor = aiPermission === 'write' ? contextColors.write : contextColors.read;
-
-      // Apply human transparency to context
-      if (colors.useAiColorAsBase) {
-        effectiveOpacity *= humanTransparency[humanPermission as keyof typeof humanTransparency] || 1.0;
-      }
+      
+      // Use the per-permission transparency from color customizer
+      effectiveOpacity = permissionTransparencies[contextKey] || opacity;
     } else {
-      // Determine base color and transparency based on configuration
-      if (colors.useAiColorAsBase) {
-        // Use AI color as base, apply human transparency
-        baseColor = aiColors[aiPermission as keyof typeof aiColors];
-        effectiveOpacity *= humanTransparency[humanPermission as keyof typeof humanTransparency] || 1.0;
-      } else {
-        // Use human color as base, apply AI transparency
-        baseColor = humanColors[humanPermission as keyof typeof humanColors];
-        effectiveOpacity *= aiTransparency[aiPermission as keyof typeof aiTransparency] || 1.0;
-      }
+      // Determine base color - for mixed permissions, we always use AI as base
+      // (users can configure the exact appearance they want per permission)
+      const aiKey = 'ai' + aiPermission.charAt(0).toUpperCase() + aiPermission.slice(1).replace('noaccess', 'NoAccess');
+      baseColor = aiColors[aiPermission as keyof typeof aiColors];
+      
+      // Use the per-permission transparency from color customizer
+      effectiveOpacity = permissionTransparencies[aiKey] || opacity;
     }
 
     return { color: baseColor, opacity: effectiveOpacity };
