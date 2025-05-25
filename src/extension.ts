@@ -5,7 +5,7 @@ import { registerFileDecorationProvider } from '@/tools/file-customization-provi
 import { registerContextMenu } from '@/tools/register-context-menu';
 import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
 import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
-import { parseGuardTags, getLinePermissions, markLinesModified } from '@/utils/guardProcessor';
+import { parseGuardTags, getLinePermissions, markLinesModified, getDefaultPermissions } from '@/utils/guardProcessor';
 import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
 import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTypes';
 import { errorHandler } from '@/utils/errorHandler';
@@ -106,13 +106,13 @@ export async function activate(context: ExtensionContext) {
       disposables.push(
         workspace.onDidChangeConfiguration(event => {
           configValidator.handleConfigurationChange(event);
-          
+
           // If guard colors changed, recreate decoration types and refresh all decorations
-          if (event.affectsConfiguration('tumee-vscode-plugin.guardColors') || 
+          if (event.affectsConfiguration('tumee-vscode-plugin.guardColors') ||
               event.affectsConfiguration('tumee-vscode-plugin.guardColorsComplete')) {
             // Recreate decoration types with new colors
             initializeCodeDecorations(context);
-            
+
             // Refresh decorations in all visible editors
             for (const editor of window.visibleTextEditors) {
               void updateCodeDecorations(editor.document);
@@ -217,10 +217,10 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
   // Get the complete guard colors configuration
   const guardColorsComplete = config.get<any>('guardColorsComplete');
-  
+
   // Store per-permission transparency values
   const permissionTransparencies: Record<string, number> = {};
-  
+
   // Convert from complete format to flat format for now
   const userColors: any = {};
   if (guardColorsComplete?.permissions) {
@@ -236,7 +236,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   if (guardColorsComplete?.combinations) {
     Object.assign(userColors, guardColorsComplete.combinations);
   }
-  
+
   const colors = { ...defaultColors, ...userColors };
 
   const opacity = colors.opacity || config.get<number>('codeDecorationOpacity') || 0.1;
@@ -269,7 +269,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       console.log('[DEBUG] aiRead_humanWrite with humanWrite disabled - returning transparent');
       return { color: '#000000', opacity: 0 }; // Fully transparent
     }
-    
+
     // Check if there's a custom color for this exact combination
     const customColor = (colors as Record<string, any>)[key] as string | undefined;
     if (customColor && typeof customColor === 'string') {
@@ -310,19 +310,19 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       // For context, use the context color based on AI permission
       const contextKey = aiPermission === 'write' ? 'contextWrite' : 'contextRead';
       baseColor = aiPermission === 'write' ? contextColors.write : contextColors.read;
-      
+
       // Use the per-permission transparency from color customizer
       effectiveOpacity = permissionTransparencies[contextKey] || opacity;
     } else {
       // Determine base color - for mixed permissions, we always use AI as base
       // (users can configure the exact appearance they want per permission)
-      const aiKey = 'ai' + aiPermission.charAt(0).toUpperCase() + aiPermission.slice(1).replace('noaccess', 'NoAccess');
+      const aiKey = `ai${  aiPermission.charAt(0).toUpperCase()  }${aiPermission.slice(1).replace('noaccess', 'NoAccess')}`;
       baseColor = aiColors[aiPermission as keyof typeof aiColors];
-      
+
       // Use the per-permission transparency from color customizer
       effectiveOpacity = permissionTransparencies[aiKey] || opacity;
     }
-    
+
     // Debug logging
     if (key === 'aiRead_humanWrite') {
       console.log(`[DEBUG] Color for ${key}: baseColor=${baseColor}, opacity=${effectiveOpacity}`);
@@ -489,33 +489,6 @@ function getDecorationType(aiPerm: string, humanPerm: string, aiContext: boolean
 }
 
 /**
- * Helper function to find the last non-empty line in a range
- */
-function findLastNonEmptyLine(lines: string[], startLine: number, endLine: number): number {
-  for (let i = endLine; i >= startLine; i--) {
-    if (lines[i].trim() !== '') {
-      return i;
-    }
-  }
-  return startLine; // Default to startLine if all lines are empty
-}
-
-/**
- * Determine if whitespace should be trimmed for a given guard permission
- * @param target The guard target ('ai' or 'human')
- * @param permission The guard permission ('r', 'w', 'n', 'context')
- * @returns true if trailing whitespace should be trimmed from the decoration range
- */
-function shouldTrimWhitespaceForPermissions(aiPerm: string, humanPerm: string): boolean {
-  // Trim whitespace for:
-  // - AI no-access or context
-  // - Human read-only or no-access
-  // - Either permission is context
-  return aiPerm === 'n' || aiPerm === 'context' ||
-         humanPerm === 'r' || humanPerm === 'n' || humanPerm === 'context';
-}
-
-/**
  * Implementation of code decoration updates
  * This now uses the shared guard processing logic
  *
@@ -591,70 +564,34 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       aiWriteContext_humanNoAccess: []
     };
 
-    // Process the line permissions into continuous ranges
-    let currentStart = -1;
-    let currentAiPerm = '';
-    let currentHumanPerm = '';
-    let currentAiContext = false;
-    let currentHumanContext = false;
+    // Get default permissions
+    const defaults = getDefaultPermissions();
 
+    // Decorate each line - just use what guardProcessor calculated
     for (let i = 0; i < document.lineCount; i++) {
-      const lineNumber = i + 1; // Convert to 1-based for permission lookup
+      const lineNumber = i + 1;
       const perm = linePermissions.get(lineNumber);
 
-      // Get AI and human permissions for this line
-      // Default to 'r' for AI and 'w' for human if not found
-      const aiPerm = perm?.permissions?.ai || 'r';
-      const humanPerm = perm?.permissions?.human || 'w';
-      const aiContext = perm?.isContext?.ai || false;
-      const humanContext = perm?.isContext?.human || false;
-      
+      if (!perm) continue;
 
-      // Check if we need to end the current range
-      if (aiPerm !== currentAiPerm || humanPerm !== currentHumanPerm ||
-          aiContext !== currentAiContext || humanContext !== currentHumanContext) {
-        // End previous range if it exists
-        if (currentStart >= 0) {
-          const decorationType = getDecorationType(currentAiPerm, currentHumanPerm, currentAiContext, currentHumanContext);
-          if (decorationType) {
-            const shouldTrim = shouldTrimWhitespaceForPermissions(currentAiPerm, currentHumanPerm);
-            const lastLine = shouldTrim
-              ? findLastNonEmptyLine(lines, currentStart, i - 1)
-              : i - 1;
+      const aiPerm = perm.permissions?.ai || defaults.ai;
+      const humanPerm = perm.permissions?.human || defaults.human;
+      const aiContext = perm.isContext?.ai || false;
+      const humanContext = perm.isContext?.human || false;
 
-            const endChar = lines[lastLine] ? lines[lastLine].length : 0;
-            decorationRanges[decorationType].push({
-              range: new Range(
-                new Position(currentStart, 0),
-                new Position(lastLine, endChar > 0 ? endChar : 0)
-              )
-            });
-          }
-        }
+      // Get decoration type based on permissions
+      const decorationType = getDecorationType(aiPerm, humanPerm, aiContext, humanContext) || '';
 
-        // Start new range (we always have permissions now)
-        currentStart = i;
-        currentAiPerm = aiPerm;
-        currentHumanPerm = humanPerm;
-        currentAiContext = aiContext;
-        currentHumanContext = humanContext;
+      if (lineNumber <= 15) {
+        console.log(`[DEBUG] Line ${lineNumber}: ai=${aiPerm}, human=${humanPerm}, decorationType=${decorationType}`);
       }
-    }
 
-    // Handle the last range if it extends to the end of the file
-    if (currentStart >= 0) {
-      const decorationType = getDecorationType(currentAiPerm, currentHumanPerm, currentAiContext, currentHumanContext);
+      // Add decoration for this line
       if (decorationType) {
-        const shouldTrim = shouldTrimWhitespaceForPermissions(currentAiPerm, currentHumanPerm);
-        const lastLine = shouldTrim
-          ? findLastNonEmptyLine(lines, currentStart, lines.length - 1)
-          : lines.length - 1;
-
-        const endChar = lines[lastLine] ? lines[lastLine].length : 0;
-        decorationRanges[decorationType].push({
+        decorationRanges[decorationType as keyof DecorationRanges].push({
           range: new Range(
-            new Position(currentStart, 0),
-            new Position(lastLine, endChar > 0 ? endChar : 0)
+            new Position(i, 0),
+            new Position(i, lines[i].length)
           )
         });
       }

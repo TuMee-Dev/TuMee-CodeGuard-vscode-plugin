@@ -79,7 +79,7 @@ export const parseGuardTag = (line: string): {
 
     // Normalize target: 'hu' -> 'human'
     const normalizedTarget = target.toLowerCase() === 'hu' ? 'human' : target.toLowerCase();
-    
+
     return {
       target: normalizedTarget,
       identifier: identifier || undefined,

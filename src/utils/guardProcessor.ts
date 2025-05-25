@@ -340,6 +340,8 @@ export async function parseGuardTags(
         // For simple guards without scope or line count,
         // the guard starts from the current line and goes to end of file
 
+        console.log(`[DEBUG] Guard tag parsed: ${guardTag.target}:${guardTag.permission} at line ${lineNumber}, range: ${startLine}-${endLine}`);
+
         // Update guard tag with calculated boundaries
         guardTag.scopeStart = startLine;
         guardTag.scopeEnd = endLine;
@@ -413,7 +415,7 @@ function processGuardStack(
   defaultPermissions: { [target: string]: string } = { ai: 'r', human: 'w' }
 ): Map<number, ProcessedLinePermission> {
   const linePermissions = new Map<number, ProcessedLinePermission>();
-  
+
   // Initialize stack with default permissions covering the entire file
   const guardStack: GuardStackEntry[] = [{
     permissions: { ...defaultPermissions },
@@ -422,8 +424,20 @@ function processGuardStack(
     endLine: totalLines,
     isLineLimited: false
   }];
-  
-  console.log('[DEBUG] processGuardStack called with defaults:', defaultPermissions);
+
+  // Check if there are guard tags on line 1 that should modify the defaults
+  const line1Tags = guardTags.filter(tag => tag.lineNumber === 1);
+  if (line1Tags.length > 0) {
+    console.log('[DEBUG] Found line 1 tags:', line1Tags.map(t => `${t.target}:${t.permission}`));
+    // Update the default entry with line 1 tags
+    for (const tag of line1Tags) {
+      if (tag.permission !== 'context') {
+        guardStack[0].permissions[tag.target] = tag.permission;
+        defaultPermissions[tag.target] = tag.permission; // Also update defaultPermissions so new guards inherit this
+        console.log(`[DEBUG] Updated stack base: ${tag.target} = ${tag.permission}, stack[0] now:`, guardStack[0].permissions);
+      }
+    }
+  }
 
   for (let line = 1; line <= totalLines; line++) {
     // Remove expired guards from stack
@@ -439,6 +453,11 @@ function processGuardStack(
     // Add new guards starting on this line
     for (const tag of guardTags) {
       if (tag.lineNumber === line) {
+        // Skip line 1 tags as they've already been processed into defaults
+        if (line === 1) {
+          continue;
+        }
+
         // Get current permissions and context from top of stack or use defaults
         const currentPermissions = guardStack.length > 0
           ? { ...guardStack[guardStack.length - 1].permissions }
@@ -486,29 +505,66 @@ function processGuardStack(
         let effectivePermissions = top.permissions;
 
         if (isWhitespaceOnly) {
-          // Look for non-context permissions in the stack
-          const nonContextPermissions: { [target: string]: string } = {};
-
-          // Collect all non-context permissions from applicable stack entries
-          for (let i = guardStack.length - 1; i >= 0; i--) {
-            const entry = guardStack[i];
-            if (line >= entry.startLine && line <= entry.endLine) {
-              // Add any non-context permissions we haven't seen yet
-              for (const [target, permission] of Object.entries(entry.permissions)) {
-                if (permission !== 'context' && !nonContextPermissions[target]) {
-                  nonContextPermissions[target] = permission;
-                }
+          // Check if this is trailing whitespace at the end of a guard
+          // Look ahead to see if there's a guard starting soon or if we're at the end of a block
+          let isTrailing = false;
+          let nextGuardLine = -1;
+          
+          // Find the next guard that will start
+          for (const tag of guardTags) {
+            if (tag.lineNumber > line) {
+              if (nextGuardLine === -1 || tag.lineNumber < nextGuardLine) {
+                nextGuardLine = tag.lineNumber;
               }
             }
           }
+          
+          // Check if all lines between here and the next guard (or end of current guard) are empty
+          if (nextGuardLine > 0 && nextGuardLine <= top.endLine) {
+            isTrailing = true;
+            for (let j = line; j < nextGuardLine && j <= top.endLine; j++) {
+              if (getLineText(j).trim().length > 0) {
+                isTrailing = false;
+                break;
+              }
+            }
+          }
+          
+          if (isTrailing && guardStack.length > 1) {
+            // Use permissions from the stack entry below current
+            const underlyingEntry = guardStack[guardStack.length - 2];
+            effectivePermissions = underlyingEntry.permissions;
+            if (line <= 15) {
+              console.log(`[DEBUG] Line ${line}: Trailing whitespace, using underlying stack permissions:`, effectivePermissions);
+            }
+          } else {
+            // Original context guard handling
+            const nonContextPermissions: { [target: string]: string } = {};
 
-          // If we found any non-context permissions, use them
-          if (Object.keys(nonContextPermissions).length > 0) {
-            effectivePermissions = nonContextPermissions;
+            // Collect all non-context permissions from applicable stack entries
+            for (let i = guardStack.length - 1; i >= 0; i--) {
+              const entry = guardStack[i];
+              if (line >= entry.startLine && line <= entry.endLine) {
+                // Add any non-context permissions we haven't seen yet
+                for (const [target, permission] of Object.entries(entry.permissions)) {
+                  if (permission !== 'context' && !nonContextPermissions[target]) {
+                    nonContextPermissions[target] = permission;
+                  }
+                }
+              }
+            }
+
+            // If we found any non-context permissions, use them
+            if (Object.keys(nonContextPermissions).length > 0) {
+              effectivePermissions = nonContextPermissions;
+            }
           }
         }
 
         // Return the full permissions state for this line with context info
+        if (line >= 3 && line <= 5) {
+          console.log(`[DEBUG] Line ${line} permissions: ${JSON.stringify(effectivePermissions)}, from stack entry ${guardStack.length - 1}`);
+        }
         linePermissions.set(line, {
           permissions: effectivePermissions,
           isContext: top.isContext
@@ -540,6 +596,13 @@ function processGuardStack(
 // }
 
 /**
+ * Get default permissions (will be configurable via ACL tool in future)
+ */
+export function getDefaultPermissions(): { [target: string]: string } {
+  return { ai: 'r', human: 'w' };
+}
+
+/**
  * Get line permissions for a document (used for decorations)
  * @param document The document to analyze
  * @param guardTags The parsed guard tags
@@ -560,16 +623,17 @@ export function getLinePermissions(
     guardTags,
     totalLines,
     (line) => document.lineAt(line - 1).text,
-    { ai: 'r', human: 'w' } // Explicit default permissions
+    getDefaultPermissions()
   );
-  
+
   console.log('[DEBUG] Default permissions being used:', { ai: 'r', human: 'w' });
 
   // Convert permissions dictionary to LinePermission map
   for (const [line, perms] of linePermissions) {
-    if (line <= 5) { // Debug first 5 lines
+    if (line <= 15) { // Debug first 15 lines
       console.log(`[DEBUG] Line ${line} permissions:`, perms.permissions, 'isContext:', perms.isContext);
     }
+    
     permissions.set(line, {
       line: line,
       permissions: perms.permissions,

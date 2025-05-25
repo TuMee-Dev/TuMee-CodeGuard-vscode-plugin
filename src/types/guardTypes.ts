@@ -24,6 +24,10 @@ export interface LinePermission {
     [target: string]: boolean;  // e.g., { ai: true, human: false }
   };
   identifier?: string;
+  isTrailingWhitespace?: boolean;  // True if this is trailing whitespace at end of a guard scope
+  underlyingPermissions?: {  // Permissions to use if this is trailing whitespace
+    [target: string]: string;
+  };
 }
 
 export interface ParsedGuardTag {
@@ -57,7 +61,6 @@ export interface DecorationRanges {
   aiWriteContext_humanWrite: { range: Range }[];
   aiWriteContext_humanNoAccess: { range: Range }[];
 
-  [key: string]: { range: Range }[];  // Index signature for dynamic access
 }
 
 // Cache types
