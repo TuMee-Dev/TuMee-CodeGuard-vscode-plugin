@@ -7,7 +7,7 @@ import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
 import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
 import { parseGuardTags, getLinePermissions, markLinesModified } from '@/utils/guardProcessor';
 import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
-import type { GuardTag, LinePermission } from '@/types/guardTypes';
+import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTypes';
 import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
@@ -19,12 +19,8 @@ import { backgroundProcessor } from '@/utils/backgroundProcessor';
 import { registerValidationCommands } from '@/utils/validationMode';
 
 let disposables: Disposable[] = [];
-let aiOnlyDecoration: TextEditorDecorationType;
-let humanOnlyDecoration: TextEditorDecorationType;
-let mixedDecoration: TextEditorDecorationType;
-let humanReadOnlyDecoration: TextEditorDecorationType;
-let humanNoAccessDecoration: TextEditorDecorationType;
-let contextDecoration: TextEditorDecorationType;
+// Map of decoration types for all permission combinations
+let decorationTypes: Map<string, TextEditorDecorationType> = new Map();
 let statusBarItem: StatusBarItem;
 
 // Debounce timer for decoration updates
@@ -34,13 +30,7 @@ let decorationUpdateTimer: NodeJS.Timeout | undefined;
 const processedDocumentVersions = new WeakMap<TextDocument, number>();
 
 // Cache decoration ranges to prevent flashing when switching tabs
-const decorationCache = new WeakMap<TextDocument, {
-  aiWrite: { range: Range }[];
-  aiNoAccess: { range: Range }[];
-  humanReadOnly: { range: Range }[];
-  humanNoAccess: { range: Range }[];
-  context: { range: Range }[];
-}>();
+const decorationCache = new WeakMap<TextDocument, DecorationRanges>();
 
 export async function activate(context: ExtensionContext) {
   try {
@@ -73,12 +63,8 @@ export async function activate(context: ExtensionContext) {
       disposables.push(
         commands.registerCommand('tumee-vscode-plugin.refreshDecorations', () => {
           // Dispose old decorations
-          aiOnlyDecoration?.dispose();
-          humanOnlyDecoration?.dispose();
-          mixedDecoration?.dispose();
-          humanReadOnlyDecoration?.dispose();
-          humanNoAccessDecoration?.dispose();
-          contextDecoration?.dispose();
+          decorationTypes.forEach(decoration => decoration.dispose());
+          decorationTypes.clear();
 
           // Reinitialize with new colors
           initializeCodeDecorations(context);
@@ -160,11 +146,10 @@ export async function activate(context: ExtensionContext) {
             // Apply cached decorations immediately to prevent flashing
             const cachedDecorations = decorationCache.get(editor.document);
             if (cachedDecorations) {
-              editor.setDecorations(aiOnlyDecoration, cachedDecorations.aiWrite);
-              editor.setDecorations(humanOnlyDecoration, cachedDecorations.aiNoAccess);
-              editor.setDecorations(humanReadOnlyDecoration, cachedDecorations.humanReadOnly);
-              editor.setDecorations(humanNoAccessDecoration, cachedDecorations.humanNoAccess);
-              editor.setDecorations(contextDecoration, cachedDecorations.context);
+              decorationTypes.forEach((decoration, key) => {
+                const ranges = cachedDecorations[key as keyof DecorationRanges] || [];
+                editor.setDecorations(decoration, ranges);
+              });
             }
 
             // Then trigger a proper update (no debounce for tab switches)
@@ -206,92 +191,102 @@ export async function activate(context: ExtensionContext) {
 function initializeCodeDecorations(_context: ExtensionContext) {
   // Get configured colors and opacity
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
-  const colors = config.get<GuardColors>('guardColors') || {
+  const defaultColors = {
     aiWrite: '#FFA500',      // Yellow/Amber for AI write
     aiNoAccess: '#90EE90',   // Light green for AI no access
     humanReadOnly: '#D3D3D3', // Light grey for human read-only
     humanNoAccess: '#FF0000', // Red for human no access
+    humanWrite: '#000000',   // Transparent by default
     context: '#00CED1',      // Light blue/cyan for AI context
     opacity: 0.3
   };
+  
+  // Merge user colors with defaults to ensure all properties exist
+  const userColors = config.get<GuardColors>('guardColors') || {};
+  const colors = { ...defaultColors, ...userColors };
 
   const opacity = colors.opacity || config.get<number>('codeDecorationOpacity') || 0.1;
 
   // Helper function to convert hex to rgba
-  const hexToRgba = (hex: string, alpha: number): string => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  const hexToRgba = (hex: string | undefined, alpha: number): string => {
+    if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) {
+      // Return transparent if no valid hex color provided
+      return `rgba(0, 0, 0, 0)`;
+    }
+    try {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    } catch (error) {
+      console.error('Invalid hex color:', hex);
+      return `rgba(0, 0, 0, 0)`;
+    }
   };
 
-  // AI Write regions
-  aiOnlyDecoration = window.createTextEditorDecorationType({
-    backgroundColor: hexToRgba(colors.aiWrite, opacity),
-    isWholeLine: true,
-    borderWidth: '0 0 0 3px',
-    borderStyle: 'solid',
-    borderColor: hexToRgba(colors.aiWrite, 0.6),
-    overviewRulerColor: new ThemeColor('tumee.ai'),
-    overviewRulerLane: 2,
-  });
+  // Clear existing decorations
+  decorationTypes.forEach(decoration => decoration.dispose());
+  decorationTypes.clear();
 
-  // AI No Access regions
-  humanOnlyDecoration = window.createTextEditorDecorationType({
-    backgroundColor: hexToRgba(colors.aiNoAccess, opacity),
-    isWholeLine: true,
-    borderWidth: '0 0 0 3px',
-    borderStyle: 'solid',
-    borderColor: hexToRgba(colors.aiNoAccess, 0.6),
-    overviewRulerColor: new ThemeColor('tumee.human'),
-    overviewRulerLane: 2,
-  });
+  // Define colors for each permission combination
+  // Using the original color scheme with transparency for human permissions
+  const baseColor = {
+    aiWrite: colors.aiWrite || '#FFA500',        // Orange/Amber
+    aiRead: '#808080',                           // Gray 
+    aiNoAccess: colors.aiNoAccess || '#90EE90',  // Light green
+    humanBase: colors.humanReadOnly || '#D3D3D3' // Light gray for human
+  };
+  
+  const permissionColors: { [key: string]: string } = {
+    // Base permission combinations
+    // AI Read + Human variations (use human base color with different opacities)
+    aiRead_humanRead: baseColor.humanBase,      // Medium transparency
+    aiRead_humanWrite: baseColor.humanBase,     // High transparency (more transparent)
+    aiRead_humanNoAccess: baseColor.humanBase,  // No transparency (solid)
+    
+    // AI Write + Human variations (use AI write color)
+    aiWrite_humanRead: baseColor.aiWrite,       // AI can write - orange
+    aiWrite_humanWrite: baseColor.aiWrite,      // Both can write - orange
+    aiWrite_humanNoAccess: baseColor.aiWrite,   // AI write, human no - orange
+    
+    // AI No Access + Human variations (use AI no access color)
+    aiNoAccess_humanRead: baseColor.aiNoAccess,     // Light green
+    aiNoAccess_humanWrite: baseColor.aiNoAccess,    // Light green
+    aiNoAccess_humanNoAccess: colors.humanNoAccess || '#FF0000', // Both no access - red
+    
+    // Context variants (use context color)
+    aiReadContext_humanRead: colors.context || '#00CED1',
+    aiReadContext_humanWrite: colors.context || '#00CED1',
+    aiReadContext_humanNoAccess: colors.context || '#00CED1',
+    aiWriteContext_humanRead: colors.context || '#00CED1',
+    aiWriteContext_humanWrite: colors.context || '#00CED1',
+    aiWriteContext_humanNoAccess: colors.context || '#00CED1'
+  };
 
-  // Mixed regions (unused but kept for backward compatibility)
-  mixedDecoration = window.createTextEditorDecorationType({
-    backgroundColor: `rgba(33, 150, 243, ${opacity})`, // Blue color for mixed (unused)
-    isWholeLine: true,
-    borderWidth: '0 0 0 3px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(33, 150, 243, 0.6)',
-    overviewRulerColor: new ThemeColor('tumee.humanAI'),
-    overviewRulerLane: 2,
+  // Create decoration types for all permission combinations
+  Object.entries(permissionColors).forEach(([key, color]) => {
+    // Determine opacity based on human permission level
+    let effectiveOpacity = opacity;
+    if (key.includes('_humanWrite')) {
+      effectiveOpacity = opacity * 0.3;  // High transparency for human write
+    } else if (key.includes('_humanRead')) {
+      effectiveOpacity = opacity * 0.6;  // Medium transparency for human read
+    } else if (key.includes('_humanNoAccess')) {
+      effectiveOpacity = opacity * 1.0;  // No transparency reduction for human no access
+    }
+    
+    const decoration = window.createTextEditorDecorationType({
+      backgroundColor: hexToRgba(color, effectiveOpacity),
+      isWholeLine: true,
+      borderWidth: '0 0 0 3px',
+      borderStyle: 'solid',
+      borderColor: hexToRgba(color, 0.6),
+      overviewRulerColor: hexToRgba(color, 0.8),
+      overviewRulerLane: 2,
+    });
+    decorationTypes.set(key, decoration);
+    disposables.push(decoration);
   });
-
-  // Human Read-Only regions
-  humanReadOnlyDecoration = window.createTextEditorDecorationType({
-    backgroundColor: hexToRgba(colors.humanReadOnly, opacity),
-    isWholeLine: true,
-    borderWidth: '0 0 0 3px',
-    borderStyle: 'solid',
-    borderColor: hexToRgba(colors.humanReadOnly, 0.6),
-    overviewRulerColor: new ThemeColor('tumee.humanReadOnly'),
-    overviewRulerLane: 2,
-  });
-
-  // Human No Access regions
-  humanNoAccessDecoration = window.createTextEditorDecorationType({
-    backgroundColor: hexToRgba(colors.humanNoAccess, opacity),
-    isWholeLine: true,
-    borderWidth: '0 0 0 3px',
-    borderStyle: 'solid',
-    borderColor: hexToRgba(colors.humanNoAccess, 0.6),
-    overviewRulerColor: new ThemeColor('tumee.humanNoAccess'),
-    overviewRulerLane: 2,
-  });
-
-  // Context regions
-  contextDecoration = window.createTextEditorDecorationType({
-    backgroundColor: hexToRgba(colors.context, opacity),
-    isWholeLine: true,
-    borderWidth: '0 0 0 3px',
-    borderStyle: 'solid',
-    borderColor: hexToRgba(colors.context, 0.6),
-    overviewRulerColor: new ThemeColor('tumee.context'),
-    overviewRulerLane: 2,
-  });
-
-  disposables.push(aiOnlyDecoration, humanOnlyDecoration, mixedDecoration, humanReadOnlyDecoration, humanNoAccessDecoration, contextDecoration);
 }
 
 function triggerUpdateDecorations(document: TextDocument) {
@@ -369,18 +364,50 @@ function clearDecorations() {
   const activeEditor = window.activeTextEditor;
   if (!activeEditor) return;
 
-  activeEditor.setDecorations(aiOnlyDecoration, []);
-  activeEditor.setDecorations(humanOnlyDecoration, []);
-  activeEditor.setDecorations(mixedDecoration, []);
-  activeEditor.setDecorations(humanReadOnlyDecoration, []);
-  activeEditor.setDecorations(humanNoAccessDecoration, []);
-  activeEditor.setDecorations(contextDecoration, []);
+  // Clear all decoration types
+  decorationTypes.forEach(decoration => {
+    activeEditor.setDecorations(decoration, []);
+  });
 
   // Also clear the cache for this document
   if (activeEditor.document) {
     decorationCache.delete(activeEditor.document);
   }
 }
+
+/**
+ * Helper function to determine decoration type based on permission combination
+ */
+function getDecorationType(aiPerm: string, humanPerm: string, aiContext: boolean, humanContext: boolean): keyof DecorationRanges | null {
+  // Context is now properly tracked as a modifier
+  if (aiContext) {
+    // AI has context modifier
+    if (aiPerm === 'r') {
+      if (humanPerm === 'r') return 'aiReadContext_humanRead';
+      if (humanPerm === 'w') return 'aiReadContext_humanWrite';
+      if (humanPerm === 'n') return 'aiReadContext_humanNoAccess';
+    } else if (aiPerm === 'w') {
+      if (humanPerm === 'r') return 'aiWriteContext_humanRead';
+      if (humanPerm === 'w') return 'aiWriteContext_humanWrite';
+      if (humanPerm === 'n') return 'aiWriteContext_humanNoAccess';
+    }
+  }
+  
+  // Handle all non-context combinations
+  if (aiPerm === 'r' && humanPerm === 'r') return 'aiRead_humanRead';
+  if (aiPerm === 'r' && humanPerm === 'w') return 'aiRead_humanWrite';
+  if (aiPerm === 'r' && humanPerm === 'n') return 'aiRead_humanNoAccess';
+  if (aiPerm === 'w' && humanPerm === 'r') return 'aiWrite_humanRead';
+  if (aiPerm === 'w' && humanPerm === 'w') return 'aiWrite_humanWrite';
+  if (aiPerm === 'w' && humanPerm === 'n') return 'aiWrite_humanNoAccess';
+  if (aiPerm === 'n' && humanPerm === 'r') return 'aiNoAccess_humanRead';
+  if (aiPerm === 'n' && humanPerm === 'w') return 'aiNoAccess_humanWrite';
+  if (aiPerm === 'n' && humanPerm === 'n') return 'aiNoAccess_humanNoAccess';
+  
+  // Default case - shouldn't happen with valid permissions
+  return 'aiRead_humanWrite'; // Default state
+}
+
 
 /**
  * Helper function to find the last non-empty line in a range
@@ -400,15 +427,13 @@ function findLastNonEmptyLine(lines: string[], startLine: number, endLine: numbe
  * @param permission The guard permission ('r', 'w', 'n', 'context')
  * @returns true if trailing whitespace should be trimmed from the decoration range
  */
-function shouldTrimWhitespaceForGuard(target: string, permission: string): boolean {
-  // Define which permissions should have their trailing whitespace trimmed
-  const trimWhitespacePermissions = {
-    'ai': ['n', 'context'],      // AI no-access and context guards
-    'human': ['r', 'n']          // Human read-only and no-access guards
-  };
-
-  const permissions = trimWhitespacePermissions[target as keyof typeof trimWhitespacePermissions];
-  return permissions ? permissions.includes(permission) : false;
+function shouldTrimWhitespaceForPermissions(aiPerm: string, humanPerm: string): boolean {
+  // Trim whitespace for:
+  // - AI no-access or context
+  // - Human read-only or no-access  
+  // - Either permission is context
+  return aiPerm === 'n' || aiPerm === 'context' || 
+         humanPerm === 'r' || humanPerm === 'n' || humanPerm === 'context';
 }
 
 /**
@@ -466,134 +491,110 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     }
 
     // Now convert linePermissions to decoration ranges
-    const decorationRanges = {
-      aiWrite: [] as { range: Range }[],
-      aiNoAccess: [] as { range: Range }[],
-      humanReadOnly: [] as { range: Range }[],
-      humanNoAccess: [] as { range: Range }[],
-      context: [] as { range: Range }[]
+    const decorationRanges: DecorationRanges = {
+      // All permission combinations
+      aiRead_humanRead: [],
+      aiRead_humanWrite: [],
+      aiRead_humanNoAccess: [],
+      aiWrite_humanRead: [],
+      aiWrite_humanWrite: [],
+      aiWrite_humanNoAccess: [],
+      aiNoAccess_humanRead: [],
+      aiNoAccess_humanWrite: [],
+      aiNoAccess_humanNoAccess: [],
+      
+      // Context variants
+      aiReadContext_humanRead: [],
+      aiReadContext_humanWrite: [],
+      aiReadContext_humanNoAccess: [],
+      aiWriteContext_humanRead: [],
+      aiWriteContext_humanWrite: [],
+      aiWriteContext_humanNoAccess: []
     };
 
     // Process the line permissions into continuous ranges
     let currentStart = -1;
-    let currentTarget = '';
-    let currentPermission = '';
+    let currentAiPerm = '';
+    let currentHumanPerm = '';
+    let currentAiContext = false;
+    let currentHumanContext = false;
 
     for (let i = 0; i < document.lineCount; i++) {
       const lineNumber = i + 1; // Convert to 1-based for permission lookup
       const perm = linePermissions.get(lineNumber);
 
-      // Determine effective target and permission for this line
-      const target = perm?.target;
-      const permission = perm?.permission;
-
-      // For comparison purposes, treat undefined as a specific state
-      const effectivePermission = permission || '';
-      const effectiveTarget = target || '';
+      // Get AI and human permissions for this line
+      const aiPerm = perm?.permissions?.ai || '';
+      const humanPerm = perm?.permissions?.human || '';
+      const aiContext = perm?.isContext?.ai || false;
+      const humanContext = perm?.isContext?.human || false;
 
       // Check if we need to end the current range
-      if (effectiveTarget !== currentTarget || effectivePermission !== currentPermission) {
-      // End previous range if it exists
+      if (aiPerm !== currentAiPerm || humanPerm !== currentHumanPerm || 
+          aiContext !== currentAiContext || humanContext !== currentHumanContext) {
+        // End previous range if it exists
         if (currentStart >= 0) {
-          // Determine if whitespace should be trimmed based on permission type
-          const shouldTrim = shouldTrimWhitespaceForGuard(currentTarget, currentPermission);
-          // currentStart and i are both 0-based line indices
-          const lastLine = shouldTrim
-            ? findLastNonEmptyLine(lines, currentStart, i - 1)
-            : i - 1;
-
-          // Create range, but ensure we don't extend past the actual content
-          // VSCode can extend decorations to the next line if we go to end of line
-          const endChar = lines[lastLine] ? lines[lastLine].length : 0;
-          const range = new Range(
-            new Position(currentStart, 0),
-            new Position(lastLine, endChar > 0 ? endChar : 0)
-          );
-
-          // Add range to appropriate decoration array
-          if (currentTarget === 'ai') {
-            if (currentPermission === 'w') {
-              decorationRanges.aiWrite.push({ range });
-            } else if (currentPermission === 'n') {
-              decorationRanges.aiNoAccess.push({ range });
-            } else if (currentPermission === 'context') {
-              decorationRanges.context.push({ range });
-            }
-          } else if (currentTarget === 'human') {
-            if (currentPermission === 'r') {
-              decorationRanges.humanReadOnly.push({ range });
-            } else if (currentPermission === 'n') {
-              decorationRanges.humanNoAccess.push({ range });
-            }
+          const decorationType = getDecorationType(currentAiPerm, currentHumanPerm, currentAiContext, currentHumanContext);
+          if (decorationType) {
+            const shouldTrim = shouldTrimWhitespaceForPermissions(currentAiPerm, currentHumanPerm);
+            const lastLine = shouldTrim
+              ? findLastNonEmptyLine(lines, currentStart, i - 1)
+              : i - 1;
+            
+            const endChar = lines[lastLine] ? lines[lastLine].length : 0;
+            decorationRanges[decorationType].push({
+              range: new Range(
+                new Position(currentStart, 0),
+                new Position(lastLine, endChar > 0 ? endChar : 0)
+              )
+            });
           }
         }
 
-        // Start new range if this is a highlighted permission
-        const shouldHighlight =
-          (effectiveTarget === 'ai' && (effectivePermission === 'w' || effectivePermission === 'n' || effectivePermission === 'context')) ||
-          (effectiveTarget === 'human' && (effectivePermission === 'r' || effectivePermission === 'n'));
-
-        if (shouldHighlight) {
-          currentStart = i;  // Use 0-based line number for Position constructor
-          currentTarget = effectiveTarget;
-          currentPermission = effectivePermission;
+        // Start new range if we have permissions
+        if (aiPerm || humanPerm) {
+          currentStart = i;
+          currentAiPerm = aiPerm;
+          currentHumanPerm = humanPerm;
+          currentAiContext = aiContext;
+          currentHumanContext = humanContext;
         } else {
           currentStart = -1;
-          currentTarget = '';
-          currentPermission = '';
+          currentAiPerm = '';
+          currentHumanPerm = '';
+          currentAiContext = false;
+          currentHumanContext = false;
         }
       }
     }
 
     // Handle the last range if it extends to the end of the file
-    if (currentStart >= 0 && currentTarget && currentPermission) {
-      // Determine if whitespace should be trimmed based on permission type
-      const shouldTrim = shouldTrimWhitespaceForGuard(currentTarget, currentPermission);
-      // currentStart is 0-based line index
-      const lastLine = shouldTrim
-        ? findLastNonEmptyLine(lines, currentStart, lines.length - 1)
-        : lines.length - 1;
-
-      // Create range, ensuring we don't extend to next line
-      const endChar = lines[lastLine] ? lines[lastLine].length : 0;
-      const range = new Range(
-        new Position(currentStart, 0),
-        new Position(lastLine, endChar > 0 ? endChar : 0)
-      );
-
-      if (currentTarget === 'ai') {
-        if (currentPermission === 'w') {
-          decorationRanges.aiWrite.push({ range });
-        } else if (currentPermission === 'n') {
-          decorationRanges.aiNoAccess.push({ range });
-        } else if (currentPermission === 'context') {
-          decorationRanges.context.push({ range });
-        }
-      } else if (currentTarget === 'human') {
-        if (currentPermission === 'r') {
-          decorationRanges.humanReadOnly.push({ range });
-        } else if (currentPermission === 'n') {
-          decorationRanges.humanNoAccess.push({ range });
-        }
+    if (currentStart >= 0 && (currentAiPerm || currentHumanPerm)) {
+      const decorationType = getDecorationType(currentAiPerm, currentHumanPerm, currentAiContext, currentHumanContext);
+      if (decorationType) {
+        const shouldTrim = shouldTrimWhitespaceForPermissions(currentAiPerm, currentHumanPerm);
+        const lastLine = shouldTrim
+          ? findLastNonEmptyLine(lines, currentStart, lines.length - 1)
+          : lines.length - 1;
+        
+        const endChar = lines[lastLine] ? lines[lastLine].length : 0;
+        decorationRanges[decorationType].push({
+          range: new Range(
+            new Position(currentStart, 0),
+            new Position(lastLine, endChar > 0 ? endChar : 0)
+          )
+        });
       }
     }
 
-    // Apply decorations
-    activeEditor.setDecorations(aiOnlyDecoration, decorationRanges.aiWrite);
-    activeEditor.setDecorations(humanOnlyDecoration, decorationRanges.aiNoAccess);
-    activeEditor.setDecorations(mixedDecoration, []);
-    activeEditor.setDecorations(humanReadOnlyDecoration, decorationRanges.humanReadOnly);
-    activeEditor.setDecorations(humanNoAccessDecoration, decorationRanges.humanNoAccess);
-    activeEditor.setDecorations(contextDecoration, decorationRanges.context);
+    // Apply decorations - clear all first then apply active ones
+    decorationTypes.forEach((decoration, key) => {
+      const ranges = decorationRanges[key as keyof DecorationRanges] || [];
+      activeEditor.setDecorations(decoration, ranges);
+    });
 
     // Cache the decoration ranges to prevent flashing when switching tabs
-    decorationCache.set(document, {
-      aiWrite: decorationRanges.aiWrite,
-      aiNoAccess: decorationRanges.aiNoAccess,
-      humanReadOnly: decorationRanges.humanReadOnly,
-      humanNoAccess: decorationRanges.humanNoAccess,
-      context: decorationRanges.context
-    });
+    decorationCache.set(document, decorationRanges);
 
     performanceMonitor.endTimer('updateCodeDecorations', {
       lines: lines.length,
@@ -693,15 +694,14 @@ async function updateStatusBarItem(document: TextDocument) {
     // Get the permission at the cursor line
     const cursorPermission = linePermissions.get(cursorLine + 1); // 1-based
 
-    // Only show AI permissions in the status bar for now
-    if (cursorPermission && cursorPermission.target === 'ai') {
+    // Show AI permissions in the status bar
+    if (cursorPermission && cursorPermission.permissions.ai) {
+      const aiPerm = cursorPermission.permissions.ai;
       currentAccess =
-      cursorPermission.permission === 'r' ? 'Read-Only' :
-        cursorPermission.permission === 'w' ? 'Write' :
-          cursorPermission.permission === 'n' ? 'No Access' :
-            cursorPermission.permission === 'context' ? 'Context' : 'Default';
-
-      // lineCount is not available in LinePermission anymore
+        aiPerm === 'r' ? 'Read-Only' :
+        aiPerm === 'w' ? 'Write' :
+        aiPerm === 'n' ? 'No Access' :
+        aiPerm === 'context' ? 'Context' : 'Default';
     }
 
     // Set status bar text with line count if present

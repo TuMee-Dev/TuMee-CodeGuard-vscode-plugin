@@ -17,6 +17,9 @@ interface GuardStackEntry {
   permissions: {
     [target: string]: string;  // e.g., { ai: 'w', human: 'r' }
   };
+  isContext: {
+    [target: string]: boolean;  // e.g., { ai: true, human: false }
+  };
   startLine: number;
   endLine: number;
   isLineLimited: boolean;
@@ -269,10 +272,11 @@ export async function parseGuardTags(
         continue;
       }
 
-      // Check for expired line-limited guards
+      // Check for expired guards (both line-limited and scope-based)
       while (guardStack.length > 0) {
         const top = guardStack[guardStack.length - 1];
-        if (top.isLineLimited && i >= top.endLine) {
+        // Remove if we've passed the guard's end line (works for both line-limited and scope-based)
+        if (i >= top.endLine) {
           popGuardWithContextCleanup(guardStack);
         } else {
           break;
@@ -344,16 +348,29 @@ export async function parseGuardTags(
         removeInterruptedContextGuards(guardStack);
 
         // Push to stack with current permissions
-        // Get current permissions from top of stack or use defaults
+        // Get current permissions and context state from top of stack or use defaults
         const currentPermissions = guardStack.length > 0 
           ? { ...guardStack[guardStack.length - 1].permissions }
           : { ai: 'r', human: 'w' };  // Default permissions
         
-        // Update only the permission for this guard's target
-        currentPermissions[guardTag.target] = guardTag.permission;
+        const currentContext = guardStack.length > 0
+          ? { ...guardStack[guardStack.length - 1].isContext }
+          : { ai: false, human: false };  // Default no context
+        
+        // Handle context as a modifier
+        if (guardTag.permission === 'context') {
+          // Context doesn't change read/write permissions
+          currentContext[guardTag.target] = true;
+        } else {
+          // Update the actual permission
+          currentPermissions[guardTag.target] = guardTag.permission;
+          // Clear context when setting a new permission
+          currentContext[guardTag.target] = false;
+        }
         
         guardStack.push({
           permissions: currentPermissions,
+          isContext: currentContext,
           startLine: startLine,
           endLine: endLine,
           isLineLimited: isLineLimited,
@@ -384,13 +401,18 @@ export const parseGuardTagsChunked = parseGuardTags;
 /**
  * Core guard stack processing logic - tracks all permission types independently
  */
+interface ProcessedLinePermission {
+  permissions: { [target: string]: string };
+  isContext: { [target: string]: boolean };
+}
+
 function processGuardStack(
   guardTags: GuardTag[],
   totalLines: number,
   getLineText: (lineNumber: number) => string,
   defaultPermissions: { [target: string]: string } = { ai: 'r', human: 'w' }
-): Map<number, GuardTag> {
-  const linePermissions = new Map<number, GuardTag>();
+): Map<number, ProcessedLinePermission> {
+  const linePermissions = new Map<number, ProcessedLinePermission>();
   const guardStack: GuardStackEntry[] = [];
 
   for (let line = 1; line <= totalLines; line++) {
@@ -407,16 +429,29 @@ function processGuardStack(
     // Add new guards starting on this line
     for (const tag of guardTags) {
       if (tag.lineNumber === line) {
-        // Get current permissions from top of stack or use defaults
+        // Get current permissions and context from top of stack or use defaults
         const currentPermissions = guardStack.length > 0 
           ? { ...guardStack[guardStack.length - 1].permissions }
           : { ...defaultPermissions };
         
-        // Update only the permission for this guard's target
-        currentPermissions[tag.target] = tag.permission;
+        const currentContext = guardStack.length > 0
+          ? { ...guardStack[guardStack.length - 1].isContext }
+          : { ai: false, human: false };
+        
+        // Handle context as a modifier
+        if (tag.permission === 'context') {
+          // Context doesn't change read/write permissions
+          currentContext[tag.target] = true;
+        } else {
+          // Update the actual permission
+          currentPermissions[tag.target] = tag.permission;
+          // Clear context when setting a new permission
+          currentContext[tag.target] = false;
+        }
         
         const entry: GuardStackEntry = {
           permissions: currentPermissions,
+          isContext: currentContext,
           startLine: tag.scopeStart || line,
           endLine: tag.scopeEnd || (tag.lineCount ? line + tag.lineCount - 1 : totalLines),
           isLineLimited: !!tag.lineCount,
@@ -463,32 +498,17 @@ function processGuardStack(
           }
         }
         
-        // For now, we need to pick one guard to display
-        // Priority: ai permissions > human permissions
-        if (effectivePermissions.ai) {
-          linePermissions.set(line, {
-            lineNumber: line,
-            target: 'ai',
-            permission: effectivePermissions.ai as 'r' | 'w' | 'n' | 'context',
-            identifier: top.sourceGuard?.identifier
-          });
-        } else if (effectivePermissions.human) {
-          linePermissions.set(line, {
-            lineNumber: line,
-            target: 'human',
-            permission: effectivePermissions.human as 'r' | 'w' | 'n' | 'context',
-            identifier: top.sourceGuard?.identifier
-          });
-        }
+        // Return the full permissions state for this line with context info
+        linePermissions.set(line, {
+          permissions: effectivePermissions,
+          isContext: top.isContext
+        });
       }
     } else {
       // No guards on stack - use defaults
-      // Show AI permission by default (this matches current behavior)
       linePermissions.set(line, {
-        lineNumber: line,
-        target: 'ai',
-        permission: defaultPermissions.ai as 'r' | 'w' | 'n' | 'context',
-        identifier: undefined
+        permissions: defaultPermissions,
+        isContext: { ai: false, human: false }
       });
     }
   }
@@ -496,62 +516,15 @@ function processGuardStack(
   return linePermissions;
 }
 
-/**
- * Create guard regions from parsed tags using stack-based precedence
- * This function is used to create non-overlapping regions for visualization
- */
-export function createGuardRegions(guardTags: GuardTag[], totalLines: number): GuardTag[] {
-  const regions: GuardTag[] = [];
-  
-  // Use the shared guard stack processing logic
-  // For createGuardRegions, we don't need line text so we provide a dummy function
-  const linePermissions = processGuardStack(
-    guardTags,
-    totalLines,
-    () => '' // Don't need actual line text for region creation
-  );
-
-  // Create contiguous regions from line permissions
-  let currentRegion: GuardTag | null = null;
-  let regionStart = 1;
-
-  for (let line = 1; line <= totalLines + 1; line++) {
-    const permission = line <= totalLines ? linePermissions.get(line) : null;
-
-    if (currentRegion) {
-      // Check if we need to end the current region
-      const needNewRegion = !permission ||
-        permission.target !== currentRegion.target ||
-        permission.permission !== currentRegion.permission ||
-        permission.identifier !== currentRegion.identifier;
-
-      if (needNewRegion) {
-        // End current region
-        currentRegion.scopeStart = regionStart;
-        currentRegion.scopeEnd = line - 1;
-        currentRegion.lineCount = line - regionStart;
-        regions.push(currentRegion);
-        currentRegion = null;
-      }
-    }
-
-    if (permission && !currentRegion) {
-      // Start new region
-      currentRegion = {
-        lineNumber: line,
-        target: permission.target,
-        identifier: permission.identifier,
-        permission: permission.permission,
-        scope: permission.scope,
-        addScopes: permission.addScopes,
-        removeScopes: permission.removeScopes
-      };
-      regionStart = line;
-    }
-  }
-
-  return regions;
-}
+// /**
+//  * Create guard regions from parsed tags using stack-based precedence
+//  * This function is used to create non-overlapping regions for visualization
+//  * NOTE: This function needs to be refactored to work with the new permission model
+//  */
+// export function createGuardRegions(guardTags: GuardTag[], totalLines: number): GuardTag[] {
+//   // TODO: Refactor to work with new permission model where we track both AI and human permissions
+//   return [];
+// }
 
 /**
  * Get line permissions for a document (used for decorations)
@@ -573,13 +546,13 @@ export function getLinePermissions(
     (line) => document.lineAt(line - 1).text
   );
 
-  // Convert GuardTag map to LinePermission map
-  for (const [line, guard] of linePermissions) {
+  // Convert permissions dictionary to LinePermission map
+  for (const [line, perms] of linePermissions) {
     permissions.set(line, {
       line: line,
-      permission: guard.permission,
-      target: guard.target,
-      identifier: guard.identifier
+      permissions: perms.permissions,
+      isContext: perms.isContext,
+      identifier: undefined
     });
   }
 

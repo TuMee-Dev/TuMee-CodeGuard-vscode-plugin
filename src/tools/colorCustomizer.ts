@@ -2,12 +2,31 @@ import * as vscode from 'vscode';
 import { getExtensionWithOptionalName } from '@/utils';
 
 export interface GuardColors {
+  // Legacy colors for backward compatibility
   aiWrite: string;
   aiNoAccess: string;
   humanReadOnly: string;
   humanNoAccess: string;
+  humanWrite: string;
   context: string;
   opacity: number;
+  
+  // New permission combination colors (optional - will use defaults if not set)
+  aiRead_humanRead?: string;
+  aiRead_humanWrite?: string;
+  aiRead_humanNoAccess?: string;
+  aiWrite_humanRead?: string;
+  aiWrite_humanWrite?: string;
+  aiWrite_humanNoAccess?: string;
+  aiNoAccess_humanRead?: string;
+  aiNoAccess_humanWrite?: string;
+  aiNoAccess_humanNoAccess?: string;
+  aiReadContext_humanRead?: string;
+  aiReadContext_humanWrite?: string;
+  aiReadContext_humanNoAccess?: string;
+  aiWriteContext_humanRead?: string;
+  aiWriteContext_humanWrite?: string;
+  aiWriteContext_humanNoAccess?: string;
 }
 
 // Default colors
@@ -16,6 +35,7 @@ const DEFAULT_COLORS: GuardColors = {
   aiNoAccess: '#90EE90',   // Light green for AI no access
   humanReadOnly: '#D3D3D3', // Light grey for human read-only
   humanNoAccess: '#FF0000', // Red for human no access
+  humanWrite: '#000000',   // Transparent by default (opacity will make it invisible)
   context: '#00CED1',      // Light blue/cyan for AI context
   opacity: 0.3
 };
@@ -24,7 +44,25 @@ const DEFAULT_COLORS: GuardColors = {
 const COLOR_THEMES = {
   default: {
     name: 'Default',
-    colors: DEFAULT_COLORS
+    colors: {
+      ...DEFAULT_COLORS,
+      // Additional permission combinations use base colors
+      aiRead_humanRead: DEFAULT_COLORS.humanReadOnly,
+      aiRead_humanWrite: DEFAULT_COLORS.humanReadOnly,
+      aiRead_humanNoAccess: DEFAULT_COLORS.humanReadOnly,
+      aiWrite_humanRead: DEFAULT_COLORS.aiWrite,
+      aiWrite_humanWrite: DEFAULT_COLORS.aiWrite,
+      aiWrite_humanNoAccess: DEFAULT_COLORS.aiWrite,
+      aiNoAccess_humanRead: DEFAULT_COLORS.aiNoAccess,
+      aiNoAccess_humanWrite: DEFAULT_COLORS.aiNoAccess,
+      aiNoAccess_humanNoAccess: DEFAULT_COLORS.humanNoAccess,
+      aiReadContext_humanRead: DEFAULT_COLORS.context,
+      aiReadContext_humanWrite: DEFAULT_COLORS.context,
+      aiReadContext_humanNoAccess: DEFAULT_COLORS.context,
+      aiWriteContext_humanRead: DEFAULT_COLORS.context,
+      aiWriteContext_humanWrite: DEFAULT_COLORS.context,
+      aiWriteContext_humanNoAccess: DEFAULT_COLORS.context
+    }
   },
   darkMode: {
     name: 'Dark Mode',
@@ -33,8 +71,25 @@ const COLOR_THEMES = {
       aiNoAccess: '#66BB6A',
       humanReadOnly: '#AB47BC',
       humanNoAccess: '#FFA726',
+      humanWrite: '#000000',    // Transparent
       context: '#26C6DA',
-      opacity: 0.15
+      opacity: 0.15,
+      // Additional combinations
+      aiRead_humanRead: '#AB47BC',
+      aiRead_humanWrite: '#AB47BC',
+      aiRead_humanNoAccess: '#AB47BC',
+      aiWrite_humanRead: '#EF5350',
+      aiWrite_humanWrite: '#EF5350',
+      aiWrite_humanNoAccess: '#EF5350',
+      aiNoAccess_humanRead: '#66BB6A',
+      aiNoAccess_humanWrite: '#66BB6A',
+      aiNoAccess_humanNoAccess: '#FFA726',
+      aiReadContext_humanRead: '#26C6DA',
+      aiReadContext_humanWrite: '#26C6DA',
+      aiReadContext_humanNoAccess: '#26C6DA',
+      aiWriteContext_humanRead: '#26C6DA',
+      aiWriteContext_humanWrite: '#26C6DA',
+      aiWriteContext_humanNoAccess: '#26C6DA'
     }
   },
   highContrast: {
@@ -44,8 +99,25 @@ const COLOR_THEMES = {
       aiNoAccess: '#00FF00',
       humanReadOnly: '#FF00FF',
       humanNoAccess: '#FF8800',
+      humanWrite: '#000000',    // Transparent
       context: '#00FFFF',
-      opacity: 0.2
+      opacity: 0.2,
+      // Additional combinations
+      aiRead_humanRead: '#FF00FF',
+      aiRead_humanWrite: '#FF00FF',
+      aiRead_humanNoAccess: '#FF00FF',
+      aiWrite_humanRead: '#FF0000',
+      aiWrite_humanWrite: '#FF0000',
+      aiWrite_humanNoAccess: '#FF0000',
+      aiNoAccess_humanRead: '#00FF00',
+      aiNoAccess_humanWrite: '#00FF00',
+      aiNoAccess_humanNoAccess: '#FF8800',
+      aiReadContext_humanRead: '#00FFFF',
+      aiReadContext_humanWrite: '#00FFFF',
+      aiReadContext_humanNoAccess: '#00FFFF',
+      aiWriteContext_humanRead: '#00FFFF',
+      aiWriteContext_humanWrite: '#00FFFF',
+      aiWriteContext_humanNoAccess: '#00FFFF'
     }
   },
   subtle: {
@@ -55,6 +127,7 @@ const COLOR_THEMES = {
       aiNoAccess: '#C8E6C9',
       humanReadOnly: '#E1BEE7',
       humanNoAccess: '#FFE0B2',
+      humanWrite: '#000000',    // Transparent
       context: '#B2EBF2',
       opacity: 0.3
     }
@@ -66,6 +139,7 @@ const COLOR_THEMES = {
       aiNoAccess: '#388E3C',
       humanReadOnly: '#7B1FA2',
       humanNoAccess: '#F57C00',
+      humanWrite: '#000000',    // Transparent
       context: '#0097A7',
       opacity: 0.1
     }
@@ -433,6 +507,8 @@ export class ColorCustomizerPanel {
                 
                 <div class="custom-content" id="customContent">
                     <div class="color-grid">
+                        <h4 style="margin: 10px 0; padding: 0 20px; color: var(--vscode-descriptionForeground);">Base Colors</h4>
+                        
                         <div class="color-item">
                             <label class="color-label">AI Write Access</label>
                             <div class="color-input-wrapper">
@@ -450,7 +526,7 @@ export class ColorCustomizerPanel {
                         </div>
                         
                         <div class="color-item">
-                            <label class="color-label">Human Read-Only</label>
+                            <label class="color-label">Human Base Color</label>
                             <div class="color-input-wrapper">
                                 <input type="color" id="humanReadOnly" class="color-input" value="#D3D3D3" onchange="updateColorHex(this)">
                                 <span class="color-hex" id="humanReadOnly-hex">#D3D3D3</span>
@@ -458,7 +534,7 @@ export class ColorCustomizerPanel {
                         </div>
                         
                         <div class="color-item">
-                            <label class="color-label">Human No Access</label>
+                            <label class="color-label">Both No Access</label>
                             <div class="color-input-wrapper">
                                 <input type="color" id="humanNoAccess" class="color-input" value="#FF0000" onchange="updateColorHex(this)">
                                 <span class="color-hex" id="humanNoAccess-hex">#FF0000</span>
@@ -473,13 +549,54 @@ export class ColorCustomizerPanel {
                             </div>
                         </div>
                         
+                        <h4 style="margin: 20px 0 10px 0; padding: 0 20px; color: var(--vscode-descriptionForeground);">Advanced Combinations</h4>
+                        
+                        <div style="padding: 0 20px; margin-bottom: 15px; font-size: 12px; color: var(--vscode-descriptionForeground);">
+                            Note: Human permission levels use transparency - Write (high transparency), Read (medium), No Access (solid)
+                        </div>
+                        
+                        <div class="color-item">
+                            <label class="color-label">AI Read + Human Read</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" id="aiRead_humanRead" class="color-input" value="#D3D3D3" onchange="updateColorHex(this)">
+                                <span class="color-hex" id="aiRead_humanRead-hex">#D3D3D3</span>
+                            </div>
+                        </div>
+                        
+                        <div class="color-item">
+                            <label class="color-label">AI Read + Human Write</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" id="aiRead_humanWrite" class="color-input" value="#D3D3D3" onchange="updateColorHex(this)">
+                                <span class="color-hex" id="aiRead_humanWrite-hex">#D3D3D3</span>
+                            </div>
+                        </div>
+                        
+                        <div class="color-item">
+                            <label class="color-label">AI Write + Human Read</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" id="aiWrite_humanRead" class="color-input" value="#FFA500" onchange="updateColorHex(this)">
+                                <span class="color-hex" id="aiWrite_humanRead-hex">#FFA500</span>
+                            </div>
+                        </div>
+                        
+                        <div class="color-item">
+                            <label class="color-label">AI Write + Human Write</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" id="aiWrite_humanWrite" class="color-input" value="#FFA500" onchange="updateColorHex(this)">
+                                <span class="color-hex" id="aiWrite_humanWrite-hex">#FFA500</span>
+                            </div>
+                        </div>
+                        
                         <div class="opacity-section">
                             <div class="opacity-wrapper">
-                                <label class="color-label">Background Opacity</label>
+                                <label class="color-label">Base Opacity</label>
                                 <input type="range" id="opacity" class="opacity-slider" 
                                        min="0" max="100" value="30" 
                                        oninput="updateOpacity(this)">
                                 <span class="opacity-value" id="opacity-value">30%</span>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 12px; color: var(--vscode-descriptionForeground);" id="opacity-breakdown">
+                                Human Write: 9%, Human Read: 18%, Human No Access: 30%
                             </div>
                         </div>
                     </div>
@@ -548,6 +665,13 @@ export class ColorCustomizerPanel {
                 const value = slider.value;
                 document.getElementById('opacity-value').textContent = value + '%';
                 currentOpacity = value / 100;
+                
+                // Update opacity breakdown
+                const breakdown = document.getElementById('opacity-breakdown');
+                const writeOpacity = Math.round(value * 0.3);
+                const readOpacity = Math.round(value * 0.6);
+                breakdown.textContent = \`Human Write: \${writeOpacity}%, Human Read: \${readOpacity}%, Human No Access: \${value}%\`;
+                
                 updatePreview();
             }
             
@@ -580,17 +704,34 @@ export class ColorCustomizerPanel {
             }
             
             function getColors() {
-                return {
+                const colors = {
                     aiWrite: document.getElementById('aiWrite').value,
                     aiNoAccess: document.getElementById('aiNoAccess').value,
                     humanReadOnly: document.getElementById('humanReadOnly').value,
                     humanNoAccess: document.getElementById('humanNoAccess').value,
+                    humanWrite: '#000000', // Transparent - not shown in UI
                     context: document.getElementById('context').value,
                     opacity: currentOpacity
                 };
+                
+                // Add advanced combination colors if they exist
+                const advancedIds = [
+                    'aiRead_humanRead', 'aiRead_humanWrite',
+                    'aiWrite_humanRead', 'aiWrite_humanWrite'
+                ];
+                
+                advancedIds.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        colors[id] = element.value;
+                    }
+                });
+                
+                return colors;
             }
             
             function updateAllColors(colors) {
+                // Update base colors
                 document.getElementById('aiWrite').value = colors.aiWrite;
                 document.getElementById('aiNoAccess').value = colors.aiNoAccess;
                 document.getElementById('humanReadOnly').value = colors.humanReadOnly;
@@ -602,6 +743,23 @@ export class ColorCustomizerPanel {
                 document.getElementById('humanReadOnly-hex').textContent = colors.humanReadOnly.toUpperCase();
                 document.getElementById('humanNoAccess-hex').textContent = colors.humanNoAccess.toUpperCase();
                 document.getElementById('context-hex').textContent = colors.context.toUpperCase();
+                
+                // Update advanced combination colors if they exist
+                const advancedIds = [
+                    'aiRead_humanRead', 'aiRead_humanWrite',
+                    'aiWrite_humanRead', 'aiWrite_humanWrite'
+                ];
+                
+                advancedIds.forEach(id => {
+                    const element = document.getElementById(id);
+                    const hexElement = document.getElementById(id + '-hex');
+                    if (element && colors[id]) {
+                        element.value = colors[id];
+                        if (hexElement) {
+                            hexElement.textContent = colors[id].toUpperCase();
+                        }
+                    }
+                });
                 
                 if (colors.opacity !== undefined) {
                     currentOpacity = colors.opacity;

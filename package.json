@@ -105,48 +105,130 @@
             "aiWrite": {
               "type": "string",
               "format": "color",
-              "default": "#F44336",
+              "default": "#FFA500",
               "description": "Color for AI write access regions"
             },
             "aiNoAccess": {
               "type": "string",
               "format": "color",
-              "default": "#4CAF50",
+              "default": "#90EE90",
               "description": "Color for AI no access regions"
             },
             "humanReadOnly": {
               "type": "string",
               "format": "color",
-              "default": "#9C27B0",
+              "default": "#D3D3D3",
               "description": "Color for human read-only regions"
             },
             "humanNoAccess": {
               "type": "string",
               "format": "color",
-              "default": "#FF9800",
+              "default": "#FF0000",
               "description": "Color for human no access regions"
+            },
+            "humanWrite": {
+              "type": "string",
+              "format": "color",
+              "default": "#000000",
+              "description": "Color for human write access regions (transparent by default)"
             },
             "context": {
               "type": "string",
               "format": "color",
-              "default": "#00BCD4",
+              "default": "#00CED1",
               "description": "Color for context information regions"
             },
             "opacity": {
               "type": "number",
-              "default": 0.1,
+              "default": 0.3,
               "minimum": 0,
               "maximum": 1,
               "description": "Background opacity for all guard tag highlights"
+            },
+            "aiRead_humanRead": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI read + human read (optional)"
+            },
+            "aiRead_humanWrite": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI read + human write (optional)"
+            },
+            "aiRead_humanNoAccess": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI read + human no access (optional)"
+            },
+            "aiWrite_humanRead": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI write + human read (optional)"
+            },
+            "aiWrite_humanWrite": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI write + human write (optional)"
+            },
+            "aiWrite_humanNoAccess": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI write + human no access (optional)"
+            },
+            "aiNoAccess_humanRead": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI no access + human read (optional)"
+            },
+            "aiNoAccess_humanWrite": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI no access + human write (optional)"
+            },
+            "aiNoAccess_humanNoAccess": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI no access + human no access (optional)"
+            },
+            "aiReadContext_humanRead": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI read context + human read (optional)"
+            },
+            "aiReadContext_humanWrite": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI read context + human write (optional)"
+            },
+            "aiReadContext_humanNoAccess": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI read context + human no access (optional)"
+            },
+            "aiWriteContext_humanRead": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI write context + human read (optional)"
+            },
+            "aiWriteContext_humanWrite": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI write context + human write (optional)"
+            },
+            "aiWriteContext_humanNoAccess": {
+              "type": "string",
+              "format": "color",
+              "description": "Color for AI write context + human no access (optional)"
             }
           },
           "default": {
-            "aiWrite": "#F44336",
-            "aiNoAccess": "#4CAF50",
-            "humanReadOnly": "#9C27B0",
-            "humanNoAccess": "#FF9800",
-            "context": "#00BCD4",
-            "opacity": 0.1
+            "aiWrite": "#FFA500",
+            "aiNoAccess": "#90EE90",
+            "humanReadOnly": "#D3D3D3",
+            "humanNoAccess": "#FF0000",
+            "humanWrite": "#000000",
+            "context": "#00CED1",
+            "opacity": 0.3
           }
         },
         "tumee-vscode-plugin.items": {

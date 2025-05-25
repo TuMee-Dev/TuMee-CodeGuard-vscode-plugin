@@ -93,7 +93,16 @@ const CONFIG_RULES: ConfigurationRules = {
         return result;
       }
 
-      const validColors = ['aiWrite', 'aiNoAccess', 'humanReadOnly', 'humanNoAccess', 'context', 'opacity'];
+      const validColors = [
+        'aiWrite', 'aiNoAccess', 'humanReadOnly', 'humanNoAccess', 'humanWrite', 'context', 'opacity',
+        // New permission combinations
+        'aiRead_humanRead', 'aiRead_humanWrite', 'aiRead_humanNoAccess',
+        'aiWrite_humanRead', 'aiWrite_humanWrite', 'aiWrite_humanNoAccess',
+        'aiNoAccess_humanRead', 'aiNoAccess_humanWrite', 'aiNoAccess_humanNoAccess',
+        // Context variants
+        'aiReadContext_humanRead', 'aiReadContext_humanWrite', 'aiReadContext_humanNoAccess',
+        'aiWriteContext_humanRead', 'aiWriteContext_humanWrite', 'aiWriteContext_humanNoAccess'
+      ];
       const colorPattern = /^#[0-9A-Fa-f]{6}$/;
 
       const valueObj = value as Record<string, unknown>;

@@ -38,7 +38,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'python': {
     'func': ['function_definition'],
     'class': ['class_definition'],
-    'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'with_statement'],
+    'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'with_statement', 'dictionary', 'list', 'set'],
     'sig': ['function_definition'],
     'body': ['block'],
     'method': ['function_definition'],
@@ -205,14 +205,47 @@ async function resolveSemanticWithTreeSitter(
 
   // For scoped guards, we need to search forward from the guard line
   // to find the next occurrence of the scope type
-  if (scope === 'class' || scope === 'func' || scope === 'function') {
+  if (scope === 'class' || scope === 'func' || scope === 'function' || scope === 'block') {
     // Start searching from the line after the guard
     for (let searchLine = line + 1; searchLine < document.lineCount; searchLine++) {
       const searchNode = findNodeAtPosition(tree, searchLine);
       if (searchNode) {
-        const parentNode = findParentOfType(searchNode, nodeTypes);
-        if (parentNode && parentNode.startPosition.row >= line) {
-          const bounds = getNodeBoundaries(parentNode);
+        // For block scope, we need to handle differently
+        // Dictionary/list/set nodes might be children of assignments
+        let targetNode: Node | null = null;
+        
+        if (scope === 'block') {
+          // First check if the current node itself is a block type
+          if (nodeTypes.includes(searchNode.type)) {
+            targetNode = searchNode;
+          } else {
+            // For assignments like "DICT = {}", search children
+            for (const child of searchNode.children) {
+              if (child && nodeTypes.includes(child.type)) {
+                targetNode = child;
+                break;
+              }
+            }
+            
+            // If not found in immediate children, check parent's children
+            // This handles cases where we land on a leaf node
+            if (!targetNode && searchNode.parent) {
+              for (const sibling of searchNode.parent.children) {
+                if (sibling && nodeTypes.includes(sibling.type) && 
+                    sibling.startPosition.row >= line) {
+                  targetNode = sibling;
+                  break;
+                }
+              }
+            }
+          }
+        } else {
+          // For non-block scopes, use the original parent search
+          targetNode = findParentOfType(searchNode, nodeTypes);
+        }
+        
+        if (targetNode && targetNode.startPosition.row >= line) {
+          const bounds = getNodeBoundaries(targetNode);
 
           // For Python classes, trim trailing whitespace
           if (scope === 'class' && document.languageId === 'python') {
