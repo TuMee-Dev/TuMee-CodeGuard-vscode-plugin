@@ -665,13 +665,44 @@ export class ColorCustomizerPanel {
                 margin-bottom: 20px;
             }
             
-            .preset-selector select {
-                width: 100%;
+            .theme-controls {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
+            
+            .theme-controls select {
+                flex: 1;
                 padding: 8px;
                 background: var(--vscode-dropdown-background);
                 color: var(--vscode-dropdown-foreground);
                 border: 1px solid var(--vscode-dropdown-border);
                 border-radius: 4px;
+            }
+            
+            .btn-icon {
+                width: 32px;
+                height: 32px;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+                border-radius: 4px;
+                background: var(--vscode-button-secondaryBackground);
+                color: var(--vscode-button-secondaryForeground);
+                cursor: pointer;
+                transition: all 0.2s;
+                font-size: 16px;
+            }
+            
+            .btn-icon:hover {
+                background: var(--vscode-list-hoverBackground);
+                transform: scale(1.05);
+            }
+            
+            .btn-icon:active {
+                transform: scale(0.95);
             }
             
             .permission-section {
@@ -1008,6 +1039,51 @@ export class ColorCustomizerPanel {
                 outline: 1px solid var(--vscode-focusBorder);
             }
             
+            /* Overlay styles */
+            .overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .overlay.show {
+                display: flex;
+            }
+            
+            .dialog {
+                background: var(--vscode-editor-background);
+                border: 1px solid var(--vscode-panel-border);
+                border-radius: 8px;
+                padding: 24px;
+                min-width: 300px;
+                max-width: 400px;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            }
+            
+            .dialog h3 {
+                margin: 0 0 16px 0;
+                font-size: 16px;
+                font-weight: 500;
+            }
+            
+            .dialog input[type="text"] {
+                width: 100%;
+                margin-bottom: 16px;
+            }
+            
+            .dialog-buttons {
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+            }
+            
             .preview-scrollable {
                 flex: 1;
                 display: flex;
@@ -1055,36 +1131,36 @@ export class ColorCustomizerPanel {
                 <h1>Guard Tag Theme Designer</h1>
                 
                 <div class="preset-selector">
-                    <h2>Presets</h2>
-                    <select id="themeSelect" onchange="applyPreset(this.value)">
-                        <option value="">Choose a preset...</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                        <option value="highContrast">High Contrast</option>
-                        <option value="colorblind">Colorblind Safe</option>
-                        <option value="ocean">Ocean Breeze</option>
-                        <option value="sunset">Sunset Glow</option>
-                        <option value="matrix">Matrix</option>
-                        <option value="neon">Neon Nights</option>
-                        <option value="pastel">Pastel Dreams</option>
-                        <option value="cyberpunk">Cyberpunk 2077</option>
-                    </select>
+                    <h2>Themes</h2>
+                    <div class="theme-controls">
+                        <select id="themeSelect" onchange="applyPreset(this.value)">
+                            <option value="">Choose a theme...</option>
+                            <option value="light">Light</option>
+                            <option value="dark">Dark</option>
+                            <option value="highContrast">High Contrast</option>
+                            <option value="colorblind">Colorblind Safe</option>
+                            <option value="ocean">Ocean Breeze</option>
+                            <option value="sunset">Sunset Glow</option>
+                            <option value="matrix">Matrix</option>
+                            <option value="neon">Neon Nights</option>
+                            <option value="pastel">Pastel Dreams</option>
+                            <option value="cyberpunk">Cyberpunk 2077</option>
+                        </select>
+                        <button class="btn-icon" onclick="addNewTheme()" title="Add new theme">➕</button>
+                        <button class="btn-icon" id="deleteThemeBtn" onclick="deleteCurrentTheme()" title="Delete theme" style="display: none;">🗑️</button>
+                    </div>
                 </div>
                 
                 ${this._generatePermissionSections()}
                 
                 <div class="buttons">
                     <div class="button-row">
-                        <button class="btn btn-primary" onclick="saveColors()">Save Current</button>
+                        <button class="btn btn-primary" onclick="saveColors()">Apply Colors</button>
                         <button class="btn btn-secondary" onclick="resetColors()">Reset</button>
                     </div>
                     <div class="button-row" style="margin-top: 10px;">
-                        <input type="text" id="newThemeName" placeholder="New theme name..." style="flex: 1; margin-right: 10px;">
-                        <button class="btn btn-primary" onclick="saveAsNewTheme()">Save as Theme</button>
-                    </div>
-                    <div class="button-row" style="margin-top: 10px;">
-                        <button class="btn btn-secondary" onclick="exportTheme()">Export</button>
-                        <button class="btn btn-secondary" onclick="importTheme()">Import</button>
+                        <button class="btn btn-secondary" onclick="exportTheme()">Export to Clipboard</button>
+                        <button class="btn btn-secondary" onclick="importTheme()">Import from Clipboard</button>
                     </div>
                 </div>
             </div>
@@ -1373,6 +1449,18 @@ export class ColorCustomizerPanel {
             </div>
         </div>
         
+        <!-- Theme name dialog overlay -->
+        <div id="themeDialog" class="overlay">
+            <div class="dialog">
+                <h3>New Theme Name</h3>
+                <input type="text" id="themeNameInput" placeholder="Enter theme name..." autofocus>
+                <div class="dialog-buttons">
+                    <button class="btn btn-secondary" onclick="closeThemeDialog()">Cancel</button>
+                    <button class="btn btn-primary" onclick="confirmNewTheme()">Create</button>
+                </div>
+            </div>
+        </div>
+        
         <script>
             const vscode = acquireVsCodeApi();
             let currentColors = null;
@@ -1384,6 +1472,28 @@ export class ColorCustomizerPanel {
                 const permissions = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
                 permissions.forEach(perm => {
                     colorLinks[perm] = true;
+                });
+                
+                // Handle Enter key in theme name input
+                const themeNameInput = document.getElementById('themeNameInput');
+                if (themeNameInput) {
+                    themeNameInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            confirmNewTheme();
+                        } else if (e.key === 'Escape') {
+                            closeThemeDialog();
+                        }
+                    });
+                }
+                
+                // Handle Escape key for dialog
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        const dialog = document.getElementById('themeDialog');
+                        if (dialog && dialog.classList.contains('show')) {
+                            closeThemeDialog();
+                        }
+                    }
                 });
                 
                 // Colors will be sent automatically by the extension
@@ -1407,9 +1517,10 @@ export class ColorCustomizerPanel {
                         break;
                     case 'setSelectedTheme':
                         if (message.theme) {
-                            const themeSelect = document.getElementById('theme-select');
+                            const themeSelect = document.getElementById('themeSelect');
                             if (themeSelect) {
                                 themeSelect.value = message.theme;
+                                updateDeleteButton();
                             }
                         }
                         break;
@@ -1876,9 +1987,98 @@ export class ColorCustomizerPanel {
                         command: 'applyTheme',
                         theme: presetName
                     });
+                    updateDeleteButton();
                 }
             }
             window.applyPreset = applyPreset;
+            
+            function updateDeleteButton() {
+                const select = document.getElementById('themeSelect');
+                const deleteBtn = document.getElementById('deleteThemeBtn');
+                if (!select || !deleteBtn) return;
+                
+                const selectedValue = select.value;
+                if (!selectedValue) {
+                    deleteBtn.style.display = 'none';
+                    return;
+                }
+                
+                // Check if it's a custom theme
+                const selectedOption = select.querySelector('option[value="' + selectedValue + '"]');
+                if (selectedOption && selectedOption.parentElement && selectedOption.parentElement.label === 'Custom Themes') {
+                    deleteBtn.style.display = 'block';
+                } else {
+                    deleteBtn.style.display = 'none';
+                }
+            }
+            
+            function addNewTheme() {
+                const dialog = document.getElementById('themeDialog');
+                const input = document.getElementById('themeNameInput');
+                if (dialog && input) {
+                    dialog.classList.add('show');
+                    input.value = '';
+                    input.focus();
+                }
+            }
+            window.addNewTheme = addNewTheme;
+            
+            function closeThemeDialog() {
+                const dialog = document.getElementById('themeDialog');
+                if (dialog) {
+                    dialog.classList.remove('show');
+                }
+            }
+            window.closeThemeDialog = closeThemeDialog;
+            
+            function confirmNewTheme() {
+                const input = document.getElementById('themeNameInput');
+                const name = input ? input.value.trim() : '';
+                
+                if (!name) {
+                    // Could show an error, but for now just return
+                    return;
+                }
+                
+                const colors = getColors();
+                vscode.postMessage({
+                    command: 'saveAsNewTheme',
+                    name: name,
+                    colors: colors
+                });
+                
+                closeThemeDialog();
+                
+                // Select the new theme after a short delay
+                setTimeout(() => {
+                    const select = document.getElementById('themeSelect');
+                    if (select) {
+                        select.value = name;
+                        updateDeleteButton();
+                    }
+                }, 200);
+            }
+            window.confirmNewTheme = confirmNewTheme;
+            
+            function deleteCurrentTheme() {
+                const select = document.getElementById('themeSelect');
+                if (!select || !select.value) return;
+                
+                const themeName = select.value;
+                
+                // Confirm deletion
+                if (confirm('Delete theme "' + themeName + '"?')) {
+                    vscode.postMessage({
+                        command: 'deleteTheme',
+                        name: themeName
+                    });
+                    
+                    // Clear selection
+                    select.value = '';
+                    updateDeleteButton();
+                }
+            }
+            window.deleteCurrentTheme = deleteCurrentTheme;
             
             function updateThemeList(builtIn, custom) {
                 const select = document.getElementById('themeSelect');
@@ -1921,6 +2121,9 @@ export class ColorCustomizerPanel {
                         }
                     }
                 }
+                
+                // Update delete button visibility
+                updateDeleteButton();
             }
             window.updateThemeList = updateThemeList;
             
@@ -1938,24 +2141,6 @@ export class ColorCustomizerPanel {
             }
             window.resetColors = resetColors;
             
-            function saveAsNewTheme() {
-                const nameInput = document.getElementById('newThemeName');
-                const name = nameInput.value.trim();
-                if (!name) {
-                    alert('Please enter a theme name');
-                    return;
-                }
-                
-                const colors = getColors();
-                vscode.postMessage({
-                    command: 'saveAsNewTheme',
-                    name: name,
-                    colors: colors
-                });
-                
-                nameInput.value = '';
-            }
-            window.saveAsNewTheme = saveAsNewTheme;
             
             function exportTheme() {
                 vscode.postMessage({ command: 'exportTheme' });
