@@ -108,17 +108,29 @@
               "default": "#FFA500",
               "description": "Color for AI write access regions"
             },
+            "aiRead": {
+              "type": "string",
+              "format": "color",
+              "default": "#808080",
+              "description": "Color for AI read access regions"
+            },
             "aiNoAccess": {
               "type": "string",
               "format": "color",
               "default": "#90EE90",
               "description": "Color for AI no access regions"
             },
-            "humanReadOnly": {
+            "humanWrite": {
+              "type": "string",
+              "format": "color",
+              "default": "#0000FF",
+              "description": "Color for human write access regions"
+            },
+            "humanRead": {
               "type": "string",
               "format": "color",
               "default": "#D3D3D3",
-              "description": "Color for human read-only regions"
+              "description": "Color for human read access regions"
             },
             "humanNoAccess": {
               "type": "string",
@@ -126,24 +138,93 @@
               "default": "#FF0000",
               "description": "Color for human no access regions"
             },
-            "humanWrite": {
-              "type": "string",
-              "format": "color",
-              "default": "#000000",
-              "description": "Color for human write access regions (transparent by default)"
-            },
-            "context": {
+            "contextRead": {
               "type": "string",
               "format": "color",
               "default": "#00CED1",
-              "description": "Color for context information regions"
+              "description": "Color for readable context regions"
+            },
+            "contextWrite": {
+              "type": "string",
+              "format": "color",
+              "default": "#1E90FF",
+              "description": "Color for writeable context regions"
             },
             "opacity": {
               "type": "number",
               "default": 0.3,
               "minimum": 0,
               "maximum": 1,
-              "description": "Background opacity for all guard tag highlights"
+              "description": "Base opacity for guard tag highlights"
+            },
+            "aiTransparencyLevels": {
+              "type": "object",
+              "description": "Transparency multipliers for AI permission levels (1.0 = no change)",
+              "properties": {
+                "write": {
+                  "type": "number",
+                  "default": 1.0,
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Transparency multiplier for AI write permission"
+                },
+                "read": {
+                  "type": "number",
+                  "default": 1.0,
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Transparency multiplier for AI read permission"
+                },
+                "noAccess": {
+                  "type": "number",
+                  "default": 1.0,
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Transparency multiplier for AI no access"
+                }
+              },
+              "default": {
+                "write": 1.0,
+                "read": 1.0,
+                "noAccess": 1.0
+              }
+            },
+            "humanTransparencyLevels": {
+              "type": "object",
+              "description": "Transparency multipliers for human permission levels (1.0 = no change)",
+              "properties": {
+                "write": {
+                  "type": "number",
+                  "default": 0.3,
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Transparency multiplier for human write permission"
+                },
+                "read": {
+                  "type": "number",
+                  "default": 0.6,
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Transparency multiplier for human read permission"
+                },
+                "noAccess": {
+                  "type": "number",
+                  "default": 1.0,
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Transparency multiplier for human no access"
+                }
+              },
+              "default": {
+                "write": 0.3,
+                "read": 0.6,
+                "noAccess": 1.0
+              }
+            },
+            "useAiColorAsBase": {
+              "type": "boolean",
+              "default": true,
+              "description": "If true, use AI colors as base with human transparency. If false, use human colors as base with AI transparency."
             },
             "aiRead_humanRead": {
               "type": "string",
@@ -223,12 +304,25 @@
           },
           "default": {
             "aiWrite": "#FFA500",
+            "aiRead": "#808080",
             "aiNoAccess": "#90EE90",
-            "humanReadOnly": "#D3D3D3",
+            "humanWrite": "#0000FF",
+            "humanRead": "#D3D3D3",
             "humanNoAccess": "#FF0000",
-            "humanWrite": "#000000",
-            "context": "#00CED1",
-            "opacity": 0.3
+            "contextRead": "#00CED1",
+            "contextWrite": "#1E90FF",
+            "opacity": 0.3,
+            "aiTransparencyLevels": {
+              "write": 1.0,
+              "read": 1.0,
+              "noAccess": 1.0
+            },
+            "humanTransparencyLevels": {
+              "write": 0.3,
+              "read": 0.6,
+              "noAccess": 1.0
+            },
+            "useAiColorAsBase": true
           }
         },
         "tumee-vscode-plugin.items": {

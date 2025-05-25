@@ -213,7 +213,7 @@ async function resolveSemanticWithTreeSitter(
         // For block scope, we need to handle differently
         // Dictionary/list/set nodes might be children of assignments
         let targetNode: Node | null = null;
-        
+
         if (scope === 'block') {
           // First check if the current node itself is a block type
           if (nodeTypes.includes(searchNode.type)) {
@@ -226,12 +226,12 @@ async function resolveSemanticWithTreeSitter(
                 break;
               }
             }
-            
+
             // If not found in immediate children, check parent's children
             // This handles cases where we land on a leaf node
             if (!targetNode && searchNode.parent) {
               for (const sibling of searchNode.parent.children) {
-                if (sibling && nodeTypes.includes(sibling.type) && 
+                if (sibling && nodeTypes.includes(sibling.type) &&
                     sibling.startPosition.row >= line) {
                   targetNode = sibling;
                   break;
@@ -243,7 +243,7 @@ async function resolveSemanticWithTreeSitter(
           // For non-block scopes, use the original parent search
           targetNode = findParentOfType(searchNode, nodeTypes);
         }
-        
+
         if (targetNode && targetNode.startPosition.row >= line) {
           const bounds = getNodeBoundaries(targetNode);
 

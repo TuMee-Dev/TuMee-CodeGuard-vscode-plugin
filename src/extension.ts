@@ -20,7 +20,7 @@ import { registerValidationCommands } from '@/utils/validationMode';
 
 let disposables: Disposable[] = [];
 // Map of decoration types for all permission combinations
-let decorationTypes: Map<string, TextEditorDecorationType> = new Map();
+const decorationTypes: Map<string, TextEditorDecorationType> = new Map();
 let statusBarItem: StatusBarItem;
 
 // Debounce timer for decoration updates
@@ -192,15 +192,28 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   // Get configured colors and opacity
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
   const defaultColors = {
-    aiWrite: '#FFA500',      // Yellow/Amber for AI write
-    aiNoAccess: '#90EE90',   // Light green for AI no access
-    humanReadOnly: '#D3D3D3', // Light grey for human read-only
-    humanNoAccess: '#FF0000', // Red for human no access
-    humanWrite: '#000000',   // Transparent by default
-    context: '#00CED1',      // Light blue/cyan for AI context
-    opacity: 0.3
+    aiWrite: '#FFA500',
+    aiRead: '#808080',
+    aiNoAccess: '#90EE90',
+    humanWrite: '#0000FF',
+    humanRead: '#D3D3D3',
+    humanNoAccess: '#FF0000',
+    contextRead: '#00CED1',
+    contextWrite: '#1E90FF',
+    opacity: 0.3,
+    aiTransparencyLevels: {
+      write: 1.0,
+      read: 1.0,
+      noAccess: 1.0
+    },
+    humanTransparencyLevels: {
+      write: 0.3,
+      read: 0.6,
+      noAccess: 1.0
+    },
+    useAiColorAsBase: true
   };
-  
+
   // Merge user colors with defaults to ensure all properties exist
   const userColors = config.get<GuardColors>('guardColors') || {};
   const colors = { ...defaultColors, ...userColors };
@@ -211,7 +224,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   const hexToRgba = (hex: string | undefined, alpha: number): string => {
     if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) {
       // Return transparent if no valid hex color provided
-      return `rgba(0, 0, 0, 0)`;
+      return 'rgba(0, 0, 0, 0)';
     }
     try {
       const r = parseInt(hex.slice(1, 3), 16);
@@ -220,7 +233,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     } catch (error) {
       console.error('Invalid hex color:', hex);
-      return `rgba(0, 0, 0, 0)`;
+      return 'rgba(0, 0, 0, 0)';
     }
   };
 
@@ -228,53 +241,95 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   decorationTypes.forEach(decoration => decoration.dispose());
   decorationTypes.clear();
 
-  // Define colors for each permission combination
-  // Using the original color scheme with transparency for human permissions
-  const baseColor = {
-    aiWrite: colors.aiWrite || '#FFA500',        // Orange/Amber
-    aiRead: '#808080',                           // Gray 
-    aiNoAccess: colors.aiNoAccess || '#90EE90',  // Light green
-    humanBase: colors.humanReadOnly || '#D3D3D3' // Light gray for human
-  };
-  
-  const permissionColors: { [key: string]: string } = {
-    // Base permission combinations
-    // AI Read + Human variations (use human base color with different opacities)
-    aiRead_humanRead: baseColor.humanBase,      // Medium transparency
-    aiRead_humanWrite: baseColor.humanBase,     // High transparency (more transparent)
-    aiRead_humanNoAccess: baseColor.humanBase,  // No transparency (solid)
-    
-    // AI Write + Human variations (use AI write color)
-    aiWrite_humanRead: baseColor.aiWrite,       // AI can write - orange
-    aiWrite_humanWrite: baseColor.aiWrite,      // Both can write - orange
-    aiWrite_humanNoAccess: baseColor.aiWrite,   // AI write, human no - orange
-    
-    // AI No Access + Human variations (use AI no access color)
-    aiNoAccess_humanRead: baseColor.aiNoAccess,     // Light green
-    aiNoAccess_humanWrite: baseColor.aiNoAccess,    // Light green
-    aiNoAccess_humanNoAccess: colors.humanNoAccess || '#FF0000', // Both no access - red
-    
-    // Context variants (use context color)
-    aiReadContext_humanRead: colors.context || '#00CED1',
-    aiReadContext_humanWrite: colors.context || '#00CED1',
-    aiReadContext_humanNoAccess: colors.context || '#00CED1',
-    aiWriteContext_humanRead: colors.context || '#00CED1',
-    aiWriteContext_humanWrite: colors.context || '#00CED1',
-    aiWriteContext_humanNoAccess: colors.context || '#00CED1'
+  // Helper function to get the color for a permission combination
+  const getPermissionColor = (key: string): { color: string, opacity: number } => {
+    // Check if there's a custom color for this exact combination
+    const customColor = (colors as Record<string, any>)[key] as string | undefined;
+    if (customColor && typeof customColor === 'string') {
+      return { color: customColor, opacity };
+    }
+
+    // Parse the permission key
+    const parts = key.split('_');
+    const aiPart = parts[0];
+    const humanPart = parts[1];
+
+    // Extract permissions
+    const aiPermission = aiPart.replace('Context', '').replace('ai', '').toLowerCase();
+    const humanPermission = humanPart.replace('human', '').toLowerCase();
+    const isContext = aiPart.includes('Context');
+
+    // Get base colors
+    const aiColors = {
+      write: colors.aiWrite,
+      read: colors.aiRead,
+      noaccess: colors.aiNoAccess
+    };
+    const humanColors = {
+      write: colors.humanWrite,
+      read: colors.humanRead,
+      noaccess: colors.humanNoAccess
+    };
+    const contextColors = {
+      write: colors.contextWrite,
+      read: colors.contextRead
+    };
+
+    // Get transparency levels
+    const aiTransparency = colors.aiTransparencyLevels || defaultColors.aiTransparencyLevels;
+    const humanTransparency = colors.humanTransparencyLevels || defaultColors.humanTransparencyLevels;
+
+    let baseColor: string;
+    let effectiveOpacity = opacity;
+
+    // Handle context colors specially
+    if (isContext) {
+      // For context, use the context color based on AI permission
+      baseColor = aiPermission === 'write' ? contextColors.write : contextColors.read;
+
+      // Apply human transparency to context
+      if (colors.useAiColorAsBase) {
+        effectiveOpacity *= humanTransparency[humanPermission as keyof typeof humanTransparency] || 1.0;
+      }
+    } else {
+      // Determine base color and transparency based on configuration
+      if (colors.useAiColorAsBase) {
+        // Use AI color as base, apply human transparency
+        baseColor = aiColors[aiPermission as keyof typeof aiColors];
+        effectiveOpacity *= humanTransparency[humanPermission as keyof typeof humanTransparency] || 1.0;
+      } else {
+        // Use human color as base, apply AI transparency
+        baseColor = humanColors[humanPermission as keyof typeof humanColors];
+        effectiveOpacity *= aiTransparency[aiPermission as keyof typeof aiTransparency] || 1.0;
+      }
+    }
+
+    return { color: baseColor, opacity: effectiveOpacity };
   };
 
+  // All possible permission combinations
+  const permissionCombinations = [
+    'aiRead_humanRead',
+    'aiRead_humanWrite',
+    'aiRead_humanNoAccess',
+    'aiWrite_humanRead',
+    'aiWrite_humanWrite',
+    'aiWrite_humanNoAccess',
+    'aiNoAccess_humanRead',
+    'aiNoAccess_humanWrite',
+    'aiNoAccess_humanNoAccess',
+    'aiReadContext_humanRead',
+    'aiReadContext_humanWrite',
+    'aiReadContext_humanNoAccess',
+    'aiWriteContext_humanRead',
+    'aiWriteContext_humanWrite',
+    'aiWriteContext_humanNoAccess'
+  ];
+
   // Create decoration types for all permission combinations
-  Object.entries(permissionColors).forEach(([key, color]) => {
-    // Determine opacity based on human permission level
-    let effectiveOpacity = opacity;
-    if (key.includes('_humanWrite')) {
-      effectiveOpacity = opacity * 0.3;  // High transparency for human write
-    } else if (key.includes('_humanRead')) {
-      effectiveOpacity = opacity * 0.6;  // Medium transparency for human read
-    } else if (key.includes('_humanNoAccess')) {
-      effectiveOpacity = opacity * 1.0;  // No transparency reduction for human no access
-    }
-    
+  permissionCombinations.forEach(key => {
+    const { color, opacity: effectiveOpacity } = getPermissionColor(key);
+
     const decoration = window.createTextEditorDecorationType({
       backgroundColor: hexToRgba(color, effectiveOpacity),
       isWholeLine: true,
@@ -378,7 +433,7 @@ function clearDecorations() {
 /**
  * Helper function to determine decoration type based on permission combination
  */
-function getDecorationType(aiPerm: string, humanPerm: string, aiContext: boolean, humanContext: boolean): keyof DecorationRanges | null {
+function getDecorationType(aiPerm: string, humanPerm: string, aiContext: boolean, _humanContext: boolean): keyof DecorationRanges | null {
   // Context is now properly tracked as a modifier
   if (aiContext) {
     // AI has context modifier
@@ -392,7 +447,7 @@ function getDecorationType(aiPerm: string, humanPerm: string, aiContext: boolean
       if (humanPerm === 'n') return 'aiWriteContext_humanNoAccess';
     }
   }
-  
+
   // Handle all non-context combinations
   if (aiPerm === 'r' && humanPerm === 'r') return 'aiRead_humanRead';
   if (aiPerm === 'r' && humanPerm === 'w') return 'aiRead_humanWrite';
@@ -403,11 +458,10 @@ function getDecorationType(aiPerm: string, humanPerm: string, aiContext: boolean
   if (aiPerm === 'n' && humanPerm === 'r') return 'aiNoAccess_humanRead';
   if (aiPerm === 'n' && humanPerm === 'w') return 'aiNoAccess_humanWrite';
   if (aiPerm === 'n' && humanPerm === 'n') return 'aiNoAccess_humanNoAccess';
-  
+
   // Default case - shouldn't happen with valid permissions
   return 'aiRead_humanWrite'; // Default state
 }
-
 
 /**
  * Helper function to find the last non-empty line in a range
@@ -430,9 +484,9 @@ function findLastNonEmptyLine(lines: string[], startLine: number, endLine: numbe
 function shouldTrimWhitespaceForPermissions(aiPerm: string, humanPerm: string): boolean {
   // Trim whitespace for:
   // - AI no-access or context
-  // - Human read-only or no-access  
+  // - Human read-only or no-access
   // - Either permission is context
-  return aiPerm === 'n' || aiPerm === 'context' || 
+  return aiPerm === 'n' || aiPerm === 'context' ||
          humanPerm === 'r' || humanPerm === 'n' || humanPerm === 'context';
 }
 
@@ -502,7 +556,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       aiNoAccess_humanRead: [],
       aiNoAccess_humanWrite: [],
       aiNoAccess_humanNoAccess: [],
-      
+
       // Context variants
       aiReadContext_humanRead: [],
       aiReadContext_humanWrite: [],
@@ -530,7 +584,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       const humanContext = perm?.isContext?.human || false;
 
       // Check if we need to end the current range
-      if (aiPerm !== currentAiPerm || humanPerm !== currentHumanPerm || 
+      if (aiPerm !== currentAiPerm || humanPerm !== currentHumanPerm ||
           aiContext !== currentAiContext || humanContext !== currentHumanContext) {
         // End previous range if it exists
         if (currentStart >= 0) {
@@ -540,7 +594,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
             const lastLine = shouldTrim
               ? findLastNonEmptyLine(lines, currentStart, i - 1)
               : i - 1;
-            
+
             const endChar = lines[lastLine] ? lines[lastLine].length : 0;
             decorationRanges[decorationType].push({
               range: new Range(
@@ -576,7 +630,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
         const lastLine = shouldTrim
           ? findLastNonEmptyLine(lines, currentStart, lines.length - 1)
           : lines.length - 1;
-        
+
         const endChar = lines[lastLine] ? lines[lastLine].length : 0;
         decorationRanges[decorationType].push({
           range: new Range(
@@ -699,9 +753,9 @@ async function updateStatusBarItem(document: TextDocument) {
       const aiPerm = cursorPermission.permissions.ai;
       currentAccess =
         aiPerm === 'r' ? 'Read-Only' :
-        aiPerm === 'w' ? 'Write' :
-        aiPerm === 'n' ? 'No Access' :
-        aiPerm === 'context' ? 'Context' : 'Default';
+          aiPerm === 'w' ? 'Write' :
+            aiPerm === 'n' ? 'No Access' :
+              aiPerm === 'context' ? 'Context' : 'Default';
     }
 
     // Set status bar text with line count if present

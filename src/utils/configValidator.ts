@@ -94,8 +94,16 @@ const CONFIG_RULES: ConfigurationRules = {
       }
 
       const validColors = [
-        'aiWrite', 'aiNoAccess', 'humanReadOnly', 'humanNoAccess', 'humanWrite', 'context', 'opacity',
-        // New permission combinations
+        // Base colors
+        'aiWrite', 'aiRead', 'aiNoAccess',
+        'humanWrite', 'humanRead', 'humanNoAccess',
+        'contextRead', 'contextWrite',
+        'opacity',
+        // Transparency configuration
+        'aiTransparencyLevels', 'humanTransparencyLevels', 'useAiColorAsBase',
+        // Legacy compatibility
+        'humanReadOnly', 'context',
+        // Permission combinations
         'aiRead_humanRead', 'aiRead_humanWrite', 'aiRead_humanNoAccess',
         'aiWrite_humanRead', 'aiWrite_humanWrite', 'aiWrite_humanNoAccess',
         'aiNoAccess_humanRead', 'aiNoAccess_humanWrite', 'aiNoAccess_humanNoAccess',
@@ -116,6 +124,23 @@ const CONFIG_RULES: ConfigurationRules = {
           const opacity = valueObj[key] as number;
           if (typeof opacity !== 'number' || opacity < 0 || opacity > 1) {
             result.errors.push('Guard color opacity must be between 0 and 1');
+          }
+        } else if (key === 'aiTransparencyLevels' || key === 'humanTransparencyLevels') {
+          const levels = valueObj[key] as Record<string, number>;
+          if (typeof levels !== 'object') {
+            result.errors.push(`${key} must be an object`);
+          } else {
+            for (const level of ['write', 'read', 'noAccess']) {
+              if (levels[level] !== undefined) {
+                if (typeof levels[level] !== 'number' || levels[level] < 0 || levels[level] > 1) {
+                  result.errors.push(`${key}.${level} must be between 0 and 1`);
+                }
+              }
+            }
+          }
+        } else if (key === 'useAiColorAsBase') {
+          if (typeof valueObj[key] !== 'boolean') {
+            result.errors.push('useAiColorAsBase must be a boolean');
           }
         } else {
           const color = valueObj[key] as string;

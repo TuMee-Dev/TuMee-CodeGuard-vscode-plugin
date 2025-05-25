@@ -349,14 +349,14 @@ export async function parseGuardTags(
 
         // Push to stack with current permissions
         // Get current permissions and context state from top of stack or use defaults
-        const currentPermissions = guardStack.length > 0 
+        const currentPermissions = guardStack.length > 0
           ? { ...guardStack[guardStack.length - 1].permissions }
           : { ai: 'r', human: 'w' };  // Default permissions
-        
+
         const currentContext = guardStack.length > 0
           ? { ...guardStack[guardStack.length - 1].isContext }
           : { ai: false, human: false };  // Default no context
-        
+
         // Handle context as a modifier
         if (guardTag.permission === 'context') {
           // Context doesn't change read/write permissions
@@ -367,7 +367,7 @@ export async function parseGuardTags(
           // Clear context when setting a new permission
           currentContext[guardTag.target] = false;
         }
-        
+
         guardStack.push({
           permissions: currentPermissions,
           isContext: currentContext,
@@ -430,14 +430,14 @@ function processGuardStack(
     for (const tag of guardTags) {
       if (tag.lineNumber === line) {
         // Get current permissions and context from top of stack or use defaults
-        const currentPermissions = guardStack.length > 0 
+        const currentPermissions = guardStack.length > 0
           ? { ...guardStack[guardStack.length - 1].permissions }
           : { ...defaultPermissions };
-        
+
         const currentContext = guardStack.length > 0
           ? { ...guardStack[guardStack.length - 1].isContext }
           : { ai: false, human: false };
-        
+
         // Handle context as a modifier
         if (tag.permission === 'context') {
           // Context doesn't change read/write permissions
@@ -448,7 +448,7 @@ function processGuardStack(
           // Clear context when setting a new permission
           currentContext[tag.target] = false;
         }
-        
+
         const entry: GuardStackEntry = {
           permissions: currentPermissions,
           isContext: currentContext,
@@ -457,7 +457,7 @@ function processGuardStack(
           isLineLimited: !!tag.lineCount,
           sourceGuard: tag
         };
-        
+
         // Before pushing new guard, remove any interrupted context guards
         removeInterruptedContextGuards(guardStack);
         guardStack.push(entry);
@@ -468,17 +468,17 @@ function processGuardStack(
     if (guardStack.length > 0) {
       const lineText = getLineText(line);
       const isWhitespaceOnly = lineText.trim().length === 0;
-      
+
       // Get the current state from the stack
       const top = guardStack[guardStack.length - 1];
       if (line >= top.startLine && line <= top.endLine) {
         // For whitespace-only lines, check if we need to skip context guards
         let effectivePermissions = top.permissions;
-        
+
         if (isWhitespaceOnly) {
           // Look for non-context permissions in the stack
           const nonContextPermissions: { [target: string]: string } = {};
-          
+
           // Collect all non-context permissions from applicable stack entries
           for (let i = guardStack.length - 1; i >= 0; i--) {
             const entry = guardStack[i];
@@ -491,13 +491,13 @@ function processGuardStack(
               }
             }
           }
-          
+
           // If we found any non-context permissions, use them
           if (Object.keys(nonContextPermissions).length > 0) {
             effectivePermissions = nonContextPermissions;
           }
         }
-        
+
         // Return the full permissions state for this line with context info
         linePermissions.set(line, {
           permissions: effectivePermissions,
@@ -538,7 +538,7 @@ export function getLinePermissions(
 ): Map<number, LinePermission> {
   const permissions = new Map<number, LinePermission>();
   const totalLines = document.lineCount;
-  
+
   // Use the shared guard stack processing logic
   const linePermissions = processGuardStack(
     guardTags,

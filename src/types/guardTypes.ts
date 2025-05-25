@@ -48,7 +48,7 @@ export interface DecorationRanges {
   aiNoAccess_humanRead: { range: Range }[];
   aiNoAccess_humanWrite: { range: Range }[];
   aiNoAccess_humanNoAccess: { range: Range }[];
-  
+
   // Context variants (context modifies existing permissions)
   aiReadContext_humanRead: { range: Range }[];
   aiReadContext_humanWrite: { range: Range }[];
@@ -56,7 +56,7 @@ export interface DecorationRanges {
   aiWriteContext_humanRead: { range: Range }[];
   aiWriteContext_humanWrite: { range: Range }[];
   aiWriteContext_humanNoAccess: { range: Range }[];
-  
+
   [key: string]: { range: Range }[];  // Index signature for dynamic access
 }
 
