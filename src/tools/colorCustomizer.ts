@@ -851,6 +851,24 @@ export class ColorCustomizerPanel {
                 text-align: center;
                 border: 1px solid var(--vscode-panel-border);
             }
+            
+            .split-context {
+                display: flex;
+                padding: 0;
+                overflow: hidden;
+            }
+            
+            .context-half {
+                flex: 1;
+                padding: 6px 5px;
+                font-size: 12px;
+                text-align: center;
+                border-left: 3px solid transparent;
+            }
+            
+            .context-half:not(:first-child) {
+                border-left: 1px solid var(--vscode-panel-border);
+            }
         </style>
     </head>
     <body>
@@ -1158,7 +1176,10 @@ export class ColorCustomizerPanel {
                     <div class="permission-example" id="ex-humanNoAccess">Human No Access</div>
                     <div class="permission-example" id="ex-mixed1">AI Write + Human Read</div>
                     <div class="permission-example" id="ex-mixed2">AI Read + Human Write</div>
-                        <div class="permission-example" id="ex-context">Context</div>
+                        <div class="permission-example split-context">
+                        <div class="context-half" id="ex-contextRead">Context R</div>
+                        <div class="context-half" id="ex-contextWrite">Context W</div>
+                    </div>
                     </div>
                 </div>
             </div>
@@ -1340,7 +1361,8 @@ export class ColorCustomizerPanel {
                 updateExample('ex-humanNoAccess', 'human', 'noAccess');
                 updateExample('ex-mixed1', 'both', { ai: 'write', human: 'read' });
                 updateExample('ex-mixed2', 'both', { ai: 'read', human: 'write' });
-                updateExample('ex-context', 'context', 'read');
+                updateExample('ex-contextRead', 'ai', 'context');
+                updateExample('ex-contextWrite', 'ai', 'contextWrite');
             }
             
             function updateLine(lineNum, aiPerm, humanPerm) {
@@ -1463,6 +1485,8 @@ export class ColorCustomizerPanel {
                     let configKey;
                     if (perm === 'context') {
                         configKey = 'contextRead';
+                    } else if (perm === 'contextWrite') {
+                        configKey = 'contextWrite';
                     } else if (type === 'ai') {
                         configKey = 'ai' + capitalizeFirst(perm);
                     } else {
@@ -1488,9 +1512,12 @@ export class ColorCustomizerPanel {
                     elem.style.borderLeft = '';
                 }
                 
-                elem.style.padding = '8px 12px';
-                elem.style.borderRadius = '4px';
-                elem.style.fontSize = '12px';
+                // Don't override styles for context-half elements
+                if (!elem.classList.contains('context-half')) {
+                    elem.style.padding = '8px 12px';
+                    elem.style.borderRadius = '4px';
+                    elem.style.fontSize = '12px';
+                }
             }
             
             function capitalizeFirst(str) {
