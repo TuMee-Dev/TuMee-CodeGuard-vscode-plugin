@@ -325,6 +325,18 @@
             "useAiColorAsBase": true
           }
         },
+        "tumee-vscode-plugin.customThemes": {
+          "type": "object",
+          "title": "Custom Color Themes",
+          "description": "User-defined color themes for guard tags",
+          "default": {},
+          "patternProperties": {
+            ".*": {
+              "type": "object",
+              "description": "A custom theme configuration"
+            }
+          }
+        },
         "tumee-vscode-plugin.items": {
           "type": "array",
           "title": "Files and Folders",

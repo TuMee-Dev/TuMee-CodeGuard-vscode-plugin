@@ -2,7 +2,7 @@
 
 ## Current Status
 Date: 2025-01-24
-Last Task: Fixed context guard scope trimming to exclude trailing empty lines
+Last Task: Fixed configuration namespace issue for color customizer themes
 
 ## Todo List Status
 
@@ -23,6 +23,7 @@ Last Task: Fixed context guard scope trimming to exclude trailing empty lines
 14. Move heavy operations to background processing with progress
 15. Fix decoration flashing when switching tabs
 16. Fix context guard scope to trim trailing empty lines
+17. Fix color customizer theme saving/loading (namespace issue: guardTags → tumee-vscode-plugin)
 
 ### 🚀 In Progress
 - **None currently** - Ready for next task

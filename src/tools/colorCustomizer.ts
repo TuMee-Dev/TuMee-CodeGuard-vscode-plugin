@@ -338,7 +338,7 @@ export class ColorCustomizerPanel {
             return;
           case 'applyTheme':
             if (message.theme) {
-              this._applyTheme(message.theme);
+              void this._applyTheme(message.theme);
             }
             return;
           case 'saveAsNewTheme':
@@ -352,7 +352,7 @@ export class ColorCustomizerPanel {
             }
             return;
           case 'exportTheme':
-            this._exportTheme();
+            void this._exportTheme();
             return;
           case 'importTheme':
             await this._importTheme();
@@ -365,16 +365,16 @@ export class ColorCustomizerPanel {
   }
 
   private async _saveColors(colors: GuardColors) {
-    const config = vscode.workspace.getConfiguration('guardTags');
+    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
     await config.update('colors', colors, vscode.ConfigurationTarget.Global);
     void vscode.window.showInformationMessage('Guard tag colors saved successfully!');
-    
+
     // Immediately send back the saved colors to verify
     this._sendCurrentColors();
   }
 
   private _sendCurrentColors() {
-    const config = vscode.workspace.getConfiguration('guardTags');
+    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
     const colors = config.get<GuardColors>('colors');
 
     void this._panel.webview.postMessage({
@@ -383,19 +383,19 @@ export class ColorCustomizerPanel {
     });
   }
 
-  private async _applyTheme(themeName: string) {
+  private _applyTheme(themeName: string) {
     // Check built-in themes first
     let theme = COLOR_THEMES[themeName as keyof typeof COLOR_THEMES];
-    
+
     // If not built-in, check custom themes
     if (!theme) {
-      const config = vscode.workspace.getConfiguration('guardTags');
+      const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
       const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
       if (customThemes[themeName]) {
         theme = { name: themeName, colors: customThemes[themeName] };
       }
     }
-    
+
     if (theme) {
       void this._panel.webview.postMessage({
         command: 'updateColors',
@@ -403,29 +403,29 @@ export class ColorCustomizerPanel {
       });
     }
   }
-  
+
   private async _saveAsNewTheme(name: string, colors: GuardColors) {
-    const config = vscode.workspace.getConfiguration('guardTags');
+    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
     const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
     customThemes[name] = colors;
     await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
     void vscode.window.showInformationMessage(`Theme '${name}' saved successfully!`);
-    
+
     // Update theme list
     this._sendThemeList();
   }
-  
+
   private async _deleteTheme(name: string) {
-    const config = vscode.workspace.getConfiguration('guardTags');
+    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
     const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
     delete customThemes[name];
     await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
     void vscode.window.showInformationMessage(`Theme '${name}' deleted successfully!`);
-    
+
     // Update theme list
     this._sendThemeList();
   }
-  
+
   private async _exportTheme() {
     const colors = await this._getCurrentColorsFromWebview();
     if (colors) {
@@ -434,24 +434,24 @@ export class ColorCustomizerPanel {
       void vscode.window.showInformationMessage('Theme copied to clipboard as JSON!');
     }
   }
-  
+
   private async _importTheme() {
     try {
       const json = await vscode.env.clipboard.readText();
-      
+
       if (!json || json.trim().length === 0) {
         void vscode.window.showErrorMessage('Clipboard is empty! Please copy a theme JSON first.');
         return;
       }
-      
+
       const colors = JSON.parse(json) as GuardColors;
-      
+
       // Validate it has at least the permissions object
       if (!colors.permissions) {
         void vscode.window.showErrorMessage('Invalid theme format: missing permissions object');
         return;
       }
-      
+
       // Merge with defaults to ensure all properties exist
       const mergedColors = mergeWithDefaults(colors);
       void this._panel.webview.postMessage({
@@ -465,22 +465,22 @@ export class ColorCustomizerPanel {
       console.error('Import theme error:', e);
     }
   }
-  
+
   private async _getCurrentColorsFromWebview(): Promise<GuardColors | undefined> {
     // Request current colors from webview
     void this._panel.webview.postMessage({ command: 'requestCurrentColors' });
-    
+
     // Wait for response (simplified - in production would use proper promise)
     return new Promise((resolve) => {
       const disposable = this._panel.webview.onDidReceiveMessage(
-        message => {
+        (message: { command: string; colors?: GuardColors }) => {
           if (message.command === 'currentColors') {
             disposable.dispose();
             resolve(message.colors);
           }
         }
       );
-      
+
       // Timeout after 1 second
       setTimeout(() => {
         disposable.dispose();
@@ -488,14 +488,14 @@ export class ColorCustomizerPanel {
       }, 1000);
     });
   }
-  
+
   private _sendThemeList() {
-    const config = vscode.workspace.getConfiguration('guardTags');
+    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
     const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
-    
+
     const builtInThemes = Object.keys(COLOR_THEMES);
     const customThemeNames = Object.keys(customThemes);
-    
+
     void this._panel.webview.postMessage({
       command: 'updateThemeList',
       builtIn: builtInThemes,
@@ -507,7 +507,7 @@ export class ColorCustomizerPanel {
     const webview = this._panel.webview;
     this._panel.title = 'Guard Tag Color Customizer';
     this._panel.webview.html = this._getHtmlForWebview(webview);
-    
+
     // Send theme list and current colors after a short delay to ensure webview is ready
     setTimeout(() => {
       this._sendThemeList();
