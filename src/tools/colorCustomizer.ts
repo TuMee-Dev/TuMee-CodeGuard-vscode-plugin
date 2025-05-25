@@ -1471,7 +1471,7 @@ export class ColorCustomizerPanel {
             function updatePreview() {
                 const colors = getColors();
                 currentColors = colors;
-                console.log('updatePreview called with colors:', colors);
+                console.log('updatePreview - colors:', JSON.stringify(colors));
                 
                 // Update code preview lines based on guard tags
                 const lineConfigs = [
@@ -1546,7 +1546,17 @@ export class ColorCustomizerPanel {
             
             function updateLine(lineNum, aiPerm, humanPerm) {
                 const line = document.getElementById('line' + lineNum);
+                if (!line) {
+                    console.error('Line element not found for line', lineNum);
+                    return;
+                }
+                
                 const border = line.querySelector('.line-border');
+                if (!border) {
+                    console.error('Border element not found for line', lineNum);
+                    return;
+                }
+                
                 const colors = getColors();
                 
                 let bgColor = '';
@@ -1592,12 +1602,17 @@ export class ColorCustomizerPanel {
                         configKey = 'ai' + capitalizeFirst(aiPerm);
                     }
                     
+                    
                     const config = colors.permissions[configKey];
                     if (config && config.enabled) {
                         bgColor = config.color;
                         opacity = config.transparency;
                         borderColor = config.minimapColor || config.color;
                         borderOpacity = config.borderOpacity || 1.0;
+                    } else if (config) {
+                        console.log('Permission disabled:', configKey);
+                    } else {
+                        console.error('Permission config not found:', configKey);
                     }
                 } else if (humanPerm) {
                     const config = colors.permissions['human' + capitalizeFirst(humanPerm)];
@@ -1612,6 +1627,7 @@ export class ColorCustomizerPanel {
                 }
                 
                 // Apply background color
+                console.log('Line', lineNum, 'bgColor:', bgColor, 'opacity:', opacity);
                 if (bgColor) {
                     const rgb = hexToRgb(bgColor);
                     if (rgb) {
@@ -1634,6 +1650,10 @@ export class ColorCustomizerPanel {
             
             function updateExample(id, type, perm) {
                 const elem = document.getElementById(id);
+                if (!elem) {
+                    console.error('Example element not found:', id);
+                    return;
+                }
                 const colors = getColors();
                 
                 let bgColor = '';
@@ -1682,6 +1702,10 @@ export class ColorCustomizerPanel {
                         opacity = config.transparency;
                         borderColor = config.minimapColor || config.color;
                         borderOpacity = config.borderOpacity || 1.0;
+                    } else if (config) {
+                        console.log('Permission disabled:', configKey);
+                    } else {
+                        console.error('Permission config not found:', configKey);
                     }
                 }
                 
@@ -1711,7 +1735,21 @@ export class ColorCustomizerPanel {
             }
             
             function hexToRgb(hex) {
-                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                if (!hex) {
+                    console.error('hexToRgb: hex is null or undefined');
+                    return null;
+                }
+                
+                // Trim any whitespace
+                hex = hex.trim();
+                
+                console.log('hexToRgb parsing:', hex, 'length:', hex.length);
+                const result = /^#?([a-fA-F0-9]{2})([a-fA-F0-9]{2})([a-fA-F0-9]{2})$/i.exec(hex);
+                
+                if (!result) {
+                    console.error('hexToRgb failed to parse:', hex, 'hex code chars:', hex.split('').map(c => c.charCodeAt(0)));
+                }
+                
                 return result ? {
                     r: parseInt(result[1], 16),
                     g: parseInt(result[2], 16),
@@ -1726,13 +1764,22 @@ export class ColorCustomizerPanel {
                 permTypes.forEach(perm => {
                     const enabledElem = document.getElementById(perm + '-enabled');
                     const borderOpacityElem = document.getElementById(perm + '-borderOpacity');
+                    const colorElem = document.getElementById(perm + '-color');
+                    const transElem = document.getElementById(perm + '-transparency');
+                    const minimapElem = document.getElementById(perm + '-minimapColor');
+                    
+                    const color = colorElem ? colorElem.value : '#000000';
+                    const minimapColor = minimapElem ? minimapElem.value : '#000000';
+                    
                     permissions[perm] = {
                         enabled: enabledElem ? enabledElem.checked : true,
-                        color: document.getElementById(perm + '-color').value,
-                        transparency: document.getElementById(perm + '-transparency').value / 100,
-                        borderOpacity: borderOpacityElem ? borderOpacityElem.value / 100 : 1.0,
-                        minimapColor: document.getElementById(perm + '-minimapColor').value
+                        color: color,
+                        transparency: transElem ? (transElem.value / 100) : 0.2,
+                        borderOpacity: borderOpacityElem ? (borderOpacityElem.value / 100) : 1.0,
+                        minimapColor: minimapColor
                     };
+                    
+                    console.log('Permission', perm, 'color:', color, 'minimapColor:', minimapColor);
                 });
                 
                 return {
@@ -1960,8 +2007,11 @@ export class ColorCustomizerPanel {
             }
             
             // Run initialization when DOM is ready
-            initializeDisabledStates();
-            // Don't update preview here - wait for colors to load
+            setTimeout(() => {
+                initializeDisabledStates();
+                // Initial preview update after a short delay to ensure colors are loaded
+                setTimeout(updatePreview, 100);
+            }, 50);
         </script>
     </body>
     </html>`;
