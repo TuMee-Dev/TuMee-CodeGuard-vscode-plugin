@@ -326,7 +326,7 @@ export class ColorCustomizerPanel {
 
     // Handle messages from the webview
     this._panel.webview.onDidReceiveMessage(
-      async (message: { command: string; colors?: GuardColors; theme?: string }) => {
+      async (message: { command: string; colors?: GuardColors; theme?: string; name?: string }) => {
         switch (message.command) {
           case 'saveColors':
             if (message.colors) {
@@ -341,6 +341,22 @@ export class ColorCustomizerPanel {
               this._applyTheme(message.theme);
             }
             return;
+          case 'saveAsNewTheme':
+            if (message.name && message.colors) {
+              await this._saveAsNewTheme(message.name, message.colors);
+            }
+            return;
+          case 'deleteTheme':
+            if (message.name) {
+              await this._deleteTheme(message.name);
+            }
+            return;
+          case 'exportTheme':
+            this._exportTheme();
+            return;
+          case 'importTheme':
+            await this._importTheme();
+            return;
         }
       },
       null,
@@ -352,6 +368,9 @@ export class ColorCustomizerPanel {
     const config = vscode.workspace.getConfiguration('guardTags');
     await config.update('colors', colors, vscode.ConfigurationTarget.Global);
     void vscode.window.showInformationMessage('Guard tag colors saved successfully!');
+    
+    // Immediately send back the saved colors to verify
+    this._sendCurrentColors();
   }
 
   private _sendCurrentColors() {
@@ -364,8 +383,19 @@ export class ColorCustomizerPanel {
     });
   }
 
-  private _applyTheme(themeName: string) {
-    const theme = COLOR_THEMES[themeName as keyof typeof COLOR_THEMES];
+  private async _applyTheme(themeName: string) {
+    // Check built-in themes first
+    let theme = COLOR_THEMES[themeName as keyof typeof COLOR_THEMES];
+    
+    // If not built-in, check custom themes
+    if (!theme) {
+      const config = vscode.workspace.getConfiguration('guardTags');
+      const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+      if (customThemes[themeName]) {
+        theme = { name: themeName, colors: customThemes[themeName] };
+      }
+    }
+    
     if (theme) {
       void this._panel.webview.postMessage({
         command: 'updateColors',
@@ -373,11 +403,116 @@ export class ColorCustomizerPanel {
       });
     }
   }
+  
+  private async _saveAsNewTheme(name: string, colors: GuardColors) {
+    const config = vscode.workspace.getConfiguration('guardTags');
+    const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+    customThemes[name] = colors;
+    await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
+    void vscode.window.showInformationMessage(`Theme '${name}' saved successfully!`);
+    
+    // Update theme list
+    this._sendThemeList();
+  }
+  
+  private async _deleteTheme(name: string) {
+    const config = vscode.workspace.getConfiguration('guardTags');
+    const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+    delete customThemes[name];
+    await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
+    void vscode.window.showInformationMessage(`Theme '${name}' deleted successfully!`);
+    
+    // Update theme list
+    this._sendThemeList();
+  }
+  
+  private async _exportTheme() {
+    const colors = await this._getCurrentColorsFromWebview();
+    if (colors) {
+      const json = JSON.stringify(colors, null, 2);
+      void vscode.env.clipboard.writeText(json);
+      void vscode.window.showInformationMessage('Theme copied to clipboard as JSON!');
+    }
+  }
+  
+  private async _importTheme() {
+    try {
+      const json = await vscode.env.clipboard.readText();
+      
+      if (!json || json.trim().length === 0) {
+        void vscode.window.showErrorMessage('Clipboard is empty! Please copy a theme JSON first.');
+        return;
+      }
+      
+      const colors = JSON.parse(json) as GuardColors;
+      
+      // Validate it has at least the permissions object
+      if (!colors.permissions) {
+        void vscode.window.showErrorMessage('Invalid theme format: missing permissions object');
+        return;
+      }
+      
+      // Merge with defaults to ensure all properties exist
+      const mergedColors = mergeWithDefaults(colors);
+      void this._panel.webview.postMessage({
+        command: 'updateColors',
+        colors: mergedColors
+      });
+      void vscode.window.showInformationMessage('Theme imported from clipboard!');
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+      void vscode.window.showErrorMessage(`Failed to import theme: ${errorMessage}`);
+      console.error('Import theme error:', e);
+    }
+  }
+  
+  private async _getCurrentColorsFromWebview(): Promise<GuardColors | undefined> {
+    // Request current colors from webview
+    void this._panel.webview.postMessage({ command: 'requestCurrentColors' });
+    
+    // Wait for response (simplified - in production would use proper promise)
+    return new Promise((resolve) => {
+      const disposable = this._panel.webview.onDidReceiveMessage(
+        message => {
+          if (message.command === 'currentColors') {
+            disposable.dispose();
+            resolve(message.colors);
+          }
+        }
+      );
+      
+      // Timeout after 1 second
+      setTimeout(() => {
+        disposable.dispose();
+        resolve(undefined);
+      }, 1000);
+    });
+  }
+  
+  private _sendThemeList() {
+    const config = vscode.workspace.getConfiguration('guardTags');
+    const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+    
+    const builtInThemes = Object.keys(COLOR_THEMES);
+    const customThemeNames = Object.keys(customThemes);
+    
+    void this._panel.webview.postMessage({
+      command: 'updateThemeList',
+      builtIn: builtInThemes,
+      custom: customThemeNames
+    });
+  }
 
   private _update() {
     const webview = this._panel.webview;
     this._panel.title = 'Guard Tag Color Customizer';
     this._panel.webview.html = this._getHtmlForWebview(webview);
+    
+    // Send theme list and current colors after a short delay to ensure webview is ready
+    setTimeout(() => {
+      this._sendThemeList();
+      this._sendCurrentColors();
+    }, 100);
   }
 
   private _generatePermissionSections(): string {
@@ -469,7 +604,7 @@ export class ColorCustomizerPanel {
                 border-right: 1px solid var(--vscode-panel-border);
                 overflow-y: auto;
                 padding: 20px;
-                padding-bottom: 80px; /* Space for fixed buttons */
+                padding-bottom: 200px; /* Extra space to ensure last item can scroll fully into view */
             }
             
             .preview-panel {
@@ -797,10 +932,15 @@ export class ColorCustomizerPanel {
                 background: var(--vscode-sideBar-background);
                 padding: 20px;
                 border-top: 1px solid var(--vscode-panel-border);
+                flex-direction: column;
+                z-index: 100;
+            }
+            
+            .button-row {
                 display: flex;
                 gap: 10px;
+                align-items: center;
                 justify-content: center;
-                z-index: 100;
             }
             
             .btn {
@@ -828,6 +968,19 @@ export class ColorCustomizerPanel {
             
             .btn-secondary:hover {
                 background: var(--vscode-list-hoverBackground);
+            }
+            
+            input[type="text"] {
+                background: var(--vscode-input-background);
+                color: var(--vscode-input-foreground);
+                border: 1px solid var(--vscode-input-border);
+                padding: 8px;
+                border-radius: 4px;
+                font-size: 13px;
+            }
+            
+            input[type="text"]:focus {
+                outline: 1px solid var(--vscode-focusBorder);
             }
             
             .preview-scrollable {
@@ -878,7 +1031,7 @@ export class ColorCustomizerPanel {
                 
                 <div class="preset-selector">
                     <h2>Presets</h2>
-                    <select onchange="applyPreset(this.value)">
+                    <select id="themeSelect" onchange="applyPreset(this.value)">
                         <option value="">Choose a preset...</option>
                         <option value="light">Light</option>
                         <option value="dark">Dark</option>
@@ -896,8 +1049,18 @@ export class ColorCustomizerPanel {
                 ${this._generatePermissionSections()}
                 
                 <div class="buttons">
-                    <button class="btn btn-primary" onclick="saveColors()">Save Theme</button>
-                    <button class="btn btn-secondary" onclick="resetColors()">Reset</button>
+                    <div class="button-row">
+                        <button class="btn btn-primary" onclick="saveColors()">Save Current</button>
+                        <button class="btn btn-secondary" onclick="resetColors()">Reset</button>
+                    </div>
+                    <div class="button-row" style="margin-top: 10px;">
+                        <input type="text" id="newThemeName" placeholder="New theme name..." style="flex: 1; margin-right: 10px;">
+                        <button class="btn btn-primary" onclick="saveAsNewTheme()">Save as Theme</button>
+                    </div>
+                    <div class="button-row" style="margin-top: 10px;">
+                        <button class="btn btn-secondary" onclick="exportTheme()">Export</button>
+                        <button class="btn btn-secondary" onclick="importTheme()">Import</button>
+                    </div>
                 </div>
             </div>
             
@@ -1192,13 +1355,13 @@ export class ColorCustomizerPanel {
             
             // Initialize on load
             window.addEventListener('load', () => {
-                vscode.postMessage({ command: 'getCurrentColors' });
-                
                 // Initialize all color links as linked
                 const permissions = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
                 permissions.forEach(perm => {
                     colorLinks[perm] = true;
                 });
+                
+                // Colors will be sent automatically by the extension
             });
             
             // Handle messages from the extension
@@ -1207,6 +1370,15 @@ export class ColorCustomizerPanel {
                 switch (message.command) {
                     case 'updateColors':
                         updateAllColors(message.colors);
+                        break;
+                    case 'updateThemeList':
+                        updateThemeList(message.builtIn, message.custom);
+                        break;
+                    case 'requestCurrentColors':
+                        vscode.postMessage({
+                            command: 'currentColors',
+                            colors: getColors()
+                        });
                         break;
                 }
             });
@@ -1270,14 +1442,20 @@ export class ColorCustomizerPanel {
                 });
                 
                 // Also disable/enable the labels
-                const sliderControls = event.currentTarget.closest('.permission-section').querySelectorAll('.slider-control, .color-control');
-                sliderControls.forEach(control => {
-                    if (enabled) {
-                        control.classList.remove('disabled');
-                    } else {
-                        control.classList.add('disabled');
+                const enabledCheckbox = document.getElementById(permission + '-enabled');
+                if (enabledCheckbox) {
+                    const permissionSection = enabledCheckbox.closest('.permission-section');
+                    if (permissionSection) {
+                        const sliderControls = permissionSection.querySelectorAll('.slider-control, .color-control');
+                        sliderControls.forEach(control => {
+                            if (enabled) {
+                                control.classList.remove('disabled');
+                            } else {
+                                control.classList.add('disabled');
+                            }
+                        });
                     }
-                });
+                }
                 
                 updatePreview();
             }
@@ -1293,6 +1471,7 @@ export class ColorCustomizerPanel {
             function updatePreview() {
                 const colors = getColors();
                 currentColors = colors;
+                console.log('updatePreview called with colors:', colors);
                 
                 // Update code preview lines based on guard tags
                 const lineConfigs = [
@@ -1387,13 +1566,13 @@ export class ColorCustomizerPanel {
                     } else if (!aiConfig.enabled) {
                         // AI disabled, use human color
                         bgColor = humanConfig.color;
-                        opacity = aiConfig.transparency;
+                        opacity = humanConfig.transparency;
                         borderColor = humanConfig.minimapColor || humanConfig.color;
                         borderOpacity = humanConfig.borderOpacity || 1.0;
                     } else if (!humanConfig.enabled) {
                         // Human disabled, use AI color
                         bgColor = aiConfig.color;
-                        opacity = humanConfig.transparency;
+                        opacity = aiConfig.transparency;
                         borderColor = aiConfig.minimapColor || aiConfig.color;
                         borderOpacity = aiConfig.borderOpacity || 1.0;
                     } else {
@@ -1435,7 +1614,9 @@ export class ColorCustomizerPanel {
                 // Apply background color
                 if (bgColor) {
                     const rgb = hexToRgb(bgColor);
-                    line.style.backgroundColor = \`rgba(\${rgb.r}, \${rgb.g}, \${rgb.b}, \${opacity})\`;
+                    if (rgb) {
+                        line.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + opacity + ')';
+                    }
                 } else {
                     line.style.backgroundColor = '';
                 }
@@ -1443,7 +1624,9 @@ export class ColorCustomizerPanel {
                 // Apply border bar
                 if (colors.borderBarEnabled && borderColor) {
                     const rgb = hexToRgb(borderColor);
-                    border.style.backgroundColor = \`rgba(\${rgb.r}, \${rgb.g}, \${rgb.b}, \${borderOpacity})\`;
+                    if (rgb) {
+                        border.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + borderOpacity + ')';
+                    }
                 } else {
                     border.style.backgroundColor = '';
                 }
@@ -1467,12 +1650,12 @@ export class ColorCustomizerPanel {
                         bgColor = '';
                     } else if (!aiConfig.enabled) {
                         bgColor = humanConfig.color;
-                        opacity = aiConfig.transparency;
+                        opacity = humanConfig.transparency;
                         borderColor = humanConfig.minimapColor || humanConfig.color;
                         borderOpacity = humanConfig.borderOpacity || 1.0;
                     } else if (!humanConfig.enabled) {
                         bgColor = aiConfig.color;
-                        opacity = humanConfig.transparency;
+                        opacity = aiConfig.transparency;
                         borderColor = aiConfig.minimapColor || aiConfig.color;
                         borderOpacity = aiConfig.borderOpacity || 1.0;
                     } else {
@@ -1505,8 +1688,10 @@ export class ColorCustomizerPanel {
                 if (bgColor) {
                     const rgb = hexToRgb(bgColor);
                     const borderRgb = hexToRgb(borderColor);
-                    elem.style.backgroundColor = \`rgba(\${rgb.r}, \${rgb.g}, \${rgb.b}, \${opacity})\`;
-                    elem.style.borderLeft = \`3px solid rgba(\${borderRgb.r}, \${borderRgb.g}, \${borderRgb.b}, \${borderOpacity})\`;
+                    if (rgb && borderRgb) {
+                        elem.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + opacity + ')';
+                        elem.style.borderLeft = '3px solid rgba(' + borderRgb.r + ', ' + borderRgb.g + ', ' + borderRgb.b + ', ' + borderOpacity + ')';
+                    }
                 } else {
                     elem.style.backgroundColor = '';
                     elem.style.borderLeft = '';
@@ -1526,7 +1711,7 @@ export class ColorCustomizerPanel {
             }
             
             function hexToRgb(hex) {
-                const result = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(hex);
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
                 return result ? {
                     r: parseInt(result[1], 16),
                     g: parseInt(result[2], 16),
@@ -1566,7 +1751,8 @@ export class ColorCustomizerPanel {
                     if (enabledElem) {
                         enabledElem.checked = config.enabled !== false;
                         // Delay to ensure DOM is ready
-                        setTimeout(() => toggleDisabledState(key, config.enabled !== false), 50);
+                        // Trigger the toggleEnabled to update UI state
+                        toggleEnabled(key);
                     }
                     
                     // Set color
@@ -1612,6 +1798,51 @@ export class ColorCustomizerPanel {
                     });
                 }
             }
+            window.applyPreset = applyPreset;
+            
+            function updateThemeList(builtIn, custom) {
+                const select = document.getElementById('themeSelect');
+                const currentValue = select.value;
+                
+                // Clear existing options
+                select.innerHTML = '';
+                
+                // Add built-in themes
+                const builtInGroup = document.createElement('optgroup');
+                builtInGroup.label = 'Built-in Themes';
+                builtIn.forEach(theme => {
+                    const option = document.createElement('option');
+                    option.value = theme;
+                    option.textContent = theme; // Will be formatted by the extension
+                    builtInGroup.appendChild(option);
+                });
+                select.appendChild(builtInGroup);
+                
+                // Add custom themes if any
+                if (custom && custom.length > 0) {
+                    const customGroup = document.createElement('optgroup');
+                    customGroup.label = 'Custom Themes';
+                    custom.forEach(theme => {
+                        const option = document.createElement('option');
+                        option.value = theme;
+                        option.textContent = theme;
+                        customGroup.appendChild(option);
+                    });
+                    select.appendChild(customGroup);
+                }
+                
+                // Restore selection if it still exists
+                if (currentValue) {
+                    const options = select.querySelectorAll('option');
+                    for (let option of options) {
+                        if (option.value === currentValue) {
+                            select.value = currentValue;
+                            break;
+                        }
+                    }
+                }
+            }
+            window.updateThemeList = updateThemeList;
             
             function saveColors() {
                 const colors = getColors();
@@ -1626,6 +1857,36 @@ export class ColorCustomizerPanel {
                 applyPreset('light');
             }
             window.resetColors = resetColors;
+            
+            function saveAsNewTheme() {
+                const nameInput = document.getElementById('newThemeName');
+                const name = nameInput.value.trim();
+                if (!name) {
+                    alert('Please enter a theme name');
+                    return;
+                }
+                
+                const colors = getColors();
+                vscode.postMessage({
+                    command: 'saveAsNewTheme',
+                    name: name,
+                    colors: colors
+                });
+                
+                nameInput.value = '';
+            }
+            window.saveAsNewTheme = saveAsNewTheme;
+            
+            function exportTheme() {
+                vscode.postMessage({ command: 'exportTheme' });
+            }
+            window.exportTheme = exportTheme;
+            
+            function importTheme() {
+                console.log('Import button clicked');
+                vscode.postMessage({ command: 'importTheme' });
+            }
+            window.importTheme = importTheme;
             
             let focusedPermission = null;
             
@@ -1700,7 +1961,7 @@ export class ColorCustomizerPanel {
             
             // Run initialization when DOM is ready
             initializeDisabledStates();
-            updatePreview();
+            // Don't update preview here - wait for colors to load
         </script>
     </body>
     </html>`;
