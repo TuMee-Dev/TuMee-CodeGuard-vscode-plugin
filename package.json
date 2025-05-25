@@ -337,6 +337,18 @@
             }
           }
         },
+        "tumee-vscode-plugin.selectedTheme": {
+          "type": "string",
+          "title": "Selected Theme",
+          "description": "The currently selected guard tag color theme",
+          "default": ""
+        },
+        "tumee-vscode-plugin.guardColorsComplete": {
+          "type": "object",
+          "title": "Complete Guard Tag Colors",
+          "description": "Full color configuration including all properties",
+          "default": {}
+        },
         "tumee-vscode-plugin.items": {
           "type": "array",
           "title": "Files and Folders",

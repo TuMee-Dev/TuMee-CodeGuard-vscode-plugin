@@ -106,6 +106,15 @@ export async function activate(context: ExtensionContext) {
       disposables.push(
         workspace.onDidChangeConfiguration(event => {
           configValidator.handleConfigurationChange(event);
+          
+          // If guard colors changed, refresh all decorations
+          if (event.affectsConfiguration('tumee-vscode-plugin.guardColors') || 
+              event.affectsConfiguration('tumee-vscode-plugin.guardColorsComplete')) {
+            // Refresh decorations in all visible editors
+            for (const editor of window.visibleTextEditors) {
+              void updateCodeDecorations(editor.document);
+            }
+          }
         })
       );
 

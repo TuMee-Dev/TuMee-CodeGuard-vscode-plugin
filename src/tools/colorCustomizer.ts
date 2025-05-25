@@ -338,7 +338,7 @@ export class ColorCustomizerPanel {
             return;
           case 'applyTheme':
             if (message.theme) {
-              void this._applyTheme(message.theme);
+              await this._applyTheme(message.theme);
             }
             return;
           case 'saveAsNewTheme':
@@ -364,9 +364,17 @@ export class ColorCustomizerPanel {
     );
   }
 
-  private async _saveColors(colors: GuardColors) {
+  private async _saveColors(colors: GuardColors, fromTheme: boolean = false) {
     const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    await config.update('colors', colors, vscode.ConfigurationTarget.Global);
+
+    // Just save the complete color data - no conversion needed
+    await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
+
+    // If not saving from a theme, clear the selected theme
+    if (!fromTheme) {
+      await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+    }
+
     void vscode.window.showInformationMessage('Guard tag colors saved successfully!');
 
     // Immediately send back the saved colors to verify
@@ -375,15 +383,15 @@ export class ColorCustomizerPanel {
 
   private _sendCurrentColors() {
     const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    const colors = config.get<GuardColors>('colors');
+    const colors = config.get<GuardColors>('guardColorsComplete') || DEFAULT_COLORS;
 
     void this._panel.webview.postMessage({
       command: 'updateColors',
-      colors: mergeWithDefaults(colors)
+      colors: colors
     });
   }
 
-  private _applyTheme(themeName: string) {
+  private async _applyTheme(themeName: string) {
     // Check built-in themes first
     let theme = COLOR_THEMES[themeName as keyof typeof COLOR_THEMES];
 
@@ -397,6 +405,13 @@ export class ColorCustomizerPanel {
     }
 
     if (theme) {
+      // Save the theme colors
+      await this._saveColors(theme.colors, true);
+
+      // Save the selected theme name
+      const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+      await config.update('selectedTheme', themeName, vscode.ConfigurationTarget.Global);
+
       void this._panel.webview.postMessage({
         command: 'updateColors',
         colors: theme.colors
@@ -512,6 +527,16 @@ export class ColorCustomizerPanel {
     setTimeout(() => {
       this._sendThemeList();
       this._sendCurrentColors();
+
+      // Check if there's a selected theme and apply it
+      const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+      const selectedTheme = config.get<string>('selectedTheme');
+      if (selectedTheme) {
+        void this._panel.webview.postMessage({
+          command: 'setSelectedTheme',
+          theme: selectedTheme
+        });
+      }
     }, 100);
   }
 
@@ -1379,6 +1404,14 @@ export class ColorCustomizerPanel {
                             command: 'currentColors',
                             colors: getColors()
                         });
+                        break;
+                    case 'setSelectedTheme':
+                        if (message.theme) {
+                            const themeSelect = document.getElementById('theme-select');
+                            if (themeSelect) {
+                                themeSelect.value = message.theme;
+                            }
+                        }
                         break;
                 }
             });
