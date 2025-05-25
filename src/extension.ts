@@ -107,9 +107,12 @@ export async function activate(context: ExtensionContext) {
         workspace.onDidChangeConfiguration(event => {
           configValidator.handleConfigurationChange(event);
           
-          // If guard colors changed, refresh all decorations
+          // If guard colors changed, recreate decoration types and refresh all decorations
           if (event.affectsConfiguration('tumee-vscode-plugin.guardColors') || 
               event.affectsConfiguration('tumee-vscode-plugin.guardColorsComplete')) {
+            // Recreate decoration types with new colors
+            initializeCodeDecorations(context);
+            
             // Refresh decorations in all visible editors
             for (const editor of window.visibleTextEditors) {
               void updateCodeDecorations(editor.document);
@@ -223,8 +226,23 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     useAiColorAsBase: true
   };
 
-  // Merge user colors with defaults to ensure all properties exist
-  const userColors = config.get<GuardColors>('guardColors') || {};
+  // Get the complete guard colors configuration
+  const guardColorsComplete = config.get<any>('guardColorsComplete');
+  
+  // Convert from complete format to flat format for now
+  const userColors: any = {};
+  if (guardColorsComplete?.permissions) {
+    for (const [key, cfg] of Object.entries(guardColorsComplete.permissions)) {
+      const permission = cfg as any;
+      if (permission.enabled && permission.color) {
+        userColors[key] = permission.color;
+      }
+    }
+  }
+  if (guardColorsComplete?.combinations) {
+    Object.assign(userColors, guardColorsComplete.combinations);
+  }
+  
   const colors = { ...defaultColors, ...userColors };
 
   const opacity = colors.opacity || config.get<number>('codeDecorationOpacity') || 0.1;
