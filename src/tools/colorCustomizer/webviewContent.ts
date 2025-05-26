@@ -523,6 +523,8 @@ export function getWebviewStyles(): string {
 export function getWebviewJavaScript(previewLines: any[]): string {
   return `const vscode = acquireVsCodeApi();
     let currentColors = null;
+    let savedColors = null;
+    let hasChanges = false;
     let colorLinks = {};
     const PREVIEW_LINES = ${JSON.stringify(previewLines)};
     
@@ -535,6 +537,9 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       
       // Set up permission example click handlers
       setupPermissionExampleHandlers();
+      
+      // Initialize button states
+      updateButtonStates();
       
       const themeNameInput = document.getElementById('themeNameInput');
       if (themeNameInput) {
@@ -666,6 +671,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         document.getElementById(permission + '-minimapColor').value = rowColor;
       }
       updateColorPreview(permission);
+      checkForChanges();
     }
     window.toggleColorLink = toggleColorLink;
     
@@ -676,6 +682,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       }
       updateColorPreview(permission);
       updatePreview();
+      checkForChanges();
     }
     window.updateMinimapColor = updateMinimapColor;
     
@@ -686,6 +693,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       }
       updateColorPreview(permission);
       updatePreview();
+      checkForChanges();
     }
     window.updateRowColor = updateRowColor;
     
@@ -728,6 +736,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       }
       
       updatePreview();
+      checkForChanges();
     }
     window.toggleEnabled = toggleEnabled;
     
@@ -738,8 +747,68 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       const permission = slider.id.split('-')[0];
       updateColorPreview(permission);
       updatePreview();
+      checkForChanges();
     }
     window.updateSlider = updateSlider;
+    
+    function checkForChanges() {
+      if (!savedColors) return;
+      
+      const currentColors = getColors();
+      hasChanges = !colorsEqual(currentColors, savedColors);
+      updateButtonStates();
+    }
+    
+    function colorsEqual(colors1, colors2) {
+      if (!colors1 || !colors2) return false;
+      
+      // Check borderBarEnabled
+      if (colors1.borderBarEnabled !== colors2.borderBarEnabled) return false;
+      
+      // Check permissions
+      const perms1 = colors1.permissions || {};
+      const perms2 = colors2.permissions || {};
+      
+      const permTypes = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
+      
+      for (const perm of permTypes) {
+        const p1 = perms1[perm];
+        const p2 = perms2[perm];
+        
+        if (!p1 || !p2) return false;
+        
+        if (p1.enabled !== p2.enabled ||
+            p1.color !== p2.color ||
+            Math.abs(p1.transparency - p2.transparency) > 0.001 ||
+            Math.abs(p1.borderOpacity - p2.borderOpacity) > 0.001 ||
+            p1.minimapColor !== p2.minimapColor) {
+          return false;
+        }
+      }
+      
+      return true;
+    }
+    
+    function updateButtonStates() {
+      const applyButton = document.querySelector('.btn-primary');
+      const resetButton = document.querySelector('.btn-secondary');
+      
+      if (applyButton && applyButton.textContent === 'Apply Colors') {
+        // If no saved colors yet, we haven't loaded initial state, so disable the button
+        const shouldEnable = savedColors !== null && hasChanges;
+        applyButton.disabled = !shouldEnable;
+        applyButton.style.opacity = shouldEnable ? '1' : '0.5';
+        applyButton.style.cursor = shouldEnable ? 'pointer' : 'not-allowed';
+      }
+      
+      if (resetButton && resetButton.textContent === 'Reset') {
+        // Reset should also be disabled initially
+        const shouldEnable = savedColors !== null && hasChanges;
+        resetButton.disabled = !shouldEnable;
+        resetButton.style.opacity = shouldEnable ? '1' : '0.5';
+        resetButton.style.cursor = shouldEnable ? 'pointer' : 'not-allowed';
+      }
+    }
     
     function updatePreview() {
       const colors = getColors();
@@ -1006,6 +1075,11 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       });
       
       updatePreview();
+      
+      // Save the colors as the new baseline
+      savedColors = JSON.parse(JSON.stringify(colors));
+      hasChanges = false;
+      updateButtonStates();
     }
     
     function applyPreset(presetName) {
@@ -1266,6 +1340,11 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         command: 'saveColors',
         colors: colors
       });
+      
+      // After saving, update the saved colors and reset change state
+      savedColors = JSON.parse(JSON.stringify(colors));
+      hasChanges = false;
+      updateButtonStates();
     }
     window.saveColors = saveColors;
     
