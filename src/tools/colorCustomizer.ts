@@ -784,32 +784,38 @@ export class ColorCustomizerPanel {
     <body>
         <div class="main-container">
             <div class="control-panel">
-                <h1>Guard Tag Theme Designer</h1>
-                
-                <div class="preset-selector">
-                    <h2>Themes</h2>
-                    <div class="theme-controls">
-                        <select id="themeSelect" onchange="applyPreset(this.value)">
-                            <option value="">Choose a theme...</option>
-                            ${Object.keys(COLOR_THEMES).map(key =>
+                <div class="control-header">
+                    <h1>Guard Tag Theme Designer</h1>
+                    
+                    <div class="preset-selector">
+                        <h2>Themes</h2>
+                        <div class="theme-controls">
+                            <select id="themeSelect" onchange="applyPreset(this.value)">
+                                <option value="">Choose a theme...</option>
+                                ${Object.keys(COLOR_THEMES).map(key =>
     `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
-                        </select>
-                        <button class="btn-icon" onclick="addNewTheme()" title="Add new theme">➕</button>
-                        <button class="btn-icon" id="deleteThemeBtn" title="Delete theme" style="display: none;">🗑️</button>
+                            </select>
+                            <button class="btn-icon" onclick="addNewTheme()" title="Add new theme">➕</button>
+                            <button class="btn-icon" id="deleteThemeBtn" title="Delete theme" style="display: none;">🗑️</button>
+                        </div>
+                        <div id="themeStatus" class="theme-status" style="display: none; margin-top: 8px; font-size: 12px; color: var(--vscode-descriptionForeground);"></div>
                     </div>
-                    <div id="themeStatus" class="theme-status" style="display: none; margin-top: 8px; font-size: 12px; color: var(--vscode-descriptionForeground);"></div>
                 </div>
                 
-                ${permissionSections}
+                <div class="control-content">
+                    ${permissionSections}
+                </div>
                 
-                <div class="buttons">
-                    <div class="button-row">
-                        <button class="btn btn-primary" onclick="saveColors()">Apply Colors</button>
-                        <button class="btn btn-secondary" onclick="resetColors()">Reset</button>
-                    </div>
-                    <div class="button-row" style="margin-top: 10px;">
-                        <button class="btn btn-secondary" onclick="exportTheme()">Export to Clipboard</button>
-                        <button class="btn btn-secondary" onclick="importTheme()">Import from Clipboard</button>
+                <div class="control-footer">
+                    <div class="buttons">
+                        <div class="button-row">
+                            <button class="btn btn-primary" onclick="saveColors()">Apply Colors</button>
+                            <button class="btn btn-secondary" onclick="resetColors()">Reset</button>
+                        </div>
+                        <div class="button-row" style="margin-top: 10px;">
+                            <button class="btn btn-secondary" onclick="exportTheme()">Export to Clipboard</button>
+                            <button class="btn btn-secondary" onclick="importTheme()">Import from Clipboard</button>
+                        </div>
                     </div>
                 </div>
             </div>

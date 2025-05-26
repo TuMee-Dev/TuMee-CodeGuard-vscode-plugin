@@ -24,9 +24,28 @@ export function getWebviewStyles(): string {
       flex: 0 0 480px;
       background: var(--vscode-sideBar-background);
       border-right: 1px solid var(--vscode-panel-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .control-header {
+      flex-shrink: 0;
+      padding: 20px 20px 0 20px;
+    }
+    
+    .control-content {
+      flex: 1;
       overflow-y: auto;
-      padding: 20px;
-      padding-bottom: 200px;
+      padding: 0 20px;
+      padding-bottom: 20px;
+    }
+    
+    .control-footer {
+      flex-shrink: 0;
+      padding: 0 20px 20px 20px;
+      background: var(--vscode-sideBar-background);
+      border-top: 1px solid var(--vscode-panel-border);
     }
     
     .preview-panel {
@@ -276,9 +295,7 @@ export function getWebviewStyles(): string {
     }
     
     .buttons {
-      margin-top: 30px;
-      border-top: 1px solid var(--vscode-panel-border);
-      padding-top: 20px;
+      margin-top: 20px;
     }
     
     .button-row {
@@ -1402,7 +1419,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
               top: Math.max(0, targetScroll),
               behavior: 'smooth'
             });
-          }, 600); // Slightly longer delay to ensure DOM is ready
+          }, 100); // Short delay to ensure DOM is ready
         }
       }
     }
