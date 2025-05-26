@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { getWebviewStyles, getWebviewJavaScript } from './colorCustomizer/webviewContent';
 
 export interface PermissionColorConfig {
   enabled: boolean;                // Whether to use own color or other's
@@ -255,6 +256,8 @@ export class ColorCustomizerPanel {
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
   private _disposables: vscode.Disposable[] = [];
+  private _currentTheme: string = '';
+  private _isSystemTheme: boolean = false;
 
   // Permission section configuration
   private static readonly PERMISSION_SECTIONS = [
@@ -385,6 +388,9 @@ export class ColorCustomizerPanel {
           case 'importTheme':
             await this._importTheme();
             return;
+          case 'requestThemeList':
+            this._sendThemeList();
+            return;
         }
       },
       null,
@@ -394,13 +400,55 @@ export class ColorCustomizerPanel {
 
   private async _saveColors(colors: GuardColors, fromTheme: boolean = false) {
     const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
 
-    if (!fromTheme) {
-      await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+    // If we're editing a system theme, prompt to create a new theme
+    if (this._isSystemTheme && !fromTheme) {
+      const themeName = await vscode.window.showInputBox({
+        prompt: 'System themes cannot be modified. Enter a name for your custom theme:',
+        placeHolder: 'My Custom Theme',
+        validateInput: (value) => {
+          if (!value || value.trim().length === 0) {
+            return 'Theme name cannot be empty';
+          }
+          const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+          if (customThemes[value]) {
+            return 'A theme with this name already exists';
+          }
+          return null;
+        }
+      });
+
+      if (themeName) {
+        await this._saveAsNewTheme(themeName, colors);
+        this._currentTheme = themeName;
+        this._isSystemTheme = false;
+        await config.update('selectedTheme', themeName, vscode.ConfigurationTarget.Global);
+
+        // Update the dropdown in the webview
+        void this._panel.webview.postMessage({
+          command: 'setSelectedTheme',
+          theme: themeName
+        });
+      }
+      return;
     }
 
-    void vscode.window.showInformationMessage('Guard tag colors saved successfully!');
+    // If we have a current custom theme and not applying from theme selector
+    if (this._currentTheme && !this._isSystemTheme && !fromTheme) {
+      const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+      if (customThemes[this._currentTheme]) {
+        customThemes[this._currentTheme] = colors;
+        await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
+        void vscode.window.showInformationMessage(`Theme '${this._currentTheme}' updated successfully!`);
+      }
+    } else {
+      await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
+      if (!fromTheme) {
+        await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+        void vscode.window.showInformationMessage('Guard tag colors saved successfully!');
+      }
+    }
+
     this._sendCurrentColors();
   }
 
@@ -416,24 +464,34 @@ export class ColorCustomizerPanel {
 
   private async _applyTheme(themeName: string) {
     let theme = COLOR_THEMES[themeName];
+    this._isSystemTheme = !!theme;
 
     if (!theme) {
       const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
       const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
       if (customThemes[themeName]) {
         theme = { name: themeName, colors: customThemes[themeName] };
+        this._isSystemTheme = false;
       }
     }
 
     if (theme) {
-      await this._saveColors(theme.colors, true);
+      this._currentTheme = themeName;
 
+      // Update colors without showing notification
       const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+      await config.update('guardColorsComplete', theme.colors, vscode.ConfigurationTarget.Global);
       await config.update('selectedTheme', themeName, vscode.ConfigurationTarget.Global);
 
       void this._panel.webview.postMessage({
         command: 'updateColors',
         colors: theme.colors
+      });
+
+      // Send theme type info to webview
+      void this._panel.webview.postMessage({
+        command: 'setThemeType',
+        isSystem: this._isSystemTheme
       });
     }
   }
@@ -443,8 +501,25 @@ export class ColorCustomizerPanel {
     const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
     customThemes[name] = colors;
     await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
+    await config.update('selectedTheme', name, vscode.ConfigurationTarget.Global);
+
+    this._currentTheme = name;
+    this._isSystemTheme = false;
+
     void vscode.window.showInformationMessage(`Theme '${name}' saved successfully!`);
     this._sendThemeList();
+
+    // Update the dropdown selection
+    setTimeout(() => {
+      void this._panel.webview.postMessage({
+        command: 'setSelectedTheme',
+        theme: name
+      });
+      void this._panel.webview.postMessage({
+        command: 'setThemeType',
+        isSystem: false
+      });
+    }, 100);
   }
 
   private async _deleteTheme(name: string) {
@@ -452,8 +527,22 @@ export class ColorCustomizerPanel {
     const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
     delete customThemes[name];
     await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
+
+    // If we deleted the current theme, clear selection
+    if (this._currentTheme === name) {
+      this._currentTheme = '';
+      this._isSystemTheme = false;
+      await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+    }
+
     void vscode.window.showInformationMessage(`Theme '${name}' deleted successfully!`);
     this._sendThemeList();
+
+    // Reset dropdown to default
+    void this._panel.webview.postMessage({
+      command: 'themeDeleted',
+      deletedTheme: name
+    });
   }
 
   private async _exportTheme() {
@@ -540,9 +629,17 @@ export class ColorCustomizerPanel {
       const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
       const selectedTheme = config.get<string>('selectedTheme');
       if (selectedTheme) {
+        this._currentTheme = selectedTheme;
+        this._isSystemTheme = !!COLOR_THEMES[selectedTheme];
+
         void this._panel.webview.postMessage({
           command: 'setSelectedTheme',
           theme: selectedTheme
+        });
+
+        void this._panel.webview.postMessage({
+          command: 'setThemeType',
+          isSystem: this._isSystemTheme
         });
       }
     }, 100);
@@ -609,9 +706,11 @@ export class ColorCustomizerPanel {
     return text.replace(/[&<>"']/g, m => map[m]);
   }
 
-  private _getHtmlForWebview(_webview: vscode.Webview) {
-    const css = this._getStyles();
-    const javascript = this._getJavaScript();
+  private _getHtmlForWebview(webview: vscode.Webview) {
+    // Use external module for CSS and JavaScript
+    const css = getWebviewStyles();
+    const javascript = getWebviewJavaScript(ColorCustomizerPanel.PREVIEW_LINES);
+    
     const permissionSections = ColorCustomizerPanel.PERMISSION_SECTIONS.map(s => this._generatePermissionSection(s)).join('');
     const lineNumbers = Array.from({ length: 50 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
     const codeLines = ColorCustomizerPanel.PREVIEW_LINES.map((line, i) => this._generateCodeLine(i, line.content)).join('');
@@ -634,12 +733,13 @@ export class ColorCustomizerPanel {
                     <div class="theme-controls">
                         <select id="themeSelect" onchange="applyPreset(this.value)">
                             <option value="">Choose a theme...</option>
-                            ${Object.keys(COLOR_THEMES).map(key => 
-                              `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
+                            ${Object.keys(COLOR_THEMES).map(key =>
+    `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
                         </select>
                         <button class="btn-icon" onclick="addNewTheme()" title="Add new theme">➕</button>
                         <button class="btn-icon" id="deleteThemeBtn" onclick="deleteCurrentTheme()" title="Delete theme" style="display: none;">🗑️</button>
                     </div>
+                    <div id="themeStatus" class="theme-status" style="display: none; margin-top: 8px; font-size: 12px; color: var(--vscode-descriptionForeground);"></div>
                 </div>
                 
                 ${permissionSections}
@@ -705,6 +805,7 @@ export class ColorCustomizerPanel {
     </html>`;
   }
 
+  // Deprecated - moved to webviewContent.ts
   private _getStyles(): string {
     return `
       * { box-sizing: border-box; }
@@ -1144,6 +1245,7 @@ export class ColorCustomizerPanel {
     `;
   }
 
+  // Deprecated - moved to webviewContent.ts
   private _getJavaScript(): string {
     return `
       const vscode = acquireVsCodeApi();
@@ -1203,6 +1305,19 @@ export class ColorCustomizerPanel {
                 updateDeleteButton();
               }
             }
+            break;
+          case 'setThemeType':
+            updateThemeStatus(message.isSystem);
+            break;
+          case 'themeDeleted':
+            const themeSelect = document.getElementById('themeSelect');
+            if (themeSelect && themeSelect.value === message.deletedTheme) {
+              themeSelect.value = '';
+              updateDeleteButton();
+              updateThemeStatus(false);
+            }
+            // Request updated theme list from extension
+            vscode.postMessage({ command: 'requestThemeList' });
             break;
         }
       });
@@ -1594,6 +1709,13 @@ export class ColorCustomizerPanel {
             theme: presetName
           });
           updateDeleteButton();
+        } else {
+          // Clear theme status when no theme selected
+          updateThemeStatus(false);
+          const statusDiv = document.getElementById('themeStatus');
+          if (statusDiv) {
+            statusDiv.style.display = 'none';
+          }
         }
       }
       window.applyPreset = applyPreset;
@@ -1614,6 +1736,25 @@ export class ColorCustomizerPanel {
           deleteBtn.style.display = 'block';
         } else {
           deleteBtn.style.display = 'none';
+        }
+      }
+      
+      function updateThemeStatus(isSystem) {
+        const statusDiv = document.getElementById('themeStatus');
+        if (!statusDiv) return;
+        
+        const select = document.getElementById('themeSelect');
+        if (!select || !select.value) {
+          statusDiv.style.display = 'none';
+          return;
+        }
+        
+        if (isSystem) {
+          statusDiv.innerHTML = '🔒 System theme (read-only) - Click "Apply Colors" to create a custom copy';
+          statusDiv.style.display = 'block';
+        } else {
+          statusDiv.innerHTML = '✏️ Custom theme - Changes will be saved to this theme';
+          statusDiv.style.display = 'block';
         }
       }
       
