@@ -250,6 +250,31 @@ export function getWebviewStyles(): string {
       pointer-events: none; 
     }
     
+    /* Read-only mode styles */
+    .control-panel.read-only {
+      position: relative;
+    }
+    
+    .control-panel.read-only::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--vscode-editor-background);
+      opacity: 0.1;
+      pointer-events: none;
+    }
+    
+    .control-panel.read-only .permission-section {
+      background: var(--vscode-editor-background) !important;
+    }
+    
+    .control-panel.read-only .slider::-webkit-slider-thumb {
+      background: var(--vscode-input-border) !important;
+    }
+    
     .buttons {
       margin-top: 30px;
       border-top: 1px solid var(--vscode-panel-border);
@@ -563,7 +588,10 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     });
     
     function openColorPicker(inputId) {
-      document.getElementById(inputId).click();
+      const input = document.getElementById(inputId);
+      if (input && !input.disabled) {
+        input.click();
+      }
     }
     window.openColorPicker = openColorPicker;
     
@@ -591,8 +619,14 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     
     function toggleColorLink(event, permission) {
       event.stopPropagation();
-      colorLinks[permission] = !colorLinks[permission];
+      
+      // Check if controls are disabled
       const icon = document.getElementById(permission + '-link');
+      if (icon && icon.style.pointerEvents === 'none') {
+        return;
+      }
+      
+      colorLinks[permission] = !colorLinks[permission];
       icon.className = colorLinks[permission] ? 'link-icon linked' : 'link-icon unlinked';
       
       if (colorLinks[permission]) {
@@ -986,15 +1020,108 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       const select = document.getElementById('themeSelect');
       if (!select || !select.value) {
         statusDiv.style.display = 'none';
+        // Re-enable controls when no theme is selected
+        setControlsEnabled(true);
         return;
       }
       
+      // Enable/disable all controls based on theme type
+      setControlsEnabled(!isSystem);
+      
       if (isSystem) {
-        statusDiv.innerHTML = '🔒 System theme (read-only) - Click "Apply Colors" to create a custom copy';
+        statusDiv.innerHTML = '🔒 Built-in theme (read-only) - Create a new theme to customize';
         statusDiv.style.display = 'block';
       } else {
-        statusDiv.innerHTML = '✏️ Custom theme - Changes will be saved to this theme';
+        statusDiv.innerHTML = '✏️ Custom theme - You can modify all settings';
         statusDiv.style.display = 'block';
+      }
+    }
+    
+    function setControlsEnabled(enabled) {
+      // Enable/disable all input controls
+      const inputs = document.querySelectorAll('input[type="color"], input[type="range"], input[type="checkbox"]');
+      const colorPreviews = document.querySelectorAll('.color-preview');
+      const linkIcons = document.querySelectorAll('.link-icon');
+      const sliders = document.querySelectorAll('.slider');
+      
+      inputs.forEach(input => {
+        input.disabled = !enabled;
+        if (input.type === 'checkbox') {
+          input.style.cursor = enabled ? 'pointer' : 'not-allowed';
+        }
+      });
+      
+      // Update sliders with visual feedback
+      sliders.forEach(slider => {
+        slider.style.cursor = enabled ? 'pointer' : 'not-allowed';
+        slider.style.opacity = enabled ? '1' : '0.4';
+        if (!enabled) {
+          slider.style.background = 'var(--vscode-input-background)';
+        } else {
+          slider.style.background = 'var(--vscode-scrollbarSlider-background)';
+        }
+      });
+      
+      // Update color preview interactivity
+      colorPreviews.forEach(preview => {
+        preview.style.cursor = enabled ? 'pointer' : 'not-allowed';
+        preview.style.opacity = enabled ? '1' : '0.5';
+        if (!enabled) {
+          preview.style.filter = 'grayscale(0.5)';
+        } else {
+          preview.style.filter = 'none';
+        }
+      });
+      
+      // Update link icons
+      linkIcons.forEach(icon => {
+        icon.style.cursor = enabled ? 'pointer' : 'not-allowed';
+        icon.style.opacity = enabled ? '1' : '0.4';
+        icon.style.pointerEvents = enabled ? 'auto' : 'none';
+      });
+      
+      // Enable/disable Apply Colors button
+      const applyButton = document.querySelector('.btn-primary');
+      if (applyButton && applyButton.textContent === 'Apply Colors') {
+        applyButton.disabled = !enabled;
+        applyButton.style.opacity = enabled ? '1' : '0.3';
+        applyButton.style.cursor = enabled ? 'pointer' : 'not-allowed';
+      }
+      
+      // Update visual feedback for permission sections
+      const sections = document.querySelectorAll('.permission-section');
+      sections.forEach(section => {
+        section.style.cursor = enabled ? 'pointer' : 'not-allowed';
+        if (!enabled) {
+          section.style.background = 'var(--vscode-input-background)';
+          section.style.opacity = '0.7';
+          section.style.borderColor = 'var(--vscode-input-border)';
+        } else {
+          section.style.background = 'var(--vscode-input-background)';
+          section.style.opacity = '1';
+          section.style.borderColor = 'transparent';
+        }
+      });
+      
+      // Update slider controls and labels
+      const sliderControls = document.querySelectorAll('.slider-control');
+      sliderControls.forEach(control => {
+        if (!enabled) {
+          control.style.opacity = '0.5';
+        } else {
+          control.style.opacity = '1';
+        }
+      });
+      
+      // Make the entire control panel look disabled
+      const controlPanel = document.querySelector('.control-panel');
+      if (controlPanel) {
+        controlPanel.style.cursor = enabled ? 'auto' : 'not-allowed';
+        if (!enabled) {
+          controlPanel.classList.add('read-only');
+        } else {
+          controlPanel.classList.remove('read-only');
+        }
       }
     }
     
@@ -1126,6 +1253,12 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     window.importTheme = importTheme;
     
     function focusPermission(permissionId) {
+      // Check if controls are enabled (not in read-only mode)
+      const firstInput = document.querySelector('input[type="checkbox"]');
+      if (firstInput && firstInput.disabled) {
+        return; // Don't allow focus in read-only mode
+      }
+      
       document.querySelectorAll('.permission-section').forEach(section => {
         section.classList.remove('focused');
       });
