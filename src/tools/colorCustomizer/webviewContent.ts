@@ -1402,18 +1402,6 @@ export function getWebviewJavaScript(previewLines: any[]): string {
               top: Math.max(0, targetScroll),
               behavior: 'smooth'
             });
-            
-            // Add a highlight effect to all lines in the block
-            for (let i = previewIndex; i <= endIndex; i++) {
-              const line = document.getElementById('line' + (i + 1));
-              if (line) {
-                line.style.transition = 'background-color 0.3s';
-                line.style.backgroundColor = 'var(--vscode-editor-selectionBackground)';
-                setTimeout(() => {
-                  line.style.backgroundColor = '';
-                }, 1500);
-              }
-            }
           }, 600); // Slightly longer delay to ensure DOM is ready
         }
       }
