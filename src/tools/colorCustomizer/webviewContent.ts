@@ -470,6 +470,18 @@ export function getWebviewStyles(): string {
       font-size: 12px;
       text-align: center;
       border: 1px solid var(--vscode-panel-border);
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    
+    .permission-example:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .permission-example:active {
+      transform: translateY(0);
     }
     
     .split-context {
@@ -503,6 +515,9 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       permissions.forEach(perm => {
         colorLinks[perm] = true;
       });
+      
+      // Set up permission example click handlers
+      setupPermissionExampleHandlers();
       
       const themeNameInput = document.getElementById('themeNameInput');
       if (themeNameInput) {
@@ -1267,5 +1282,162 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       clickedSection.classList.add('focused');
     }
     window.focusPermission = focusPermission;
+    
+    function setupPermissionExampleHandlers() {
+      const exampleMap = {
+        'ex-aiWrite': 'aiWrite',
+        'ex-aiRead': 'aiRead',
+        'ex-aiNoAccess': 'aiNoAccess',
+        'ex-humanWrite': 'humanWrite',
+        'ex-humanRead': 'humanRead',
+        'ex-humanNoAccess': 'humanNoAccess',
+        'ex-contextRead': 'contextRead',
+        'ex-contextWrite': 'contextWrite'
+      };
+      
+      Object.entries(exampleMap).forEach(([exampleId, permissionId]) => {
+        const element = document.getElementById(exampleId);
+        if (element) {
+          element.addEventListener('click', () => {
+            navigateToPermission(permissionId);
+          });
+        }
+      });
+      
+      // Handle mixed examples
+      const mixed1 = document.getElementById('ex-mixed1');
+      if (mixed1) {
+        mixed1.addEventListener('click', () => {
+          navigateToPermission('aiWrite');
+        });
+      }
+      
+      const mixed2 = document.getElementById('ex-mixed2');
+      if (mixed2) {
+        mixed2.addEventListener('click', () => {
+          navigateToPermission('aiRead');
+        });
+      }
+    }
+    
+    function navigateToPermission(permissionId) {
+      // Find the permission section
+      const sections = document.querySelectorAll('.permission-section');
+      let targetSection = null;
+      
+      sections.forEach(section => {
+        const checkbox = section.querySelector('input[type="checkbox"]');
+        if (checkbox && checkbox.id === permissionId + '-enabled') {
+          targetSection = section;
+        }
+      });
+      
+      if (targetSection) {
+        // Scroll the permission section into view
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Highlight the section
+        sections.forEach(s => s.classList.remove('focused'));
+        targetSection.classList.add('focused');
+        
+        // Also scroll the corresponding preview block into view if possible
+        const previewIndex = findPreviewLineForPermission(permissionId);
+        if (previewIndex >= 0) {
+          setTimeout(() => {
+            // Find the entire guard block
+            const startLine = document.getElementById('line' + (previewIndex + 1));
+            if (!startLine) return;
+            
+            // Find the end of the guard block (look for @guard:end)
+            let endIndex = previewIndex;
+            for (let i = previewIndex + 1; i < PREVIEW_LINES.length; i++) {
+              if (PREVIEW_LINES[i].content.includes('@guard:end')) {
+                endIndex = i;
+                break;
+              }
+            }
+            
+            const endLine = document.getElementById('line' + (endIndex + 1));
+            if (!endLine) return;
+            
+            // The scrollable container is .editor-container
+            const editorContainer = document.querySelector('.editor-container');
+            if (!editorContainer) return;
+            
+            // Get the editor content element that contains the lines
+            const editorContent = document.querySelector('.editor-content');
+            if (!editorContent) return;
+            
+            // Calculate the block's position and height
+            let blockTop = 0;
+            let element = startLine;
+            while (element && element !== editorContent) {
+              blockTop += element.offsetTop;
+              element = element.offsetParent;
+            }
+            
+            let blockBottom = 0;
+            element = endLine;
+            while (element && element !== editorContent) {
+              blockBottom += element.offsetTop;
+              element = element.offsetParent;
+            }
+            blockBottom += endLine.offsetHeight;
+            
+            const blockHeight = blockBottom - blockTop;
+            const containerHeight = editorContainer.clientHeight;
+            
+            // If block fits in viewport, center it. Otherwise, show from top with some padding
+            let targetScroll;
+            if (blockHeight <= containerHeight - 40) {
+              // Center the block
+              targetScroll = blockTop - (containerHeight / 2) + (blockHeight / 2);
+            } else {
+              // Show from top with 20px padding
+              targetScroll = blockTop - 20;
+            }
+            
+            // Smooth scroll to the calculated position
+            editorContainer.scrollTo({
+              top: Math.max(0, targetScroll),
+              behavior: 'smooth'
+            });
+            
+            // Add a highlight effect to all lines in the block
+            for (let i = previewIndex; i <= endIndex; i++) {
+              const line = document.getElementById('line' + (i + 1));
+              if (line) {
+                line.style.transition = 'background-color 0.3s';
+                line.style.backgroundColor = 'var(--vscode-editor-selectionBackground)';
+                setTimeout(() => {
+                  line.style.backgroundColor = '';
+                }, 1500);
+              }
+            }
+          }, 600); // Slightly longer delay to ensure DOM is ready
+        }
+      }
+    }
+    
+    function findPreviewLineForPermission(permissionId) {
+      // Find the first guard comment line for this permission type
+      for (let i = 0; i < PREVIEW_LINES.length; i++) {
+        const line = PREVIEW_LINES[i];
+        const content = line.content.toLowerCase();
+        
+        // Look for guard comments
+        if (content.includes('// @guard:')) {
+          if (permissionId === 'aiWrite' && content.includes('ai:w')) return i;
+          if (permissionId === 'aiRead' && content.includes('ai:r')) return i;
+          if (permissionId === 'aiNoAccess' && content.includes('ai:n')) return i;
+          if (permissionId === 'humanWrite' && content.includes('human:w')) return i;
+          if (permissionId === 'humanRead' && content.includes('human:r')) return i;
+          if (permissionId === 'humanNoAccess' && content.includes('human:n')) return i;
+          if (permissionId === 'contextRead' && content.includes('context:r')) return i;
+          if (permissionId === 'contextWrite' && content.includes('context:w')) return i;
+        }
+      }
+      return -1;
+    }
   `;
 }
