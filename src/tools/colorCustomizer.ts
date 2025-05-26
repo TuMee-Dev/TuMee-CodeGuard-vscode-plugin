@@ -442,15 +442,20 @@ export class ColorCustomizerPanel {
         await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
         void vscode.window.showInformationMessage(`Theme '${this._currentTheme}' updated successfully!`);
       }
-    } else {
+      // Don't send colors back - webview already has current values
+    } else if (!fromTheme) {
       await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
-      if (!fromTheme) {
-        await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
-        void vscode.window.showInformationMessage('Guard tag colors saved successfully!');
-      }
+      await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+      void vscode.window.showInformationMessage('Guard tag colors saved successfully!');
+    } else {
+      // This is fromTheme = true case, update the config
+      await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
+      // Send the new theme colors to update the UI
+      void this._panel.webview.postMessage({
+        command: 'updateColors',
+        colors: colors
+      });
     }
-
-    this._sendCurrentColors();
   }
 
   private _sendCurrentColors() {
