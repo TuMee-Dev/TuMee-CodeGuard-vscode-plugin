@@ -442,6 +442,15 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         });
       }
       
+      // Add event listener for delete button
+      const deleteBtn = document.getElementById('deleteThemeBtn');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          deleteCurrentTheme();
+        });
+      }
+      
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           const dialog = document.getElementById('themeDialog');
@@ -979,15 +988,11 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       
       const themeName = select.value;
       
-      if (confirm('Delete theme "' + themeName + '"?')) {
-        vscode.postMessage({
-          command: 'deleteTheme',
-          name: themeName
-        });
-        
-        select.value = '';
-        updateDeleteButton();
-      }
+      // Send delete request to extension which will handle confirmation
+      vscode.postMessage({
+        command: 'deleteTheme',
+        name: themeName
+      });
     }
     window.deleteCurrentTheme = deleteCurrentTheme;
     

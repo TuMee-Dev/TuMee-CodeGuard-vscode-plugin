@@ -89,6 +89,7 @@ Last Task: Fixed guard tag parser scope resolution (block and file scopes)
 ## Memories
 - Never commit changes without testing
 - Always quote shell paths
+- This is the proper way to handle confirmations in VSCode extensions since the webview environment doesn't support native browser dialogs like confirm(), alert(), or prompt().
 
 ## Commands to Run
 ```bash

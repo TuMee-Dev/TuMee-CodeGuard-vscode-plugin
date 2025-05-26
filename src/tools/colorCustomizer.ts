@@ -523,6 +523,17 @@ export class ColorCustomizerPanel {
   }
 
   private async _deleteTheme(name: string) {
+    // Show confirmation dialog
+    const choice = await vscode.window.showWarningMessage(
+      `Are you sure you want to delete the theme "${name}"?`,
+      'Delete',
+      'Cancel'
+    );
+    
+    if (choice !== 'Delete') {
+      return;
+    }
+    
     const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
     const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
     delete customThemes[name];
