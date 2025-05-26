@@ -569,7 +569,8 @@ export class ColorCustomizerPanel {
                         <div class="color-row">
                             <div style="width: 20px;"></div>
                             <div class="color-control">
-                                <input type="color" id="${section.id}-minimapColor" class="color-input" value="${section.defaultColor}" onchange="updateMinimapColor('${section.id}')">
+                                <div class="color-preview" id="${section.id}-minimapColor-preview" onclick="openColorPicker('${section.id}-minimapColor')"></div>
+                                <input type="color" id="${section.id}-minimapColor" class="color-input" value="${section.defaultColor}" onchange="updateMinimapColor('${section.id}')" style="display: none;">
                                 <label class="color-label">Minimap/Border</label>
                             </div>
                             <div class="slider-control">
@@ -581,7 +582,8 @@ export class ColorCustomizerPanel {
                         <div class="color-row">
                             <div style="width: 20px;"></div>
                             <div class="color-control">
-                                <input type="color" id="${section.id}-color" class="color-input" value="${section.defaultColor}" onchange="updateRowColor('${section.id}')">
+                                <div class="color-preview" id="${section.id}-color-preview" onclick="openColorPicker('${section.id}-color')"></div>
+                                <input type="color" id="${section.id}-color" class="color-input" value="${section.defaultColor}" onchange="updateRowColor('${section.id}')" style="display: none;">
                                 <label class="color-label">Row</label>
                             </div>
                             <div class="slider-control">
@@ -847,6 +849,16 @@ export class ColorCustomizerPanel {
                 border: 1px solid var(--vscode-input-border);
                 border-radius: 3px;
                 cursor: pointer;
+            }
+            
+            .color-preview {
+                width: 32px;
+                height: 24px;
+                border: 1px solid var(--vscode-input-border);
+                border-radius: 3px;
+                cursor: pointer;
+                display: inline-block;
+                background-color: var(--vscode-editor-background);
             }
             
             .color-label {
@@ -1526,6 +1538,35 @@ export class ColorCustomizerPanel {
                 }
             });
             
+            function openColorPicker(inputId) {
+                document.getElementById(inputId).click();
+            }
+            window.openColorPicker = openColorPicker;
+            
+            function updateColorPreview(permission) {
+                // Update minimap/border preview
+                const minimapColor = document.getElementById(permission + '-minimapColor').value;
+                const borderOpacity = (document.getElementById(permission + '-borderOpacity').value / 100) || 1;
+                const minimapPreview = document.getElementById(permission + '-minimapColor-preview');
+                if (minimapPreview) {
+                    const rgb = hexToRgb(minimapColor);
+                    if (rgb) {
+                        minimapPreview.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + borderOpacity + ')';
+                    }
+                }
+                
+                // Update row color preview  
+                const rowColor = document.getElementById(permission + '-color').value;
+                const rowOpacity = (document.getElementById(permission + '-transparency').value / 100) || 1;
+                const rowPreview = document.getElementById(permission + '-color-preview');
+                if (rowPreview) {
+                    const rgb = hexToRgb(rowColor);
+                    if (rgb) {
+                        rowPreview.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + rowOpacity + ')';
+                    }
+                }
+            }
+            
             function toggleColorLink(event, permission) {
                 event.stopPropagation();
                 colorLinks[permission] = !colorLinks[permission];
@@ -1537,6 +1578,7 @@ export class ColorCustomizerPanel {
                     const rowColor = document.getElementById(permission + '-color').value;
                     document.getElementById(permission + '-minimapColor').value = rowColor;
                 }
+                updateColorPreview(permission);
             }
             window.toggleColorLink = toggleColorLink;
             
@@ -1546,6 +1588,7 @@ export class ColorCustomizerPanel {
                 if (colorLinks[permission]) {
                     document.getElementById(permission + '-color').value = minimapColor;
                 }
+                updateColorPreview(permission);
                 updatePreview();
             }
             window.updateMinimapColor = updateMinimapColor;
@@ -1556,6 +1599,7 @@ export class ColorCustomizerPanel {
                 if (colorLinks[permission]) {
                     document.getElementById(permission + '-minimapColor').value = rowColor;
                 }
+                updateColorPreview(permission);
                 updatePreview();
             }
             window.updateRowColor = updateRowColor;
@@ -1607,6 +1651,10 @@ export class ColorCustomizerPanel {
             function updateSlider(slider) {
                 const value = slider.value;
                 document.getElementById(slider.id + '-value').textContent = value + '%';
+                
+                // Extract permission from slider ID
+                const permission = slider.id.split('-')[0];
+                updateColorPreview(permission);
                 updatePreview();
             }
             window.updateSlider = updateSlider;
@@ -1977,6 +2025,11 @@ export class ColorCustomizerPanel {
                     }
                 });
                 
+                // Update color previews for all permissions
+                Object.keys(colors.permissions).forEach(key => {
+                    updateColorPreview(key);
+                });
+                
                 updatePreview();
             }
             
@@ -2226,6 +2279,11 @@ export class ColorCustomizerPanel {
             // Run initialization when DOM is ready
             setTimeout(() => {
                 initializeDisabledStates();
+                
+                // Initialize color previews for all permissions
+                const permissions = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
+                permissions.forEach(perm => updateColorPreview(perm));
+                
                 // Initial preview update after a short delay to ensure colors are loaded
                 setTimeout(updatePreview, 100);
             }, 50);
