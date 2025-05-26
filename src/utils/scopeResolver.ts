@@ -8,7 +8,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'javascript': {
     'func': ['function_declaration', 'function_expression', 'arrow_function', 'method_definition'],
     'class': ['class_declaration', 'class_expression'],
-    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
+    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement', 'object', 'object_expression', 'array', 'array_expression'],
     'sig': ['function_declaration', 'method_definition', 'function_signature'],
     'body': ['statement_block', 'class_body'],
     'method': ['method_definition'],
@@ -18,7 +18,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'typescript': {
     'func': ['function_declaration', 'function_expression', 'arrow_function', 'method_definition', 'method_signature'],
     'class': ['class_declaration', 'class_expression', 'interface_declaration'],
-    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
+    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement', 'object', 'object_expression', 'array', 'array_expression'],
     'sig': ['function_declaration', 'method_definition', 'method_signature', 'function_signature'],
     'body': ['statement_block', 'class_body', 'interface_body'],
     'method': ['method_definition', 'method_signature'],
@@ -28,7 +28,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'tsx': {
     'func': ['function_declaration', 'function_expression', 'arrow_function', 'method_definition', 'method_signature'],
     'class': ['class_declaration', 'class_expression', 'interface_declaration'],
-    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
+    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement', 'object', 'object_expression', 'array', 'array_expression'],
     'sig': ['function_declaration', 'method_definition', 'method_signature', 'function_signature'],
     'body': ['statement_block', 'class_body', 'interface_body'],
     'method': ['method_definition', 'method_signature'],
@@ -167,19 +167,29 @@ export async function resolveSemantic(
   _addScopes?: string[],
   _removeScopes?: string[]
 ): Promise<ScopeBoundary | null> {
-  // First, try to use tree-sitter
-  if (extensionContext) {
+  const languageId = document.languageId;
+  const hasTreeSitterSupport = SCOPE_MAPPINGS[languageId] !== undefined;
+
+  // If we have tree-sitter support for this language, it MUST work
+  if (hasTreeSitterSupport) {
+    if (!extensionContext) {
+      throw new Error(`[TreeSitter] Extension context not initialized for ${languageId}`);
+    }
+    
     try {
       const treeSitterResult = await resolveSemanticWithTreeSitter(document, line, scope);
-      if (treeSitterResult) {
-        return treeSitterResult;
+      if (!treeSitterResult) {
+        // This is a bug - tree-sitter should always find scopes for supported languages
+        throw new Error(`[TreeSitter] Failed to resolve scope '${scope}' at line ${line + 1} in ${languageId} file. This is a bug.`);
       }
+      return treeSitterResult;
     } catch (error) {
-      console.warn('Tree-sitter parsing failed, falling back to regex:', error);
+      // Re-throw with more context
+      throw new Error(`[TreeSitter] Critical failure for ${languageId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  // Fall back to regex-based parsing
+  // Only use regex for languages without tree-sitter support
   return resolveSemanticWithRegex(document, line, scope);
 }
 
@@ -206,6 +216,9 @@ async function resolveSemanticWithTreeSitter(
   // For scoped guards, we need to search forward from the guard line
   // to find the next occurrence of the scope type
   if (scope === 'class' || scope === 'func' || scope === 'function' || scope === 'block') {
+    // For block scope, we always want to find the next code block,
+    // not apply to the comment itself
+
     // Start searching from the line after the guard
     for (let searchLine = line + 1; searchLine < document.lineCount; searchLine++) {
       const searchNode = findNodeAtPosition(tree, searchLine);
@@ -258,14 +271,14 @@ async function resolveSemanticWithTreeSitter(
             }
 
             return {
-              startLine: bounds.startLine,
+              startLine: line + 1, // Start from the guard line, not the block start
               endLine: endLine + 1, // Convert back to 1-based
               type: scope
             };
           }
 
           return {
-            startLine: bounds.startLine,
+            startLine: line + 1, // Start from the guard line (1-based)
             endLine: bounds.endLine,
             type: scope
           };

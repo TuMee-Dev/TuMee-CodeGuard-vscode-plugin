@@ -3,6 +3,7 @@ import type { GuardTag, LinePermission, ScopeBoundary } from '../types/guardType
 import { parseGuardTag } from './acl';
 import { resolveSemantic } from './scopeResolver';
 import { logError, validateDocument, GuardProcessingError, ErrorSeverity } from './errorHandler';
+import { GUARD_TAG_PATTERNS } from './regexCache';
 
 // Cache for scope resolutions to avoid recalculating on every keystroke
 const scopeCacheMap = new WeakMap<vscode.TextDocument, Map<string, ScopeBoundary>>();
@@ -260,13 +261,15 @@ export async function parseGuardTags(
   const guardStack: GuardStackEntry[] = [];
 
   try {
-    for (let i = 0; i < totalLines; i++) {
-      const line = lines[i];
+    // Start from line 1 (0-based becomes 1-based naturally)
+    // Line 0 is reserved for default permissions
+    for (let lineNumber = 1; lineNumber <= totalLines; lineNumber++) {
+      const line = lines[lineNumber - 1]; // Get the actual line content
 
       // Skip empty or invalid lines
       if (typeof line !== 'string') {
         logError(
-          new GuardProcessingError(`Invalid line at index ${i}`, ErrorSeverity.WARNING),
+          new GuardProcessingError(`Invalid line at index ${lineNumber - 1}`, ErrorSeverity.WARNING),
           'parseGuardTagsChunked'
         );
         continue;
@@ -276,7 +279,7 @@ export async function parseGuardTags(
       while (guardStack.length > 0) {
         const top = guardStack[guardStack.length - 1];
         // Remove if we've passed the guard's end line (works for both line-limited and scope-based)
-        if (i >= top.endLine) {
+        if (lineNumber > top.endLine) {
           popGuardWithContextCleanup(guardStack);
         } else {
           break;
@@ -291,34 +294,53 @@ export async function parseGuardTags(
       const tagInfo = parseGuardTag(line);
 
       if (tagInfo) {
-        const lineNumber = i + 1; // 1-based line number
+        // lineNumber is already 1-based from the loop
 
         // Create guard tag entry
+        // Default to 'block' scope if no scope specified (unless it's a line count)
+        const effectiveScope = tagInfo.scope || (!tagInfo.lineCount ? 'block' : undefined);
+
         const guardTag: GuardTag = {
           lineNumber: lineNumber,
           target: tagInfo.target as 'ai' | 'human',
           identifier: tagInfo.identifier,
           permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-          scope: tagInfo.scope,
+          scope: effectiveScope,
           lineCount: tagInfo.lineCount,
           addScopes: tagInfo.addScopes,
           removeScopes: tagInfo.removeScopes
         };
 
         // Handle semantic scope resolution
-        if (tagInfo.scope && !tagInfo.lineCount) {
-          const scopeBoundary = await resolveSemanticWithCache(
-            document,
-            lineNumber - 1,  // Convert back to 0-based for the resolver
-            tagInfo.scope,
-            tagInfo.addScopes,
-            tagInfo.removeScopes
-          );
+        if (effectiveScope && !tagInfo.lineCount) {
+          // Special handling for 'file' scope
+          if (effectiveScope === 'file') {
+            guardTag.scopeStart = lineNumber;
+            guardTag.scopeEnd = totalLines;
+          } else {
+            try {
+              const scopeBoundary = await resolveSemanticWithCache(
+                document,
+                lineNumber - 1,  // Convert to 0-based for the resolver
+                effectiveScope,
+                tagInfo.addScopes,
+                tagInfo.removeScopes
+              );
 
-          if (scopeBoundary) {
-            guardTag.scopeStart = scopeBoundary.startLine;
-            guardTag.scopeEnd = scopeBoundary.endLine;
-            guardTag.lineCount = scopeBoundary.endLine - scopeBoundary.startLine + 1;
+              if (scopeBoundary) {
+                guardTag.scopeStart = scopeBoundary.startLine;
+                guardTag.scopeEnd = scopeBoundary.endLine;
+                guardTag.lineCount = scopeBoundary.endLine - scopeBoundary.startLine + 1;
+              } else {
+                throw new Error(`Scope resolution returned null for '${effectiveScope}' at line ${lineNumber}`);
+              }
+            } catch (error) {
+              console.error(`[GuardProcessor] Tree-sitter scope resolution failed at line ${lineNumber}:`, error);
+              throw new GuardProcessingError(
+                `Failed to resolve scope '${effectiveScope}' at line ${lineNumber}: ${error instanceof Error ? error.message : String(error)}`,
+                ErrorSeverity.ERROR
+              );
+            }
           }
         }
 
@@ -331,20 +353,22 @@ export async function parseGuardTags(
           // Line-limited guard - starts from the guard tag line
           endLine = startLine + tagInfo.lineCount - 1;
           isLineLimited = true;
+          guardTag.scopeStart = startLine;
+          guardTag.scopeEnd = endLine;
         } else if (guardTag.scopeStart && guardTag.scopeEnd) {
-          // Semantic scope - guard starts from the guard tag line
-          // but ends at the scope end
-          startLine = lineNumber;  // Always start from guard tag
+          // Semantic scope - scope boundaries already set by resolver
+          // For block/class/func scopes, the guard applies to the resolved scope
+          // Don't overwrite the resolved boundaries!
+          startLine = guardTag.scopeStart;
           endLine = guardTag.scopeEnd;
+        } else {
+          // This should only happen for languages without tree-sitter support
+          // For supported languages, the scope resolution above would have thrown an error
+          console.warn(`[GuardProcessor] No scope resolution for line ${lineNumber} - using line-only fallback`);
+          guardTag.scopeStart = lineNumber;
+          guardTag.scopeEnd = lineNumber;
         }
-        // For simple guards without scope or line count,
-        // the guard starts from the current line and goes to end of file
 
-        console.log(`[DEBUG] Guard tag parsed: ${guardTag.target}:${guardTag.permission} at line ${lineNumber}, range: ${startLine}-${endLine}`);
-
-        // Update guard tag with calculated boundaries
-        guardTag.scopeStart = startLine;
-        guardTag.scopeEnd = endLine;
 
         // Before pushing new guard, remove any interrupted context guards
         removeInterruptedContextGuards(guardStack);
@@ -417,29 +441,20 @@ function processGuardStack(
   const linePermissions = new Map<number, ProcessedLinePermission>();
 
   // Initialize stack with default permissions covering the entire file
+  // Use line 0 for defaults to avoid 0-based/1-based confusion
   const guardStack: GuardStackEntry[] = [{
     permissions: { ...defaultPermissions },
     isContext: { ai: false, human: false },
-    startLine: 1,
+    startLine: 0,
     endLine: totalLines,
     isLineLimited: false
   }];
 
-  // Check if there are guard tags on line 1 that should modify the defaults
-  const line1Tags = guardTags.filter(tag => tag.lineNumber === 1);
-  if (line1Tags.length > 0) {
-    console.log('[DEBUG] Found line 1 tags:', line1Tags.map(t => `${t.target}:${t.permission}`));
-    // Update the default entry with line 1 tags
-    for (const tag of line1Tags) {
-      if (tag.permission !== 'context') {
-        guardStack[0].permissions[tag.target] = tag.permission;
-        defaultPermissions[tag.target] = tag.permission; // Also update defaultPermissions so new guards inherit this
-        console.log(`[DEBUG] Updated stack base: ${tag.target} = ${tag.permission}, stack[0] now:`, guardStack[0].permissions);
-      }
-    }
-  }
+  // Line 1 tags should be processed normally, not as defaults
+  // Remove this special handling that was causing the bug
 
-  for (let line = 1; line <= totalLines; line++) {
+  // Process from line 0 (defaults) through all lines
+  for (let line = 0; line <= totalLines; line++) {
     // Remove expired guards from stack
     while (guardStack.length > 0) {
       const top = guardStack[guardStack.length - 1];
@@ -453,10 +468,6 @@ function processGuardStack(
     // Add new guards starting on this line
     for (const tag of guardTags) {
       if (tag.lineNumber === line) {
-        // Skip line 1 tags as they've already been processed into defaults
-        if (line === 1) {
-          continue;
-        }
 
         // Get current permissions and context from top of stack or use defaults
         const currentPermissions = guardStack.length > 0
@@ -495,7 +506,8 @@ function processGuardStack(
 
     // Determine effective permissions for this line
     if (guardStack.length > 0) {
-      const lineText = getLineText(line);
+      // Line 0 is special - it's the default permissions line
+      const lineText = line === 0 ? '' : getLineText(line);
       const isWhitespaceOnly = lineText.trim().length === 0;
 
       // Get the current state from the stack
@@ -509,7 +521,7 @@ function processGuardStack(
           // Look ahead to see if there's a guard starting soon or if we're at the end of a block
           let isTrailing = false;
           let nextGuardLine = -1;
-          
+
           // Find the next guard that will start
           for (const tag of guardTags) {
             if (tag.lineNumber > line) {
@@ -518,7 +530,7 @@ function processGuardStack(
               }
             }
           }
-          
+
           // Check if all lines between here and the next guard (or end of current guard) are empty
           if (nextGuardLine > 0 && nextGuardLine <= top.endLine) {
             isTrailing = true;
@@ -529,13 +541,17 @@ function processGuardStack(
               }
             }
           }
-          
+
           if (isTrailing && guardStack.length > 1) {
-            // Use permissions from the stack entry below current
-            const underlyingEntry = guardStack[guardStack.length - 2];
-            effectivePermissions = underlyingEntry.permissions;
-            if (line <= 15) {
-              console.log(`[DEBUG] Line ${line}: Trailing whitespace, using underlying stack permissions:`, effectivePermissions);
+            // Don't apply trailing whitespace logic to file-scoped guards
+            const currentGuard = top.sourceGuard;
+            if (currentGuard && currentGuard.scope === 'file') {
+              // File scope explicitly includes all whitespace - don't trim
+              effectivePermissions = top.permissions;
+            } else {
+              // Use permissions from the stack entry below current
+              const underlyingEntry = guardStack[guardStack.length - 2];
+              effectivePermissions = underlyingEntry.permissions;
             }
           } else {
             // Original context guard handling
@@ -562,9 +578,6 @@ function processGuardStack(
         }
 
         // Return the full permissions state for this line with context info
-        if (line >= 3 && line <= 5) {
-          console.log(`[DEBUG] Line ${line} permissions: ${JSON.stringify(effectivePermissions)}, from stack entry ${guardStack.length - 1}`);
-        }
         linePermissions.set(line, {
           permissions: effectivePermissions,
           isContext: top.isContext
@@ -572,9 +585,6 @@ function processGuardStack(
       }
     } else {
       // No guards on stack - use defaults
-      if (line <= 5) {
-        console.log(`[DEBUG] Line ${line}: No guards on stack, using defaults:`, defaultPermissions);
-      }
       linePermissions.set(line, {
         permissions: defaultPermissions,
         isContext: { ai: false, human: false }
@@ -615,25 +625,17 @@ export function getLinePermissions(
   const permissions = new Map<number, LinePermission>();
   const totalLines = document.lineCount;
 
-  console.log('[DEBUG] getLinePermissions called for document:', document.fileName);
-  console.log('[DEBUG] Guard tags found:', guardTags.length);
-
   // Use the shared guard stack processing logic with explicit defaults
   const linePermissions = processGuardStack(
     guardTags,
     totalLines,
-    (line) => document.lineAt(line - 1).text,
+    (line) => line === 0 ? '' : document.lineAt(line - 1).text,
     getDefaultPermissions()
   );
 
-  console.log('[DEBUG] Default permissions being used:', { ai: 'r', human: 'w' });
-
   // Convert permissions dictionary to LinePermission map
   for (const [line, perms] of linePermissions) {
-    if (line <= 15) { // Debug first 15 lines
-      console.log(`[DEBUG] Line ${line} permissions:`, perms.permissions, 'isContext:', perms.isContext);
-    }
-    
+
     permissions.set(line, {
       line: line,
       permissions: perms.permissions,
@@ -642,7 +644,6 @@ export function getLinePermissions(
     });
   }
 
-  console.log('[DEBUG] Total lines with permissions:', permissions.size);
   return permissions;
 }
 

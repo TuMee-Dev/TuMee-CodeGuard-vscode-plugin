@@ -33,7 +33,10 @@ export const GUARD_TAG_PATTERNS = {
 
   // Inline guard tag patterns for parseGuardTag function
   PARSE_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(r|w|n|context)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/i,
-  PARSE_LEGACY_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(?:\.(\d+))?/i
+  PARSE_LEGACY_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(?:\.(\d+))?/i,
+
+  // Simple pattern to detect any guard tag (case-insensitive)
+  HAS_GUARD_TAG: /@guard:/i
 } as const;
 
 // Utility patterns

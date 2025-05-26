@@ -28,18 +28,38 @@ The plugin must understand that guards work as overlapping layers:
 - Multiple guards can apply to the same code region
 - Guards with different targets (ai/human) create independent layers
 - More specific guards can override or complement broader guards
+- **DEFAULT SCOPE**: Guards without an explicit scope default to 'block' scope (next code block only)
+- **FILE SCOPE**: Use `.file` to explicitly apply a guard to the end of the file
+
+### Scope Behavior
+
+**Default Block Scope** (NEW):
+- `@guard:ai:w` - Applies to the next code block only (e.g., function, class, object literal)
+- `@guard:human:r` - Applies to the next code block only
+- This prevents guards from unexpectedly affecting the entire file
+
+**Explicit Scopes**:
+- `@guard:ai:w.file` - Applies from this point to the end of the file
+- `@guard:ai:w.func` - Applies to the next function
+- `@guard:ai:w.class` - Applies to the next class
+- `@guard:ai:w.5` - Applies to the next 5 lines
+- `@guard:ai:w.block` - Explicitly applies to next block (same as default)
 
 Example:
 ```python
-# @guard:ai:r          # AI can read from here onwards
+# @guard:ai:r.file     # AI can read entire file from here
 def func1():
     pass
 
-# @guard:human:w       # Humans can write from here (AI still has read)
+# @guard:human:w       # Humans can write this function only (default block scope)
 def func2():
     pass
 
-# @guard:all:n         # Nobody can modify from here (overrides previous)
+# @guard:ai:n          # AI cannot access this class (default block scope)
+class SecureClass:
+    pass
+
+# At this point: ai:r (from file scope), human has default permissions
 def func3():
     pass
 ```
@@ -85,7 +105,7 @@ The plugin must generate a complete guard region map that shows all overlapping 
           "target": "ai",
           "identifiers": ["*"],
           "permission": "read-only",
-          "scope": "file",
+          "scope": "block",
           "scope_modifiers": []
         },
         "declaration_line": 1,
@@ -98,7 +118,7 @@ The plugin must generate a complete guard region map that shows all overlapping 
         "index": 1,
         "guard": "@guard:human:w",
         "parsed_guard": {
-          "raw": "@guard:human:w",
+          "raw": "@guard:human:w.file",
           "target": "human",
           "identifiers": ["*"],
           "permission": "write",

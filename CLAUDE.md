@@ -1,8 +1,8 @@
 # Claude Development State - TuMee VSCode Plugin
 
 ## Current Status
-Date: 2025-01-24
-Last Task: Fixed configuration namespace issue for color customizer themes
+Date: 2025-01-25
+Last Task: Fixed guard tag parser scope resolution (block and file scopes)
 
 ## Todo List Status
 
@@ -24,6 +24,11 @@ Last Task: Fixed configuration namespace issue for color customizer themes
 15. Fix decoration flashing when switching tabs
 16. Fix context guard scope to trim trailing empty lines
 17. Fix color customizer theme saving/loading (namespace issue: guardTags → tumee-vscode-plugin)
+18. Fix guard tag parser scope resolution:
+    - Block scope guards in comments now correctly apply to the next code block
+    - File scope guards preserve permissions for all whitespace (no trailing whitespace trimming)
+    - Removed incorrect comment block detection that was breaking block scope
+    - Guards with .block scope search forward for next code block unless another guard is hit first
 
 ### 🚀 In Progress
 - **None currently** - Ready for next task

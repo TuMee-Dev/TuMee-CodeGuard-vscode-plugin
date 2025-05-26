@@ -144,14 +144,8 @@ async function getLanguageParser(context: vscode.ExtensionContext, languageId: s
       const wasmData = await vscode.workspace.fs.readFile(wasmPath);
       wasmBytes = wasmData.buffer;
     } catch {
-      // If local file doesn't exist, try to use a CDN fallback
-      console.warn(`Local WASM file not found: ${wasmPath.toString()}, attempting CDN fallback`);
-      const cdnUrl = `https://unpkg.com/tree-sitter-${language}/tree-sitter-${language}.wasm`;
-      const response = await fetch(cdnUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch WASM from CDN: ${response.statusText}`);
-      }
-      wasmBytes = await response.arrayBuffer();
+      // If local file doesn't exist, return null to gracefully fall back to regex
+      return null;
     }
 
     const languageObj = await Language.load(new Uint8Array(wasmBytes));
