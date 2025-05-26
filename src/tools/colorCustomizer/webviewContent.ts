@@ -4,8 +4,7 @@
  */
 
 export function getWebviewStyles(): string {
-  return `
-    * { box-sizing: border-box; }
+  return `* { box-sizing: border-box; }
     
     body {
       font-family: var(--vscode-font-family);
@@ -96,6 +95,7 @@ export function getWebviewStyles(): string {
     .permission-section:focus-within,
     .permission-section.focused {
       border-color: var(--vscode-focusBorder);
+      background: var(--vscode-list-hoverBackground);
     }
     
     .permission-header {
@@ -105,9 +105,9 @@ export function getWebviewStyles(): string {
       margin-bottom: 15px;
     }
     
-    .permission-title {
-      font-weight: 600;
-      font-size: 14px;
+    .permission-title { 
+      font-size: 14px; 
+      font-weight: 500; 
     }
     
     .toggle-switch {
@@ -122,41 +122,72 @@ export function getWebviewStyles(): string {
     }
     
     .toggle-switch input[type="checkbox"] {
+      width: 40px;
+      height: 20px;
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 20px;
+      position: relative;
       cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    .toggle-switch input[type="checkbox"]:checked {
+      background-color: var(--vscode-button-background);
+    }
+    
+    .toggle-switch input[type="checkbox"]::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      top: 1px;
+      left: 1px;
+      background: var(--vscode-foreground);
+      transition: transform 0.3s;
+    }
+    
+    .toggle-switch input[type="checkbox"]:checked::before {
+      transform: translateX(20px);
     }
     
     .permission-controls {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
+      position: relative;
     }
     
     .color-row {
-      display: flex;
+      display: grid;
+      grid-template-columns: 20px auto auto auto;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
     
     .link-icon {
+      position: absolute;
+      left: 0;
+      top: 28px;
       width: 20px;
       height: 20px;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       font-size: 16px;
-      transition: transform 0.2s;
+      user-select: none;
+      transition: opacity 0.2s;
     }
     
-    .link-icon:hover { transform: scale(1.1); }
-    .link-icon.linked::before { content: '🔗'; }
-    .link-icon.unlinked::before { content: '🔗'; filter: grayscale(1) opacity(0.3); }
+    .link-icon.linked::before { content: '🔒'; }
+    .link-icon.unlinked::before { content: '✂️'; }
     
     .color-control {
-      display: flex;
+      display: grid;
+      grid-template-columns: 32px 80px;
       align-items: center;
-      gap: 8px;
-      flex: 0 0 auto;
+      gap: 6px;
     }
     
     .color-preview {
@@ -178,10 +209,10 @@ export function getWebviewStyles(): string {
     }
     
     .slider-control {
-      display: flex;
+      display: grid;
+      grid-template-columns: 100px 100px 40px;
       align-items: center;
-      gap: 8px;
-      flex: 1;
+      gap: 6px;
     }
     
     .slider-control.disabled { opacity: 0.5; pointer-events: none; }
@@ -189,30 +220,34 @@ export function getWebviewStyles(): string {
     
     .slider {
       flex: 1;
-      -webkit-appearance: none;
+      max-width: 100px;
       height: 4px;
       border-radius: 2px;
       background: var(--vscode-scrollbarSlider-background);
       outline: none;
-      cursor: pointer;
+      -webkit-appearance: none;
     }
     
     .slider::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 16px;
-      height: 16px;
+      appearance: none;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: var(--vscode-button-background);
       cursor: pointer;
-      transition: transform 0.2s;
     }
     
-    .slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
-    
     .slider-value {
-      font-size: 12px;
-      min-width: 40px;
+      font-family: monospace;
+      font-size: 10px;
+      min-width: 35px;
       text-align: right;
+    }
+    
+    .disabled { 
+      opacity: 0.5; 
+      pointer-events: none; 
     }
     
     .buttons {
@@ -258,62 +293,76 @@ export function getWebviewStyles(): string {
     }
     
     .code-preview {
+      font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+      font-size: 9px;
+      line-height: 14px;
       flex: 1;
       background: var(--vscode-editor-background);
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
-      overflow: auto;
-      font-family: var(--vscode-editor-font-family);
-      font-size: var(--vscode-editor-font-size);
-      line-height: 1.5;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
     
     .editor-container {
       display: flex;
-      min-height: 100%;
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
     
     .line-numbers {
-      flex: 0 0 50px;
-      background: var(--vscode-editorLineNumber-background, var(--vscode-editor-background));
-      color: var(--vscode-editorLineNumber-foreground);
-      padding: 10px 0;
-      text-align: right;
+      background: var(--vscode-editorGutter-background);
+      padding: 5px 0;
+      border-right: 1px solid var(--vscode-editorWidget-border);
       user-select: none;
-      border-right: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
     }
     
     .line-number {
-      padding: 0 10px;
-      height: 22px;
-      line-height: 22px;
-      font-size: 12px;
+      display: block;
+      width: 40px;
+      color: var(--vscode-editorLineNumber-foreground);
+      text-align: right;
+      padding-right: 16px;
+      padding-left: 8px;
+      user-select: none;
+      font-size: 9px;
+      opacity: 0.6;
+      height: 14px;
     }
     
     .editor-content {
       flex: 1;
-      padding: 10px 0;
+      padding: 5px 0;
+      overflow: visible;
+      min-width: 0;
     }
     
     .code-line {
-      height: 22px;
-      line-height: 22px;
-      padding: 0 16px;
       position: relative;
-      white-space: pre;
+      height: 14px;
+      white-space: nowrap;
+      display: flex;
+      margin: 0;
+      overflow: visible;
     }
     
     .line-border {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
       width: 3px;
+      height: 14px;
+      flex-shrink: 0;
     }
     
     .line-content {
-      position: relative;
-      padding-left: 8px;
+      flex: 1;
+      padding-left: 12px;
+      height: 14px;
+      line-height: 14px;
+      margin: 0;
+      white-space: pre;
+      overflow: visible;
     }
     
     .overlay {
@@ -418,8 +467,7 @@ export function getWebviewStyles(): string {
 }
 
 export function getWebviewJavaScript(previewLines: any[]): string {
-  return `
-    const vscode = acquireVsCodeApi();
+  return `const vscode = acquireVsCodeApi();
     let currentColors = null;
     let colorLinks = {};
     const PREVIEW_LINES = ${JSON.stringify(previewLines)};
@@ -469,6 +517,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           updateAllColors(message.colors);
           break;
         case 'updateThemeList':
+          console.log('Received updateThemeList:', message.builtIn, message.custom);
           updateThemeList(message.builtIn, message.custom);
           break;
         case 'requestCurrentColors':
@@ -490,14 +539,25 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           updateThemeStatus(message.isSystem);
           break;
         case 'themeDeleted':
+          console.log('Received themeDeleted:', message);
           const themeSelect = document.getElementById('themeSelect');
-          if (themeSelect && themeSelect.value === message.deletedTheme) {
-            themeSelect.value = '';
-            updateDeleteButton();
-            updateThemeStatus(false);
+          if (themeSelect) {
+            // Update the dropdown to show the next theme if provided
+            if (message.nextTheme) {
+              console.log('Setting next theme:', message.nextTheme);
+              // The theme list will be updated, and the new theme is already applied
+              // Just update the UI to reflect the change
+              setTimeout(() => {
+                themeSelect.value = message.nextTheme;
+                updateDeleteButton();
+              }, 100);
+            } else {
+              console.log('No next theme, clearing selection');
+              themeSelect.value = '';
+              updateDeleteButton();
+              updateThemeStatus(false);
+            }
           }
-          // Request updated theme list from extension
-          vscode.postMessage({ command: 'requestThemeList' });
           break;
       }
     });
@@ -993,14 +1053,17 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         command: 'deleteTheme',
         name: themeName
       });
+      
+      // Don't clear the dropdown here - wait for the response
+      // The extension will tell us what to do based on whether the user confirmed
     }
     window.deleteCurrentTheme = deleteCurrentTheme;
     
-    function updateThemeList(builtIn, custom) {
+    function updateThemeList(builtIn, custom, preserveSelection = true) {
       const select = document.getElementById('themeSelect');
-      const currentValue = select.value;
+      const currentValue = preserveSelection ? select.value : '';
       
-      select.innerHTML = '';
+      select.innerHTML = '<option value="">Choose a theme...</option>';
       
       const builtInGroup = document.createElement('optgroup');
       builtInGroup.label = 'Built-in Themes';
@@ -1024,7 +1087,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         select.appendChild(customGroup);
       }
       
-      if (currentValue) {
+      if (currentValue && preserveSelection) {
         const options = select.querySelectorAll('option');
         for (let option of options) {
           if (option.value === currentValue) {

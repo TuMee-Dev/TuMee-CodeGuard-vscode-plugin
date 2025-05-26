@@ -258,6 +258,7 @@ export class ColorCustomizerPanel {
   private _disposables: vscode.Disposable[] = [];
   private _currentTheme: string = '';
   private _isSystemTheme: boolean = false;
+  private _isDeleting: boolean = false;
 
   // Permission section configuration
   private static readonly PERMISSION_SECTIONS = [
@@ -523,37 +524,83 @@ export class ColorCustomizerPanel {
   }
 
   private async _deleteTheme(name: string) {
-    // Show confirmation dialog
-    const choice = await vscode.window.showWarningMessage(
-      `Are you sure you want to delete the theme "${name}"?`,
-      'Delete',
-      'Cancel'
-    );
-    
-    if (choice !== 'Delete') {
+    // Prevent multiple simultaneous deletions
+    if (this._isDeleting) {
+      console.log('Already processing a deletion, ignoring');
       return;
     }
     
+    this._isDeleting = true;
+    
+    try {
+      console.log('_deleteTheme called for:', name);
+      // Show confirmation dialog
+      const choice = await vscode.window.showWarningMessage(
+        `Are you sure you want to delete the theme "${name}"?`,
+        'Delete',
+        'Cancel'
+      );
+      
+      if (choice !== 'Delete') {
+        console.log('User cancelled deletion');
+        return;
+      }
+      console.log('User confirmed deletion');
+    
     const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
     const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
-    delete customThemes[name];
-    await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
+    
+    // Get list of all themes before deletion
+    const allThemes = [...Object.keys(COLOR_THEMES), ...Object.keys(customThemes)];
+    const currentIndex = allThemes.indexOf(name);
+    
+    // Create a shallow copy to avoid proxy issues
+    const updatedThemes = { ...customThemes };
+    delete updatedThemes[name];
+    await config.update('customThemes', updatedThemes, vscode.ConfigurationTarget.Global);
 
-    // If we deleted the current theme, clear selection
+    // Determine next theme to select
+    let nextTheme = '';
     if (this._currentTheme === name) {
-      this._currentTheme = '';
-      this._isSystemTheme = false;
-      await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+      // Remove the deleted theme from the list
+      const remainingThemes = allThemes.filter(t => t !== name);
+      console.log('Remaining themes:', remainingThemes);
+      
+      if (remainingThemes.length > 0) {
+        // Select the next theme in the list, or the previous one if we deleted the last theme
+        const nextIndex = Math.min(currentIndex, remainingThemes.length - 1);
+        nextTheme = remainingThemes[nextIndex];
+        console.log('Next theme to select:', nextTheme);
+      }
+      
+      // Apply the next theme or clear if no themes left
+      if (nextTheme) {
+        console.log('Applying next theme:', nextTheme);
+        await this._applyTheme(nextTheme);
+      } else {
+        console.log('No themes left, clearing selection');
+        this._currentTheme = '';
+        this._isSystemTheme = false;
+        await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+      }
     }
 
-    void vscode.window.showInformationMessage(`Theme '${name}' deleted successfully!`);
-    this._sendThemeList();
-
-    // Reset dropdown to default
-    void this._panel.webview.postMessage({
-      command: 'themeDeleted',
-      deletedTheme: name
-    });
+      void vscode.window.showInformationMessage(`Theme '${name}' deleted successfully!`);
+      
+      // Send the theme list update first
+      this._sendThemeList();
+      
+      // Then send the deletion notification with a slight delay to ensure theme list is processed
+      setTimeout(() => {
+        void this._panel.webview.postMessage({
+          command: 'themeDeleted',
+          deletedTheme: name,
+          nextTheme: nextTheme
+        });
+      }, 50);
+    } finally {
+      this._isDeleting = false;
+    }
   }
 
   private async _exportTheme() {
@@ -748,7 +795,7 @@ export class ColorCustomizerPanel {
     `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
                         </select>
                         <button class="btn-icon" onclick="addNewTheme()" title="Add new theme">➕</button>
-                        <button class="btn-icon" id="deleteThemeBtn" onclick="deleteCurrentTheme()" title="Delete theme" style="display: none;">🗑️</button>
+                        <button class="btn-icon" id="deleteThemeBtn" title="Delete theme" style="display: none;">🗑️</button>
                     </div>
                     <div id="themeStatus" class="theme-status" style="display: none; margin-top: 8px; font-size: 12px; color: var(--vscode-descriptionForeground);"></div>
                 </div>
