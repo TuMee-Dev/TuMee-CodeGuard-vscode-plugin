@@ -34,6 +34,10 @@ Last Task: Fixed guard tag parser scope resolution (block and file scopes)
 19. Fix default state decoration (aiRead_humanWrite):
     - No decoration created for default state - no background, no border
     - Lines with default permissions appear completely undecorated
+20. Fix tree-sitter block scope end position:
+    - Tree-sitter endPosition is exclusive (points after last character)
+    - When endPosition.column is 0, the node actually ends on the previous line
+    - Now correctly includes closing braces/brackets in block scope
 
 ### 🚀 In Progress
 - **None currently** - Ready for next task
