@@ -215,9 +215,11 @@ export function findParentOfType(
  * Get the scope boundaries from a syntax node
  */
 export function getNodeBoundaries(node: Node): { startLine: number; endLine: number } {
+  // Tree-sitter's endPosition points to the position AFTER the last character
+  // This is inclusive of the last character, so we don't need to adjust
   return {
     startLine: node.startPosition.row + 1,  // Convert to 1-based line numbers
-    endLine: node.endPosition.row + 1        // Convert to 1-based line numbers
+    endLine: node.endPosition.row + 1      // Convert to 1-based line numbers
   };
 }
 

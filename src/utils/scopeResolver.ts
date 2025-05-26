@@ -228,26 +228,33 @@ async function resolveSemanticWithTreeSitter(
         let targetNode: Node | null = null;
 
         if (scope === 'block') {
-          // First check if the current node itself is a block type
-          if (nodeTypes.includes(searchNode.type)) {
-            targetNode = searchNode;
+          // Special case: if we encounter a class or function when looking for a block,
+          // use the entire class/function as the block
+          const classOrFunc = findParentOfType(searchNode, ['class_declaration', 'function_declaration']);
+          if (classOrFunc && classOrFunc.startPosition.row >= line) {
+            targetNode = classOrFunc;
           } else {
-            // For assignments like "DICT = {}", search children
-            for (const child of searchNode.children) {
-              if (child && nodeTypes.includes(child.type)) {
-                targetNode = child;
-                break;
-              }
-            }
-
-            // If not found in immediate children, check parent's children
-            // This handles cases where we land on a leaf node
-            if (!targetNode && searchNode.parent) {
-              for (const sibling of searchNode.parent.children) {
-                if (sibling && nodeTypes.includes(sibling.type) &&
-                    sibling.startPosition.row >= line) {
-                  targetNode = sibling;
+            // First check if the current node itself is a block type
+            if (nodeTypes.includes(searchNode.type)) {
+              targetNode = searchNode;
+            } else {
+              // For assignments like "DICT = {}", search children
+              for (const child of searchNode.children) {
+                if (child && nodeTypes.includes(child.type)) {
+                  targetNode = child;
                   break;
+                }
+              }
+
+              // If not found in immediate children, check parent's children
+              // This handles cases where we land on a leaf node
+              if (!targetNode && searchNode.parent) {
+                for (const sibling of searchNode.parent.children) {
+                  if (sibling && nodeTypes.includes(sibling.type) &&
+                      sibling.startPosition.row >= line) {
+                    targetNode = sibling;
+                    break;
+                  }
                 }
               }
             }
