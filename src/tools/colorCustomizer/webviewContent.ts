@@ -1295,8 +1295,17 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         section.classList.remove('focused');
       });
       
-      const clickedSection = event.currentTarget;
-      clickedSection.classList.add('focused');
+      // Find and focus the clicked section
+      const sections = document.querySelectorAll('.permission-section');
+      sections.forEach(section => {
+        const checkbox = section.querySelector('input[type="checkbox"]');
+        if (checkbox && checkbox.id === permissionId + '-enabled') {
+          section.classList.add('focused');
+        }
+      });
+      
+      // Navigate to the corresponding preview
+      navigateToPermission(permissionId);
     }
     window.focusPermission = focusPermission;
     
