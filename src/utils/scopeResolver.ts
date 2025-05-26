@@ -175,7 +175,7 @@ export async function resolveSemantic(
     if (!extensionContext) {
       throw new Error(`[TreeSitter] Extension context not initialized for ${languageId}`);
     }
-    
+
     try {
       const treeSitterResult = await resolveSemanticWithTreeSitter(document, line, scope);
       if (!treeSitterResult) {

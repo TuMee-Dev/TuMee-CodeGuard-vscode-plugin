@@ -11,7 +11,7 @@ import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTy
 import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
-import { registerColorCustomizerCommand, type GuardColors } from '@/tools/colorCustomizer';
+import { registerColorCustomizerCommand } from '@/tools/colorCustomizer';
 import { disposeACLCache } from '@/utils/aclCache';
 import { performanceMonitor } from '@/utils/performanceMonitor';
 import { configValidator } from '@/utils/configValidator';
@@ -217,19 +217,24 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
   // Get the complete guard colors configuration
   const guardColorsComplete = config.get<any>('guardColorsComplete');
+  const borderBarEnabled = guardColorsComplete?.borderBarEnabled !== false;
 
   // Store per-permission transparency values
   const permissionTransparencies: Record<string, number> = {};
 
   // Convert from complete format to flat format for now
   const userColors: any = {};
+  const permissionEnabledStates: Record<string, boolean> = {};
   if (guardColorsComplete?.permissions) {
     for (const [key, cfg] of Object.entries(guardColorsComplete.permissions)) {
       const permission = cfg as any;
-      if (permission.enabled && permission.color) {
+      // Always save the color, regardless of enabled state
+      if (permission.color) {
         userColors[key] = permission.color;
         // Store the transparency value
         permissionTransparencies[key] = permission.transparency || 0.3;
+        // Store the enabled state
+        permissionEnabledStates[key] = permission.enabled !== false;
       }
     }
   }
@@ -237,7 +242,31 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     Object.assign(userColors, guardColorsComplete.combinations);
   }
 
-  const colors = { ...defaultColors, ...userColors };
+  // Only use colors for enabled permissions
+  const colors: any = {};
+  
+  // First apply defaults for enabled permissions only
+  for (const [key, defaultColor] of Object.entries(defaultColors)) {
+    if (key === 'opacity') {
+      colors[key] = defaultColor;
+    } else {
+      // Check if this permission is enabled (default to true if not specified)
+      const isEnabled = permissionEnabledStates[key] !== false;
+      console.log(`[DEBUG] Permission ${key}: enabled=${isEnabled}, hasEnabledState=${key in permissionEnabledStates}`);
+      if (isEnabled) {
+        colors[key] = defaultColor;
+      }
+    }
+  }
+  
+  // Then apply user colors ONLY for enabled permissions
+  for (const [key, color] of Object.entries(userColors)) {
+    // Only add the color if the permission is enabled
+    const isEnabled = permissionEnabledStates[key] !== false;
+    if (isEnabled) {
+      colors[key] = color;
+    }
+  }
 
   const opacity = colors.opacity || config.get<number>('codeDecorationOpacity') || 0.1;
 
@@ -257,22 +286,22 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       return 'rgba(0, 0, 0, 0)';
     }
   };
-  
+
   // Helper function to blend two hex colors
   const blendColors = (hex1: string, hex2: string): string => {
     try {
       const r1 = parseInt(hex1.slice(1, 3), 16);
       const g1 = parseInt(hex1.slice(3, 5), 16);
       const b1 = parseInt(hex1.slice(5, 7), 16);
-      
+
       const r2 = parseInt(hex2.slice(1, 3), 16);
       const g2 = parseInt(hex2.slice(3, 5), 16);
       const b2 = parseInt(hex2.slice(5, 7), 16);
-      
+
       const r = Math.round((r1 + r2) / 2);
       const g = Math.round((g1 + g2) / 2);
       const b = Math.round((b1 + b2) / 2);
-      
+
       return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
     } catch (error) {
       return hex1; // Fallback to first color
@@ -285,9 +314,9 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
   // Helper function to get the color for a permission combination
   const getPermissionColor = (key: string): { color: string, opacity: number, isMixed?: boolean, mixedColor?: string } => {
-    // Special handling for aiRead_humanWrite when humanWrite is disabled
-    if (key === 'aiRead_humanWrite' && !guardColorsComplete?.permissions?.humanWrite?.enabled) {
-      console.log('[DEBUG] aiRead_humanWrite with humanWrite disabled - returning transparent');
+    // Special handling for default state
+    if (key === 'aiRead_humanWrite') {
+      console.log('[DEBUG] aiRead_humanWrite (default state) - returning transparent');
       return { color: '#000000', opacity: 0 }; // Fully transparent
     }
 
@@ -318,54 +347,105 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       read: colors.humanRead,
       noaccess: colors.humanNoAccess
     };
+    
+    // Debug log what colors we actually have
+    if (key.includes('NoAccess')) {
+      console.log(`[DEBUG] ${key}: aiNoAccess color = ${colors.aiNoAccess}, humanNoAccess color = ${colors.humanNoAccess}`);
+      console.log(`[DEBUG] Available colors:`, colors);
+    }
     const contextColors = {
       write: colors.contextWrite,
       read: colors.contextRead
     };
 
-    let baseColor: string;
+    let baseColor: string = '#000000'; // Default fallback color
     let effectiveOpacity = opacity;
 
     // Handle context colors specially
     if (isContext) {
       // For context, use the context color based on AI permission
       const contextKey = aiPermission === 'write' ? 'contextWrite' : 'contextRead';
+      const contextEnabled = permissionEnabledStates[contextKey] !== false;
+
+      // If context permission is disabled, return transparent
+      if (!contextEnabled) {
+        console.log(`[DEBUG] ${key}: Context permission disabled - returning transparent`);
+        return { color: '#000000', opacity: 0 };
+      }
+
       baseColor = aiPermission === 'write' ? contextColors.write : contextColors.read;
 
       // Use the per-permission transparency from color customizer
       effectiveOpacity = permissionTransparencies[contextKey] || opacity;
     } else {
-      // For mixed permissions, check if we need to blend colors
-      const aiColor = aiColors[aiPermission as keyof typeof aiColors];
-      const humanColor = humanColors[humanPermission as keyof typeof humanColors];
-      
       // Determine which color to use based on which permissions differ from default
       const defaults = getDefaultPermissions();
       const aiDiffersFromDefault = aiPermission !== defaults.ai.toLowerCase();
       const humanDiffersFromDefault = humanPermission !== (defaults.human === 'w' ? 'write' : defaults.human === 'r' ? 'read' : 'noaccess');
+
+      // For mixed permissions, check if we need to blend colors
+      const aiColor = aiColors[aiPermission as keyof typeof aiColors];
+      const humanColor = humanColors[humanPermission as keyof typeof humanColors];
       
-      console.log(`[DEBUG] ${key}: AI=${aiPermission} (default=${defaults.ai}), Human=${humanPermission} (default=${defaults.human})`);
+      // If the color is undefined (because permission is disabled), treat as disabled
+      if ((aiDiffersFromDefault && !aiColor) || (humanDiffersFromDefault && !humanColor)) {
+        console.log(`[DEBUG] ${key}: Color undefined for disabled permission - returning transparent`);
+        return { color: '#000000', opacity: 0 };
+      }
+
+      // Check if permissions are enabled
+      const aiKey = `ai${aiPermission.charAt(0).toUpperCase()}${aiPermission.slice(1).replace('noaccess', 'NoAccess')}`;
+      const humanKey = `human${humanPermission.charAt(0).toUpperCase()}${humanPermission.slice(1).replace('noaccess', 'NoAccess')}`;
+      const aiEnabled = permissionEnabledStates[aiKey] !== false;
+      const humanEnabled = permissionEnabledStates[humanKey] !== false;
+
+      console.log(`[DEBUG] ${key}: AI=${aiPermission} (default=${defaults.ai}, enabled=${aiEnabled}), Human=${humanPermission} (default=${defaults.human}, enabled=${humanEnabled})`);
       console.log(`[DEBUG] ${key}: aiDiffers=${aiDiffersFromDefault}, humanDiffers=${humanDiffersFromDefault}`);
-      
+
+      // If both permissions are disabled, return transparent
+      if (!aiEnabled && !humanEnabled) {
+        console.log(`[DEBUG] ${key}: Both permissions disabled - returning transparent`);
+        return { color: '#000000', opacity: 0 };
+      }
+
       if (aiDiffersFromDefault && humanDiffersFromDefault) {
-        // Both differ from default - use striped pattern
-        console.log(`[DEBUG] ${key}: Using mixed colors - ${aiColor} and ${humanColor}`);
-        return { 
-          color: aiColor, 
-          opacity: effectiveOpacity,
-          mixedColor: humanColor,
-          isMixed: true
-        };
+        // Both differ from default - check enabled states
+        if (aiEnabled && humanEnabled) {
+          // Both enabled - use mixed pattern
+          console.log(`[DEBUG] ${key}: Using mixed colors - ${aiColor} and ${humanColor}`);
+          return {
+            color: aiColor,
+            opacity: effectiveOpacity,
+            mixedColor: humanColor,
+            isMixed: true
+          };
+        } else if (aiEnabled) {
+          // Only AI enabled - use AI color
+          baseColor = aiColor;
+          effectiveOpacity = permissionTransparencies[aiKey] || opacity;
+        } else if (humanEnabled) {
+          // Only human enabled - use human color
+          baseColor = humanColor;
+          effectiveOpacity = permissionTransparencies[humanKey] || opacity;
+        }
       } else if (humanDiffersFromDefault) {
-        // Only human differs from default - use human color
-        baseColor = humanColor;
-        const humanKey = `human${humanPermission.charAt(0).toUpperCase()}${humanPermission.slice(1).replace('noaccess', 'NoAccess')}`;
-        effectiveOpacity = permissionTransparencies[humanKey] || opacity;
+        // Only human differs from default - check if enabled
+        if (humanEnabled) {
+          baseColor = humanColor;
+          effectiveOpacity = permissionTransparencies[humanKey] || opacity;
+        } else {
+          // Human permission disabled - return transparent
+          return { color: '#000000', opacity: 0 };
+        }
       } else if (aiDiffersFromDefault) {
-        // Only AI differs from default - use AI color
-        baseColor = aiColor;
-        const aiKey = `ai${aiPermission.charAt(0).toUpperCase()}${aiPermission.slice(1).replace('noaccess', 'NoAccess')}`;
-        effectiveOpacity = permissionTransparencies[aiKey] || opacity;
+        // Only AI differs from default - check if enabled
+        if (aiEnabled) {
+          baseColor = aiColor;
+          effectiveOpacity = permissionTransparencies[aiKey] || opacity;
+        } else {
+          // AI permission disabled - return transparent
+          return { color: '#000000', opacity: 0 };
+        }
       } else {
         // Both are default - shouldn't happen as we filter out default state
         baseColor = aiColor;
@@ -410,19 +490,29 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
     const colorInfo = getPermissionColor(key);
     const { color, opacity: effectiveOpacity, isMixed, mixedColor } = colorInfo as any;
-    
-    if (key.includes('Write') || key.includes('NoAccess')) {
-      console.log(`[DEBUG] Creating decoration for ${key}: isMixed=${isMixed}, color=${color}, mixedColor=${mixedColor}`);
+
+    // Skip creating decoration if opacity is 0 (disabled permissions)
+    if (effectiveOpacity === 0) {
+      console.log(`[DEBUG] Skipping decoration for ${key}: opacity is 0 (disabled)`);
+      return;
     }
 
-    let decorationOptions: any = {
+    if (key.includes('Write') || key.includes('NoAccess')) {
+      console.log(`[DEBUG] Creating decoration for ${key}: isMixed=${isMixed}, color=${color}, mixedColor=${mixedColor}, opacity=${effectiveOpacity}`);
+    }
+
+    const decorationOptions: any = {
       isWholeLine: true,
-      borderWidth: '0 0 0 3px',
-      borderStyle: 'solid',
-      borderColor: hexToRgba(color, 0.6),
       overviewRulerColor: hexToRgba(color, 0.8),
       overviewRulerLane: 2,
     };
+
+    // Only add border if borderBarEnabled is true
+    if (borderBarEnabled) {
+      decorationOptions.borderWidth = '0 0 0 3px';
+      decorationOptions.borderStyle = 'solid';
+      decorationOptions.borderColor = hexToRgba(color, 0.6);
+    }
 
     if (isMixed && mixedColor) {
       // For mixed permissions, blend the two colors

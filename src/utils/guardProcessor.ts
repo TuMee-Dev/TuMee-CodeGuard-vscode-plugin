@@ -374,7 +374,6 @@ export async function parseGuardTags(
           guardTag.scopeEnd = lineNumber;
         }
 
-
         // Before pushing new guard, remove any interrupted context guards
         removeInterruptedContextGuards(guardStack);
 
@@ -502,7 +501,7 @@ function processGuardStack(
           isLineLimited: !!tag.lineCount,
           sourceGuard: tag
         };
-        
+
         console.log(`[GuardProcessor] Pushing guard to stack at line ${line}:`, {
           permission: tag.permission,
           target: tag.target,
@@ -570,7 +569,7 @@ function processGuardStack(
             }
           }
         }
-        
+
         // Context guard handling for ALL lines (not just whitespace)
         if ((top.isContext.ai || top.isContext.human) && !isWhitespaceOnly) {
           const nonContextPermissions: { [target: string]: string } = {};
