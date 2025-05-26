@@ -479,6 +479,8 @@ export function getWebviewStyles(): string {
       flex-shrink: 0;
       padding-top: 10px;
       border-top: 1px solid var(--vscode-panel-border);
+      position: relative;
+      z-index: 1;
     }
     
     .permission-example {
@@ -488,17 +490,18 @@ export function getWebviewStyles(): string {
       text-align: center;
       border: 1px solid var(--vscode-panel-border);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background-color 0.2s, box-shadow 0.2s;
       user-select: none;
+      position: relative;
     }
     
     .permission-example:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      background-color: var(--vscode-list-hoverBackground);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
     }
     
     .permission-example:active {
-      transform: translateY(0);
+      background-color: var(--vscode-list-activeSelectionBackground);
     }
     
     .split-context {
