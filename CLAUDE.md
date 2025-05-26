@@ -29,6 +29,11 @@ Last Task: Fixed guard tag parser scope resolution (block and file scopes)
     - File scope guards preserve permissions for all whitespace (no trailing whitespace trimming)
     - Removed incorrect comment block detection that was breaking block scope
     - Guards with .block scope search forward for next code block unless another guard is hit first
+    - Fixed tree-sitter to include object literals as valid block nodes
+    - Made tree-sitter authoritative - no regex fallback for supported languages
+19. Fix default state decoration (aiRead_humanWrite):
+    - No decoration created for default state - no background, no border
+    - Lines with default permissions appear completely undecorated
 
 ### 🚀 In Progress
 - **None currently** - Ready for next task

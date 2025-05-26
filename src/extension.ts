@@ -353,6 +353,11 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
   // Create decoration types for all permission combinations
   permissionCombinations.forEach(key => {
+    // Skip creating decoration for default state (aiRead_humanWrite)
+    if (key === 'aiRead_humanWrite') {
+      return;
+    }
+
     const { color, opacity: effectiveOpacity } = getPermissionColor(key);
 
     const decoration = window.createTextEditorDecorationType({
@@ -475,7 +480,7 @@ function getDecorationType(aiPerm: string, humanPerm: string, aiContext: boolean
 
   // Handle all non-context combinations
   if (aiPerm === 'r' && humanPerm === 'r') return 'aiRead_humanRead';
-  if (aiPerm === 'r' && humanPerm === 'w') return 'aiRead_humanWrite';
+  if (aiPerm === 'r' && humanPerm === 'w') return null; // Default state - no decoration
   if (aiPerm === 'r' && humanPerm === 'n') return 'aiRead_humanNoAccess';
   if (aiPerm === 'w' && humanPerm === 'r') return 'aiWrite_humanRead';
   if (aiPerm === 'w' && humanPerm === 'w') return 'aiWrite_humanWrite';
@@ -580,21 +585,20 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       const humanContext = perm.isContext?.human || false;
 
       // Get decoration type based on permissions
-      const decorationType = getDecorationType(aiPerm, humanPerm, aiContext, humanContext) || '';
+      const decorationType = getDecorationType(aiPerm, humanPerm, aiContext, humanContext);
 
-      if (lineNumber <= 15) {
-        console.log(`[DEBUG] Line ${lineNumber}: ai=${aiPerm}, human=${humanPerm}, decorationType=${decorationType}`);
+      // Skip lines with no decoration (default state)
+      if (!decorationType) {
+        continue;
       }
 
       // Add decoration for this line
-      if (decorationType) {
-        decorationRanges[decorationType as keyof DecorationRanges].push({
-          range: new Range(
-            new Position(i, 0),
-            new Position(i, lines[i].length)
-          )
-        });
-      }
+      decorationRanges[decorationType as keyof DecorationRanges].push({
+        range: new Range(
+          new Position(i, 0),
+          new Position(i, lines[i].length)
+        )
+      });
     }
 
     // Apply decorations - clear all first then apply active ones
