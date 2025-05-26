@@ -331,8 +331,13 @@ export async function parseGuardTags(
                 guardTag.scopeStart = scopeBoundary.startLine;
                 guardTag.scopeEnd = scopeBoundary.endLine;
                 guardTag.lineCount = scopeBoundary.endLine - scopeBoundary.startLine + 1;
+                console.log(`[GuardProcessor] Resolved ${effectiveScope} at line ${lineNumber}: start=${scopeBoundary.startLine}, end=${scopeBoundary.endLine}`);
               } else {
-                throw new Error(`Scope resolution returned null for '${effectiveScope}' at line ${lineNumber}`);
+                // No block found - apply only to current line
+                console.warn(`[GuardProcessor] No ${effectiveScope} found for guard at line ${lineNumber}, applying to current line only`);
+                guardTag.scopeStart = lineNumber;
+                guardTag.scopeEnd = lineNumber;
+                guardTag.lineCount = 1;
               }
             } catch (error) {
               console.error(`[GuardProcessor] Tree-sitter scope resolution failed at line ${lineNumber}:`, error);
@@ -497,6 +502,16 @@ function processGuardStack(
           isLineLimited: !!tag.lineCount,
           sourceGuard: tag
         };
+        
+        console.log(`[GuardProcessor] Pushing guard to stack at line ${line}:`, {
+          permission: tag.permission,
+          target: tag.target,
+          startLine: entry.startLine,
+          endLine: entry.endLine,
+          scopeStart: tag.scopeStart,
+          scopeEnd: tag.scopeEnd,
+          isContext: currentContext
+        });
 
         // Before pushing new guard, remove any interrupted context guards
         removeInterruptedContextGuards(guardStack);
@@ -553,27 +568,29 @@ function processGuardStack(
               const underlyingEntry = guardStack[guardStack.length - 2];
               effectivePermissions = underlyingEntry.permissions;
             }
-          } else {
-            // Original context guard handling
-            const nonContextPermissions: { [target: string]: string } = {};
+          }
+        }
+        
+        // Context guard handling for ALL lines (not just whitespace)
+        if ((top.isContext.ai || top.isContext.human) && !isWhitespaceOnly) {
+          const nonContextPermissions: { [target: string]: string } = {};
 
-            // Collect all non-context permissions from applicable stack entries
-            for (let i = guardStack.length - 1; i >= 0; i--) {
-              const entry = guardStack[i];
-              if (line >= entry.startLine && line <= entry.endLine) {
-                // Add any non-context permissions we haven't seen yet
-                for (const [target, permission] of Object.entries(entry.permissions)) {
-                  if (permission !== 'context' && !nonContextPermissions[target]) {
-                    nonContextPermissions[target] = permission;
-                  }
+          // Collect all non-context permissions from applicable stack entries
+          for (let i = guardStack.length - 1; i >= 0; i--) {
+            const entry = guardStack[i];
+            if (line >= entry.startLine && line <= entry.endLine) {
+              // Add any non-context permissions we haven't seen yet
+              for (const [target, permission] of Object.entries(entry.permissions)) {
+                if (permission !== 'context' && !nonContextPermissions[target]) {
+                  nonContextPermissions[target] = permission;
                 }
               }
             }
+          }
 
-            // If we found any non-context permissions, use them
-            if (Object.keys(nonContextPermissions).length > 0) {
-              effectivePermissions = nonContextPermissions;
-            }
+          // If we found any non-context permissions, use them
+          if (Object.keys(nonContextPermissions).length > 0) {
+            effectivePermissions = nonContextPermissions;
           }
         }
 

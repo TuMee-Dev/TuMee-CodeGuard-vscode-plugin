@@ -266,6 +266,7 @@ async function resolveSemanticWithTreeSitter(
 
         if (targetNode && targetNode.startPosition.row >= line) {
           const bounds = getNodeBoundaries(targetNode);
+          console.log(`[ScopeResolver] Found ${scope} node: type=${targetNode.type}, start=${bounds.startLine}, end=${bounds.endLine}`);
 
           // For Python classes, trim trailing whitespace
           if (scope === 'class' && document.languageId === 'python') {
