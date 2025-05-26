@@ -1117,7 +1117,6 @@ export class ColorCustomizerPanel {
                 padding: 6px 5px;
                 font-size: 12px;
                 text-align: center;
-                border-left: 3px solid transparent;
             }
             
             .context-half:not(:first-child) {
