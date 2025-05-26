@@ -314,11 +314,6 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
   // Helper function to get the color for a permission combination
   const getPermissionColor = (key: string): { color: string, opacity: number, isMixed?: boolean, mixedColor?: string } => {
-    // Special handling for default state
-    if (key === 'aiRead_humanWrite') {
-      console.log('[DEBUG] aiRead_humanWrite (default state) - returning transparent');
-      return { color: '#000000', opacity: 0 }; // Fully transparent
-    }
 
     // Check if there's a custom color for this exact combination
     const customColor = (colors as Record<string, any>)[key] as string | undefined;
@@ -483,10 +478,6 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
   // Create decoration types for all permission combinations
   permissionCombinations.forEach(key => {
-    // Skip creating decoration for default state (aiRead_humanWrite)
-    if (key === 'aiRead_humanWrite') {
-      return;
-    }
 
     const colorInfo = getPermissionColor(key);
     const { color, opacity: effectiveOpacity, isMixed, mixedColor } = colorInfo as any;
