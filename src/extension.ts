@@ -375,8 +375,11 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     } else {
       // Determine which color to use based on which permissions differ from default
       const defaults = getDefaultPermissions();
-      const aiDiffersFromDefault = aiPermission !== defaults.ai.toLowerCase();
-      const humanDiffersFromDefault = humanPermission !== (defaults.human === 'w' ? 'write' : defaults.human === 'r' ? 'read' : 'noaccess');
+      // Convert 'r'/'w'/'n' to 'read'/'write'/'noaccess' for comparison
+      const defaultAiPerm = defaults.ai === 'r' ? 'read' : defaults.ai === 'w' ? 'write' : 'noaccess';
+      const defaultHumanPerm = defaults.human === 'r' ? 'read' : defaults.human === 'w' ? 'write' : 'noaccess';
+      const aiDiffersFromDefault = aiPermission !== defaultAiPerm;
+      const humanDiffersFromDefault = humanPermission !== defaultHumanPerm;
 
       // For mixed permissions, check if we need to blend colors
       const aiColor = aiColors[aiPermission as keyof typeof aiColors];
@@ -442,9 +445,24 @@ function initializeCodeDecorations(_context: ExtensionContext) {
           return { color: '#000000', opacity: 0 };
         }
       } else {
-        // Both are default - shouldn't happen as we filter out default state
-        baseColor = aiColor;
-        effectiveOpacity = opacity;
+        // Both are at default values - check which one to show based on enabled state
+        if (aiEnabled && humanEnabled) {
+          // Both enabled at default - check if we should show one or blend
+          // For now, show human color since it's the "active" permission for humans
+          baseColor = humanColor;
+          effectiveOpacity = permissionTransparencies[humanKey] || opacity;
+        } else if (humanEnabled) {
+          // Only human enabled
+          baseColor = humanColor;
+          effectiveOpacity = permissionTransparencies[humanKey] || opacity;
+        } else if (aiEnabled) {
+          // Only AI enabled
+          baseColor = aiColor;
+          effectiveOpacity = permissionTransparencies[aiKey] || opacity;
+        } else {
+          // Neither enabled - return transparent
+          return { color: '#000000', opacity: 0 };
+        }
       }
     }
 
@@ -628,7 +646,7 @@ function getDecorationType(aiPerm: string, humanPerm: string, aiContext: boolean
 
   // Handle all non-context combinations
   if (aiPerm === 'r' && humanPerm === 'r') return 'aiRead_humanRead';
-  if (aiPerm === 'r' && humanPerm === 'w') return null; // Default state - no decoration
+  if (aiPerm === 'r' && humanPerm === 'w') return 'aiRead_humanWrite'; // Default state - but still allow decoration
   if (aiPerm === 'r' && humanPerm === 'n') return 'aiRead_humanNoAccess';
   if (aiPerm === 'w' && humanPerm === 'r') return 'aiWrite_humanRead';
   if (aiPerm === 'w' && humanPerm === 'w') return 'aiWrite_humanWrite';
