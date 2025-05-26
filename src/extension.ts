@@ -257,13 +257,34 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       return 'rgba(0, 0, 0, 0)';
     }
   };
+  
+  // Helper function to blend two hex colors
+  const blendColors = (hex1: string, hex2: string): string => {
+    try {
+      const r1 = parseInt(hex1.slice(1, 3), 16);
+      const g1 = parseInt(hex1.slice(3, 5), 16);
+      const b1 = parseInt(hex1.slice(5, 7), 16);
+      
+      const r2 = parseInt(hex2.slice(1, 3), 16);
+      const g2 = parseInt(hex2.slice(3, 5), 16);
+      const b2 = parseInt(hex2.slice(5, 7), 16);
+      
+      const r = Math.round((r1 + r2) / 2);
+      const g = Math.round((g1 + g2) / 2);
+      const b = Math.round((b1 + b2) / 2);
+      
+      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    } catch (error) {
+      return hex1; // Fallback to first color
+    }
+  };
 
   // Clear existing decorations
   decorationTypes.forEach(decoration => decoration.dispose());
   decorationTypes.clear();
 
   // Helper function to get the color for a permission combination
-  const getPermissionColor = (key: string): { color: string, opacity: number } => {
+  const getPermissionColor = (key: string): { color: string, opacity: number, isMixed?: boolean, mixedColor?: string } => {
     // Special handling for aiRead_humanWrite when humanWrite is disabled
     if (key === 'aiRead_humanWrite' && !guardColorsComplete?.permissions?.humanWrite?.enabled) {
       console.log('[DEBUG] aiRead_humanWrite with humanWrite disabled - returning transparent');
@@ -314,13 +335,42 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       // Use the per-permission transparency from color customizer
       effectiveOpacity = permissionTransparencies[contextKey] || opacity;
     } else {
-      // Determine base color - for mixed permissions, we always use AI as base
-      // (users can configure the exact appearance they want per permission)
-      const aiKey = `ai${  aiPermission.charAt(0).toUpperCase()  }${aiPermission.slice(1).replace('noaccess', 'NoAccess')}`;
-      baseColor = aiColors[aiPermission as keyof typeof aiColors];
-
-      // Use the per-permission transparency from color customizer
-      effectiveOpacity = permissionTransparencies[aiKey] || opacity;
+      // For mixed permissions, check if we need to blend colors
+      const aiColor = aiColors[aiPermission as keyof typeof aiColors];
+      const humanColor = humanColors[humanPermission as keyof typeof humanColors];
+      
+      // Determine which color to use based on which permissions differ from default
+      const defaults = getDefaultPermissions();
+      const aiDiffersFromDefault = aiPermission !== defaults.ai.toLowerCase();
+      const humanDiffersFromDefault = humanPermission !== (defaults.human === 'w' ? 'write' : defaults.human === 'r' ? 'read' : 'noaccess');
+      
+      console.log(`[DEBUG] ${key}: AI=${aiPermission} (default=${defaults.ai}), Human=${humanPermission} (default=${defaults.human})`);
+      console.log(`[DEBUG] ${key}: aiDiffers=${aiDiffersFromDefault}, humanDiffers=${humanDiffersFromDefault}`);
+      
+      if (aiDiffersFromDefault && humanDiffersFromDefault) {
+        // Both differ from default - use striped pattern
+        console.log(`[DEBUG] ${key}: Using mixed colors - ${aiColor} and ${humanColor}`);
+        return { 
+          color: aiColor, 
+          opacity: effectiveOpacity,
+          mixedColor: humanColor,
+          isMixed: true
+        };
+      } else if (humanDiffersFromDefault) {
+        // Only human differs from default - use human color
+        baseColor = humanColor;
+        const humanKey = `human${humanPermission.charAt(0).toUpperCase()}${humanPermission.slice(1).replace('noaccess', 'NoAccess')}`;
+        effectiveOpacity = permissionTransparencies[humanKey] || opacity;
+      } else if (aiDiffersFromDefault) {
+        // Only AI differs from default - use AI color
+        baseColor = aiColor;
+        const aiKey = `ai${aiPermission.charAt(0).toUpperCase()}${aiPermission.slice(1).replace('noaccess', 'NoAccess')}`;
+        effectiveOpacity = permissionTransparencies[aiKey] || opacity;
+      } else {
+        // Both are default - shouldn't happen as we filter out default state
+        baseColor = aiColor;
+        effectiveOpacity = opacity;
+      }
     }
 
     // Debug logging
@@ -329,7 +379,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       console.log('[DEBUG] aiColors:', aiColors);
     }
 
-    return { color: baseColor, opacity: effectiveOpacity };
+    return { color: baseColor, opacity: effectiveOpacity, isMixed: false };
   };
 
   // All possible permission combinations
@@ -358,17 +408,34 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       return;
     }
 
-    const { color, opacity: effectiveOpacity } = getPermissionColor(key);
+    const colorInfo = getPermissionColor(key);
+    const { color, opacity: effectiveOpacity, isMixed, mixedColor } = colorInfo as any;
+    
+    if (key.includes('Write') || key.includes('NoAccess')) {
+      console.log(`[DEBUG] Creating decoration for ${key}: isMixed=${isMixed}, color=${color}, mixedColor=${mixedColor}`);
+    }
 
-    const decoration = window.createTextEditorDecorationType({
-      backgroundColor: hexToRgba(color, effectiveOpacity),
+    let decorationOptions: any = {
       isWholeLine: true,
       borderWidth: '0 0 0 3px',
       borderStyle: 'solid',
       borderColor: hexToRgba(color, 0.6),
       overviewRulerColor: hexToRgba(color, 0.8),
       overviewRulerLane: 2,
-    });
+    };
+
+    if (isMixed && mixedColor) {
+      // For mixed permissions, blend the two colors
+      console.log(`[DEBUG] ${key}: Creating mixed decoration with AI=${color} and Human=${mixedColor}`);
+      // Mix the colors by averaging the hex values
+      const mixedHex = blendColors(color, mixedColor);
+      decorationOptions.backgroundColor = hexToRgba(mixedHex, effectiveOpacity);
+    } else {
+      // Single color decoration
+      decorationOptions.backgroundColor = hexToRgba(color, effectiveOpacity);
+    }
+
+    const decoration = window.createTextEditorDecorationType(decorationOptions);
     decorationTypes.set(key, decoration);
     disposables.push(decoration);
   });
