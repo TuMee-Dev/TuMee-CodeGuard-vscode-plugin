@@ -295,6 +295,21 @@ export class ColorCustomizerPanel {
 
   // Preview code lines configuration
   private static readonly PREVIEW_LINES = [
+    { content: '// Mixed Permission Example - Shows current mix pattern', ai: null, human: null },
+    { content: '// @guard:ai:r,human:r', ai: 'read', human: 'read' },
+    { content: 'const sharedData = await loadSharedConfiguration();', ai: 'read', human: 'read' },
+    { content: 'const settings = parseSettings(sharedData);', ai: 'read', human: 'read' },
+    { content: 'console.log("Both AI and human can read this");', ai: 'read', human: 'read' },
+    { content: '// @guard:end', ai: 'read', human: 'read' },
+    { content: '', ai: null, human: null },
+    { content: '// @guard:ai:w,human:r', ai: 'write', human: 'read' },
+    { content: 'function processDataWithAI(userData) {', ai: 'write', human: 'read' },
+    { content: '    // AI can modify, humans can only read', ai: 'write', human: 'read' },
+    { content: '    return aiModel.enhance(userData);', ai: 'write', human: 'read' },
+    { content: '}', ai: 'write', human: 'read' },
+    { content: '// @guard:end', ai: 'write', human: 'read' },
+    { content: '', ai: null, human: null },
+    { content: '// Individual Permission Examples', ai: null, human: null },
     { content: '// @guard:ai:w', ai: 'write', human: null },
     { content: 'function generateReport(data: ReportData): string {', ai: 'write', human: null },
     { content: '    const formatted = formatData(data);', ai: 'write', human: null },
@@ -803,7 +818,7 @@ export class ColorCustomizerPanel {
     const javascript = getWebviewJavaScript(ColorCustomizerPanel.PREVIEW_LINES);
     
     const permissionSections = ColorCustomizerPanel.PERMISSION_SECTIONS.map(s => this._generatePermissionSection(s)).join('');
-    const lineNumbers = Array.from({ length: 50 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
+    const lineNumbers = Array.from({ length: 70 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
     const codeLines = ColorCustomizerPanel.PREVIEW_LINES.map((line, i) => this._generateCodeLine(i, line.content)).join('');
 
     return `<!DOCTYPE html>
@@ -823,10 +838,17 @@ export class ColorCustomizerPanel {
                     <div class="preset-selector">
                         <h2>Themes</h2>
                         <div class="theme-controls">
-                            <select id="themeSelect" onchange="applyPreset(this.value)">
+                            <select id="themeSelect" onchange="applyPreset(this.value)" style="width: 45%;">
                                 <option value="">Choose a theme...</option>
                                 ${Object.keys(COLOR_THEMES).map(key =>
     `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
+                            </select>
+                            <select id="mixPatternSelect" onchange="updateMixPattern(this.value)" style="width: 45%; margin-left: 5px;">
+                                <option value="average">Average Blend</option>
+                                <option value="transparentAi">Human Priority</option>
+                                <option value="transparentHuman">AI Priority</option>
+                                <option value="checkerboard">Checkerboard</option>
+                                <option value="verticalSplit">Vertical Split</option>
                             </select>
                             <button class="btn-icon" onclick="addNewTheme()" title="Add new theme">➕</button>
                             <button class="btn-icon" id="deleteThemeBtn" title="Delete theme" style="display: none;">🗑️</button>
