@@ -999,60 +999,11 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           return;
         }
         
-        if (!aiConfig.enabled && !humanConfig.enabled) {
-          bgColor = '';
-        } else if (!aiConfig.enabled) {
-          bgColor = humanConfig.color;
-          opacity = humanConfig.transparency;
-          borderColor = humanConfig.minimapColor || humanConfig.color;
-          borderOpacity = humanConfig.borderOpacity ?? 1.0;
-        } else if (!humanConfig.enabled) {
-          bgColor = aiConfig.color;
-          opacity = aiConfig.transparency;
-          borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity ?? 1.0;
-        } else {
-          // Both are enabled - apply mix pattern
-          const mixPattern = colors.mixPattern || 'average';
-          
-          if (mixPattern === 'transparentHuman') {
-            // AI Priority - use AI color
-            bgColor = aiConfig.color;
-            opacity = aiConfig.transparency;
-            borderColor = aiConfig.minimapColor || aiConfig.color;
-            borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'humanPriority') {
-            // Human Priority - use human color
-            bgColor = humanConfig.color;
-            opacity = humanConfig.transparency;
-            borderColor = humanConfig.minimapColor || humanConfig.color;
-            borderOpacity = humanConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'aiPriority') {
-            // AI Priority - use AI color
-            bgColor = aiConfig.color;
-            opacity = aiConfig.transparency;
-            borderColor = aiConfig.minimapColor || aiConfig.color;
-            borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'aiBorder') {
-            // Human background, AI left border
-            bgColor = humanConfig.color;
-            opacity = humanConfig.transparency;
-            borderColor = aiConfig.minimapColor || aiConfig.color;
-            borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'humanBorder') {
-            // AI background, Human left border
-            bgColor = aiConfig.color;
-            opacity = aiConfig.transparency;
-            borderColor = humanConfig.minimapColor || humanConfig.color;
-            borderOpacity = humanConfig.borderOpacity ?? 1.0;
-          } else {
-            // Average blend (default)
-            bgColor = blendColors(aiConfig.color, humanConfig.color);
-            opacity = (aiConfig.transparency + humanConfig.transparency) / 2;
-            borderColor = aiConfig.minimapColor || aiConfig.color;
-            borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          }
-        }
+        const result = calculatePermissionColors(aiConfig, humanConfig, colors.mixPattern);
+        bgColor = result.bgColor;
+        opacity = result.opacity;
+        borderColor = result.borderColor;
+        borderOpacity = result.borderOpacity;
       } else if (aiPerm) {
         let configKey;
         if (aiPerm === 'context') {
@@ -1120,60 +1071,11 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           return;
         }
         
-        if (!aiConfig.enabled && !humanConfig.enabled) {
-          bgColor = '';
-        } else if (!aiConfig.enabled) {
-          bgColor = humanConfig.color;
-          opacity = humanConfig.transparency;
-          borderColor = humanConfig.minimapColor || humanConfig.color;
-          borderOpacity = humanConfig.borderOpacity ?? 1.0;
-        } else if (!humanConfig.enabled) {
-          bgColor = aiConfig.color;
-          opacity = aiConfig.transparency;
-          borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity ?? 1.0;
-        } else {
-          // Both are enabled - apply mix pattern
-          const mixPattern = colors.mixPattern || 'average';
-          
-          if (mixPattern === 'transparentHuman') {
-            // AI Priority - use AI color
-            bgColor = aiConfig.color;
-            opacity = aiConfig.transparency;
-            borderColor = aiConfig.minimapColor || aiConfig.color;
-            borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'humanPriority') {
-            // Human Priority - use human color
-            bgColor = humanConfig.color;
-            opacity = humanConfig.transparency;
-            borderColor = humanConfig.minimapColor || humanConfig.color;
-            borderOpacity = humanConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'aiPriority') {
-            // AI Priority - use AI color
-            bgColor = aiConfig.color;
-            opacity = aiConfig.transparency;
-            borderColor = aiConfig.minimapColor || aiConfig.color;
-            borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'aiBorder') {
-            // Human background, AI left border
-            bgColor = humanConfig.color;
-            opacity = humanConfig.transparency;
-            borderColor = aiConfig.minimapColor || aiConfig.color;
-            borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'humanBorder') {
-            // AI background, Human left border
-            bgColor = aiConfig.color;
-            opacity = aiConfig.transparency;
-            borderColor = humanConfig.minimapColor || humanConfig.color;
-            borderOpacity = humanConfig.borderOpacity ?? 1.0;
-          } else {
-            // Average blend (default)
-            bgColor = blendColors(aiConfig.color, humanConfig.color);
-            opacity = (aiConfig.transparency + humanConfig.transparency) / 2;
-            borderColor = aiConfig.minimapColor || aiConfig.color;
-            borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          }
-        }
+        const result = calculatePermissionColors(aiConfig, humanConfig, colors.mixPattern);
+        bgColor = result.bgColor;
+        opacity = result.opacity;
+        borderColor = result.borderColor;
+        borderOpacity = result.borderOpacity;
       } else {
         let configKey;
         if (perm === 'context') {
@@ -1230,6 +1132,70 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       const b = Math.round((rgb1.b + rgb2.b) / 2);
       
       return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    }
+    
+    function calculatePermissionColors(aiConfig, humanConfig, mixPattern) {
+      let bgColor = '';
+      let opacity = 1.0;
+      let borderColor = '';
+      let borderOpacity = 1.0;
+      
+      if (!aiConfig.enabled && !humanConfig.enabled) {
+        bgColor = '';
+      } else if (!aiConfig.enabled) {
+        bgColor = humanConfig.color;
+        opacity = humanConfig.transparency;
+        borderColor = humanConfig.minimapColor || humanConfig.color;
+        borderOpacity = humanConfig.borderOpacity ?? 1.0;
+      } else if (!humanConfig.enabled) {
+        bgColor = aiConfig.color;
+        opacity = aiConfig.transparency;
+        borderColor = aiConfig.minimapColor || aiConfig.color;
+        borderOpacity = aiConfig.borderOpacity ?? 1.0;
+      } else {
+        // Both are enabled - apply mix pattern
+        const pattern = mixPattern || 'average';
+        
+        if (pattern === 'transparentHuman') {
+          // AI Priority - use AI color
+          bgColor = aiConfig.color;
+          opacity = aiConfig.transparency;
+          borderColor = aiConfig.minimapColor || aiConfig.color;
+          borderOpacity = aiConfig.borderOpacity ?? 1.0;
+        } else if (pattern === 'humanPriority') {
+          // Human Priority - use human color
+          bgColor = humanConfig.color;
+          opacity = humanConfig.transparency;
+          borderColor = humanConfig.minimapColor || humanConfig.color;
+          borderOpacity = humanConfig.borderOpacity ?? 1.0;
+        } else if (pattern === 'aiPriority') {
+          // AI Priority - use AI color
+          bgColor = aiConfig.color;
+          opacity = aiConfig.transparency;
+          borderColor = aiConfig.minimapColor || aiConfig.color;
+          borderOpacity = aiConfig.borderOpacity ?? 1.0;
+        } else if (pattern === 'aiBorder') {
+          // Human background, AI left border
+          bgColor = humanConfig.color;
+          opacity = humanConfig.transparency;
+          borderColor = aiConfig.minimapColor || aiConfig.color;
+          borderOpacity = aiConfig.borderOpacity ?? 1.0;
+        } else if (pattern === 'humanBorder') {
+          // AI background, Human left border
+          bgColor = aiConfig.color;
+          opacity = aiConfig.transparency;
+          borderColor = humanConfig.minimapColor || humanConfig.color;
+          borderOpacity = humanConfig.borderOpacity ?? 1.0;
+        } else {
+          // Average blend (default)
+          bgColor = blendColors(aiConfig.color, humanConfig.color);
+          opacity = (aiConfig.transparency + humanConfig.transparency) / 2;
+          borderColor = aiConfig.minimapColor || aiConfig.color;
+          borderOpacity = aiConfig.borderOpacity ?? 1.0;
+        }
+      }
+      
+      return { bgColor, opacity, borderColor, borderOpacity };
     }
     
     function hexToRgb(hex) {
