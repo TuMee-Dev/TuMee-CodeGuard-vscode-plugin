@@ -1215,13 +1215,6 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           theme: presetName
         });
         updateDeleteButton();
-      } else {
-        // Clear theme status when no theme selected
-        updateThemeStatus(false);
-        const statusDiv = document.getElementById('themeStatus');
-        if (statusDiv) {
-          statusDiv.style.display = 'none';
-        }
       }
     }
     window.applyPreset = applyPreset;
@@ -1251,9 +1244,8 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       
       const select = document.getElementById('themeSelect');
       if (!select || !select.value) {
+        // This shouldn't happen anymore since we always have a theme
         statusDiv.style.display = 'none';
-        // Re-enable controls when no theme is selected
-        setControlsEnabled(true);
         return;
       }
       
@@ -1417,7 +1409,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       const select = document.getElementById('themeSelect');
       const currentValue = preserveSelection ? select.value : '';
       
-      select.innerHTML = '<option value="">Choose a theme...</option>';
+      select.innerHTML = '';
       
       const builtInGroup = document.createElement('optgroup');
       builtInGroup.label = 'Built-in Themes';
@@ -1449,6 +1441,11 @@ export function getWebviewJavaScript(previewLines: any[]): string {
             break;
           }
         }
+      }
+      
+      // If no theme is selected, default to 'light'
+      if (!select.value && builtIn.length > 0) {
+        select.value = builtIn.includes('light') ? 'light' : builtIn[0];
       }
       
       updateDeleteButton();

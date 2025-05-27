@@ -11,7 +11,7 @@ import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTy
 import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
-import { registerColorCustomizerCommand, DEFAULT_COLORS } from '@/tools/colorCustomizer';
+import { registerColorCustomizerCommand, DEFAULT_COLORS, COLOR_THEMES } from '@/tools/colorCustomizer';
 import { MixPattern, DEFAULT_MIX_PATTERN } from '@/types/mixPatterns';
 import { renderMixPattern, getMixedBorderColor } from '@/utils/mixPatternRenderer';
 import { disposeACLCache } from '@/utils/aclCache';
@@ -235,8 +235,30 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   // Get configured colors and opacity
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
   
-  // Get the complete guard colors configuration, or use DEFAULT_COLORS
-  const guardColorsComplete = config.get<any>('guardColorsComplete') || DEFAULT_COLORS;
+  // First check if a theme is selected
+  const selectedTheme = config.get<string>('selectedTheme');
+  let guardColorsComplete: any;
+  
+  if (selectedTheme) {
+    // Check if it's a built-in theme
+    const builtInTheme = (COLOR_THEMES as any)[selectedTheme];
+    if (builtInTheme) {
+      guardColorsComplete = builtInTheme.colors;
+    } else {
+      // Check custom themes
+      const customThemes = config.get<Record<string, any>>('customThemes', {});
+      if (customThemes[selectedTheme]) {
+        guardColorsComplete = customThemes[selectedTheme];
+      } else {
+        // Fallback to guardColorsComplete or DEFAULT_COLORS
+        guardColorsComplete = config.get<any>('guardColorsComplete') || DEFAULT_COLORS;
+      }
+    }
+  } else {
+    // No theme selected, use guardColorsComplete or DEFAULT_COLORS
+    guardColorsComplete = config.get<any>('guardColorsComplete') || DEFAULT_COLORS;
+  }
+  
   const borderBarEnabled = guardColorsComplete?.borderBarEnabled !== false;
   const mixPattern = guardColorsComplete?.mixPattern || DEFAULT_COLORS.mixPattern;
 

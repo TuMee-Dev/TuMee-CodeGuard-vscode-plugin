@@ -230,7 +230,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
 ];
 
 // Convert theme configs to old format for compatibility
-const COLOR_THEMES: Record<string, { name: string; colors: GuardColors }> = {};
+export const COLOR_THEMES: Record<string, { name: string; colors: GuardColors }> = {};
 THEME_CONFIGS.forEach(theme => {
   COLOR_THEMES[theme.name] = {
     name: theme.name.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
@@ -504,7 +504,20 @@ export class ColorCustomizerPanel {
   private _sendCurrentColors() {
     const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
     const savedColors = config.get<GuardColors>('guardColorsComplete');
-    const colors = savedColors ? mergeWithDefaults(savedColors) : DEFAULT_COLORS;
+    let colors: GuardColors;
+    
+    if (savedColors) {
+      colors = mergeWithDefaults(savedColors);
+    } else {
+      // No saved colors, check if we have a selected theme
+      const selectedTheme = config.get<string>('selectedTheme') || 'light';
+      const theme = COLOR_THEMES[selectedTheme];
+      if (theme) {
+        colors = mergeWithDefaults(theme.colors);
+      } else {
+        colors = DEFAULT_COLORS;
+      }
+    }
 
     void this._panel.webview.postMessage({
       command: 'updateColors',
@@ -576,14 +589,12 @@ export class ColorCustomizerPanel {
   private async _deleteTheme(name: string) {
     // Prevent multiple simultaneous deletions
     if (this._isDeleting) {
-      console.log('Already processing a deletion, ignoring');
       return;
     }
     
     this._isDeleting = true;
     
     try {
-      console.log('_deleteTheme called for:', name);
       // Show confirmation dialog
       const choice = await vscode.window.showWarningMessage(
         `Are you sure you want to delete the theme "${name}"?`,
@@ -592,48 +603,42 @@ export class ColorCustomizerPanel {
       );
       
       if (choice !== 'Delete') {
-        console.log('User cancelled deletion');
         return;
       }
-      console.log('User confirmed deletion');
-    
-    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
-    
-    // Get list of all themes before deletion
-    const allThemes = [...Object.keys(COLOR_THEMES), ...Object.keys(customThemes)];
-    const currentIndex = allThemes.indexOf(name);
-    
-    // Create a shallow copy to avoid proxy issues
-    const updatedThemes = { ...customThemes };
-    delete updatedThemes[name];
-    await config.update('customThemes', updatedThemes, vscode.ConfigurationTarget.Global);
+      
+      const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+      const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+      
+      // Get list of all themes before deletion
+      const allThemes = [...Object.keys(COLOR_THEMES), ...Object.keys(customThemes)];
+      const currentIndex = allThemes.indexOf(name);
+      
+      // Create a shallow copy to avoid proxy issues
+      const updatedThemes = { ...customThemes };
+      delete updatedThemes[name];
+      await config.update('customThemes', updatedThemes, vscode.ConfigurationTarget.Global);
 
-    // Determine next theme to select
-    let nextTheme = '';
-    if (this._currentTheme === name) {
-      // Remove the deleted theme from the list
-      const remainingThemes = allThemes.filter(t => t !== name);
-      console.log('Remaining themes:', remainingThemes);
-      
-      if (remainingThemes.length > 0) {
-        // Select the next theme in the list, or the previous one if we deleted the last theme
-        const nextIndex = Math.min(currentIndex, remainingThemes.length - 1);
-        nextTheme = remainingThemes[nextIndex];
-        console.log('Next theme to select:', nextTheme);
+      // Determine next theme to select
+      let nextTheme = '';
+      if (this._currentTheme === name) {
+        // Remove the deleted theme from the list
+        const remainingThemes = allThemes.filter(t => t !== name);
+        
+        if (remainingThemes.length > 0) {
+          // Select the next theme in the list, or the previous one if we deleted the last theme
+          const nextIndex = Math.min(currentIndex, remainingThemes.length - 1);
+          nextTheme = remainingThemes[nextIndex];
+        }
+        
+        // Apply the next theme or clear if no themes left
+        if (nextTheme) {
+          await this._applyTheme(nextTheme);
+        } else {
+          this._currentTheme = '';
+          this._isSystemTheme = false;
+          await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+        }
       }
-      
-      // Apply the next theme or clear if no themes left
-      if (nextTheme) {
-        console.log('Applying next theme:', nextTheme);
-        await this._applyTheme(nextTheme);
-      } else {
-        console.log('No themes left, clearing selection');
-        this._currentTheme = '';
-        this._isSystemTheme = false;
-        await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
-      }
-    }
 
       void vscode.window.showInformationMessage(`Theme '${name}' deleted successfully!`);
       
@@ -735,21 +740,27 @@ export class ColorCustomizerPanel {
       this._sendCurrentColors();
 
       const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-      const selectedTheme = config.get<string>('selectedTheme');
-      if (selectedTheme) {
-        this._currentTheme = selectedTheme;
-        this._isSystemTheme = !!COLOR_THEMES[selectedTheme];
-
-        void this._panel.webview.postMessage({
-          command: 'setSelectedTheme',
-          theme: selectedTheme
-        });
-
-        void this._panel.webview.postMessage({
-          command: 'setThemeType',
-          isSystem: this._isSystemTheme
-        });
+      let selectedTheme = config.get<string>('selectedTheme');
+      
+      // If no theme is selected, default to 'light'
+      if (!selectedTheme) {
+        selectedTheme = 'light';
+        // Save the default theme selection
+        void config.update('selectedTheme', selectedTheme, vscode.ConfigurationTarget.Global);
       }
+      
+      this._currentTheme = selectedTheme;
+      this._isSystemTheme = !!COLOR_THEMES[selectedTheme];
+
+      void this._panel.webview.postMessage({
+        command: 'setSelectedTheme',
+        theme: selectedTheme
+      });
+
+      void this._panel.webview.postMessage({
+        command: 'setThemeType',
+        isSystem: this._isSystemTheme
+      });
     }, 100);
   }
 
@@ -841,7 +852,6 @@ export class ColorCustomizerPanel {
                         <h2>Themes</h2>
                         <div class="theme-controls">
                             <select id="themeSelect" onchange="applyPreset(this.value)" style="width: 45%;">
-                                <option value="">Choose a theme...</option>
                                 ${Object.keys(COLOR_THEMES).map(key =>
     `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
                             </select>
