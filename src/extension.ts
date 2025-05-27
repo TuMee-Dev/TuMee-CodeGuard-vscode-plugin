@@ -592,28 +592,31 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     const aiPerm = parts[0];
     const humanPerm = parts[1] || '';
     
+    // Check if the permission is enabled before applying border/minimap colors
+    const isPermissionEnabled = permissionEnabledStates[aiPerm] !== false;
+    
     // Get the actual border opacity value, defaulting to 1.0 ONLY if not set
-    const borderOpacity = permissionBorderOpacities[aiPerm] ?? 1.0;
+    const borderOpacity = isPermissionEnabled ? (permissionBorderOpacities[aiPerm] ?? 1.0) : 0;
     const minimapColor = permissionMinimapColors[aiPerm] || color;
     
     // Debug logging
     if (key.includes('Write')) {
-      console.log(`[DEBUG] ${key}: borderOpacity=${borderOpacity}, from ${aiPerm}, stored value=${permissionBorderOpacities[aiPerm]}`);
+      console.log(`[DEBUG] ${key}: borderOpacity=${borderOpacity}, from ${aiPerm}, enabled=${isPermissionEnabled}, stored value=${permissionBorderOpacities[aiPerm]}`);
     }
     
-    // Only add border if borderBarEnabled is true AND border opacity > 0
-    if (borderBarEnabled && borderOpacity > 0) {
+    // Only add border if borderBarEnabled is true AND border opacity > 0 AND permission is enabled
+    if (borderBarEnabled && borderOpacity > 0 && isPermissionEnabled) {
       decorationOptions.borderWidth = '0 0 0 3px';
       decorationOptions.borderStyle = 'solid';
       decorationOptions.borderColor = hexToRgba(minimapColor, borderOpacity);
     }
     
-    // Only add overview ruler if border opacity > 0
-    if (borderOpacity > 0) {
+    // Only add overview ruler if border opacity > 0 AND permission is enabled
+    if (borderOpacity > 0 && isPermissionEnabled) {
       decorationOptions.overviewRulerColor = hexToRgba(minimapColor, borderOpacity);
       decorationOptions.overviewRulerLane = 2;
     } else {
-      // Remove overview ruler properties if opacity is 0
+      // Remove overview ruler properties if opacity is 0 or permission is disabled
       delete decorationOptions.overviewRulerColor;
       delete decorationOptions.overviewRulerLane;
     }
