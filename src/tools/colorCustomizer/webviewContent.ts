@@ -528,6 +528,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     let currentColors = null;
     let savedColors = null;
     let hasChanges = false;
+    let isLoadingTheme = true; // Start as loading until we get initial colors
     let colorLinks = {};
     const PREVIEW_LINES = ${JSON.stringify(previewLines)};
     
@@ -541,8 +542,8 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       // Set up permission example click handlers
       setupPermissionExampleHandlers();
       
-      // Initialize button states
-      updateButtonStates();
+      // Don't initialize button states here - wait for colors to load
+      // updateButtonStates();
       
       const themeNameInput = document.getElementById('themeNameInput');
       if (themeNameInput) {
@@ -755,7 +756,12 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     window.updateSlider = updateSlider;
     
     function checkForChanges() {
-      if (!savedColors) return;
+      if (!savedColors || isLoadingTheme) {
+        // No baseline to compare against yet, or we're loading a theme
+        hasChanges = false;
+        updateButtonStates();
+        return;
+      }
       
       const currentColors = getColors();
       hasChanges = !colorsEqual(currentColors, savedColors);
@@ -793,24 +799,20 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     }
     
     function updateButtonStates() {
-      const applyButton = document.querySelector('.btn-primary');
-      const resetButton = document.querySelector('.btn-secondary');
+      // Find buttons more specifically to avoid selecting dialog buttons
+      const buttons = document.querySelectorAll('.control-footer .btn');
       
-      if (applyButton && applyButton.textContent === 'Apply Colors') {
-        // If no saved colors yet, we haven't loaded initial state, so disable the button
-        const shouldEnable = savedColors !== null && hasChanges;
-        applyButton.disabled = !shouldEnable;
-        applyButton.style.opacity = shouldEnable ? '1' : '0.5';
-        applyButton.style.cursor = shouldEnable ? 'pointer' : 'not-allowed';
-      }
-      
-      if (resetButton && resetButton.textContent === 'Reset') {
-        // Reset should also be disabled initially
-        const shouldEnable = savedColors !== null && hasChanges;
-        resetButton.disabled = !shouldEnable;
-        resetButton.style.opacity = shouldEnable ? '1' : '0.5';
-        resetButton.style.cursor = shouldEnable ? 'pointer' : 'not-allowed';
-      }
+      buttons.forEach(button => {
+        if (button.textContent === 'Apply Colors') {
+          button.disabled = !hasChanges;
+          button.style.opacity = hasChanges ? '1' : '0.5';
+          button.style.cursor = hasChanges ? 'pointer' : 'not-allowed';
+        } else if (button.textContent === 'Reset') {
+          button.disabled = !hasChanges;
+          button.style.opacity = hasChanges ? '1' : '0.5';
+          button.style.cursor = hasChanges ? 'pointer' : 'not-allowed';
+        }
+      });
     }
     
     function updatePreview() {
@@ -1038,6 +1040,9 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     function updateAllColors(colors) {
       if (!colors || !colors.permissions) return;
       
+      // We're about to update all colors from the extension
+      isLoadingTheme = true;
+      
       Object.entries(colors.permissions).forEach(([key, config]) => {
         const enabledElem = document.getElementById(key + '-enabled');
         if (enabledElem) {
@@ -1079,14 +1084,16 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       
       updatePreview();
       
-      // Save the colors as the new baseline
+      // Now save the new baseline after all UI is updated
       savedColors = JSON.parse(JSON.stringify(colors));
       hasChanges = false;
+      isLoadingTheme = false;
       updateButtonStates();
     }
     
     function applyPreset(presetName) {
       if (presetName) {
+        isLoadingTheme = true;
         vscode.postMessage({
           command: 'applyTheme',
           theme: presetName
@@ -1189,13 +1196,8 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         icon.style.pointerEvents = enabled ? 'auto' : 'none';
       });
       
-      // Enable/disable Apply Colors button
-      const applyButton = document.querySelector('.btn-primary');
-      if (applyButton && applyButton.textContent === 'Apply Colors') {
-        applyButton.disabled = !enabled;
-        applyButton.style.opacity = enabled ? '1' : '0.3';
-        applyButton.style.cursor = enabled ? 'pointer' : 'not-allowed';
-      }
+      // Remove this - Apply Colors state should only be controlled by hasChanges
+      // Don't enable/disable based on theme type
       
       // Update visual feedback for permission sections
       const sections = document.querySelectorAll('.permission-section');
