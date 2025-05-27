@@ -13,6 +13,7 @@ import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
 import { registerColorCustomizerCommand, DEFAULT_COLORS } from '@/tools/colorCustomizer';
 import { MixPattern, DEFAULT_MIX_PATTERN } from '@/types/mixPatterns';
+import { renderMixPattern, getMixedBorderColor } from '@/utils/mixPatternRenderer';
 import { disposeACLCache } from '@/utils/aclCache';
 import { performanceMonitor } from '@/utils/performanceMonitor';
 import { configValidator } from '@/utils/configValidator';
@@ -216,6 +217,20 @@ export async function activate(context: ExtensionContext) {
   }
 }
 
+interface PermissionColorInfo {
+  color: string;
+  opacity: number;
+  isMixed?: boolean;
+  mixedColor?: string;
+  aiOpacity?: number;
+  humanOpacity?: number;
+  aiMinimapColor?: string;
+  humanMinimapColor?: string;
+  aiBorderOpacity?: number;
+  humanBorderOpacity?: number;
+  mixPattern?: MixPattern;
+}
+
 function initializeCodeDecorations(_context: ExtensionContext) {
   // Get configured colors and opacity
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
@@ -330,7 +345,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   decorationTypes.clear();
 
   // Helper function to get the color for a permission combination
-  const getPermissionColor = (key: string): { color: string, opacity: number, isMixed?: boolean, mixedColor?: string } => {
+  const getPermissionColor = (key: string): PermissionColorInfo => {
 
     // Check if there's a custom color for this exact combination
     const customColor = (colors as Record<string, any>)[key] as string | undefined;
@@ -432,7 +447,14 @@ function initializeCodeDecorations(_context: ExtensionContext) {
             color: aiColor,
             opacity: effectiveOpacity,
             mixedColor: humanColor,
-            isMixed: true
+            isMixed: true,
+            aiOpacity: permissionTransparencies[aiKey] || opacity,
+            humanOpacity: permissionTransparencies[humanKey] || opacity,
+            aiMinimapColor: permissionMinimapColors[aiKey],
+            humanMinimapColor: permissionMinimapColors[humanKey],
+            aiBorderOpacity: permissionBorderOpacities[aiKey],
+            humanBorderOpacity: permissionBorderOpacities[humanKey],
+            mixPattern: mixPattern
           };
         } else if (aiEnabled) {
           // Only AI enabled - use AI color
@@ -464,10 +486,21 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       } else {
         // Both are at default values - check which one to show based on enabled state
         if (aiEnabled && humanEnabled) {
-          // Both enabled at default - check if we should show one or blend
-          // For now, show human color since it's the "active" permission for humans
-          baseColor = humanColor;
-          effectiveOpacity = permissionTransparencies[humanKey] || opacity;
+          // Both enabled at default - use mixed pattern
+          console.log(`[DEBUG] ${key}: Both at default, using mixed pattern`);
+          return {
+            color: aiColor,
+            opacity: effectiveOpacity,
+            mixedColor: humanColor,
+            isMixed: true,
+            aiOpacity: permissionTransparencies[aiKey] || opacity,
+            humanOpacity: permissionTransparencies[humanKey] || opacity,
+            aiMinimapColor: permissionMinimapColors[aiKey],
+            humanMinimapColor: permissionMinimapColors[humanKey],
+            aiBorderOpacity: permissionBorderOpacities[aiKey],
+            humanBorderOpacity: permissionBorderOpacities[humanKey],
+            mixPattern: mixPattern
+          };
         } else if (humanEnabled) {
           // Only human enabled
           baseColor = humanColor;
@@ -515,7 +548,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   permissionCombinations.forEach(key => {
 
     const colorInfo = getPermissionColor(key);
-    const { color, opacity: effectiveOpacity, isMixed, mixedColor } = colorInfo as any;
+    const { color, opacity: effectiveOpacity, isMixed, mixedColor } = colorInfo;
 
     // Skip creating decoration if opacity is 0 (disabled permissions)
     if (effectiveOpacity === 0) {
@@ -566,11 +599,52 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     // Only add background color if transparency > 0
     if (effectiveOpacity > 0) {
       if (isMixed && mixedColor) {
-        // For mixed permissions, blend the two colors
-        console.log(`[DEBUG] ${key}: Creating mixed decoration with AI=${color} and Human=${mixedColor}`);
-        // Mix the colors by averaging the hex values
-        const mixedHex = blendColors(color, mixedColor);
-        decorationOptions.backgroundColor = hexToRgba(mixedHex, effectiveOpacity);
+        // For mixed permissions, use the mix pattern renderer
+        console.log(`[DEBUG] ${key}: Creating mixed decoration with pattern=${colorInfo.mixPattern}`);
+        
+        const mixResult = renderMixPattern(colorInfo.mixPattern || MixPattern.AVERAGE, {
+          aiColor: color,
+          humanColor: mixedColor,
+          aiOpacity: colorInfo.aiOpacity || effectiveOpacity,
+          humanOpacity: colorInfo.humanOpacity || effectiveOpacity,
+          aiMinimapColor: colorInfo.aiMinimapColor,
+          humanMinimapColor: colorInfo.humanMinimapColor,
+          aiBorderOpacity: colorInfo.aiBorderOpacity,
+          humanBorderOpacity: colorInfo.humanBorderOpacity
+        });
+        
+        // Apply the mix pattern result
+        if (mixResult.backgroundColor) {
+          decorationOptions.backgroundColor = mixResult.backgroundColor;
+        }
+        if (mixResult.borderColor) {
+          decorationOptions.borderColor = mixResult.borderColor;
+        }
+        if (mixResult.borderWidth) {
+          decorationOptions.borderWidth = mixResult.borderWidth;
+        }
+        if (mixResult.borderStyle) {
+          decorationOptions.borderStyle = mixResult.borderStyle;
+        }
+        
+        // Update minimap color for mixed patterns
+        const mixedBorderColor = getMixedBorderColor(colorInfo.mixPattern || MixPattern.AVERAGE, {
+          aiColor: color,
+          humanColor: mixedColor,
+          aiOpacity: colorInfo.aiOpacity || effectiveOpacity,
+          humanOpacity: colorInfo.humanOpacity || effectiveOpacity,
+          aiMinimapColor: colorInfo.aiMinimapColor,
+          humanMinimapColor: colorInfo.humanMinimapColor,
+          aiBorderOpacity: colorInfo.aiBorderOpacity,
+          humanBorderOpacity: colorInfo.humanBorderOpacity
+        });
+        
+        if (mixedBorderColor && borderBarEnabled && borderOpacity > 0) {
+          decorationOptions.borderColor = mixedBorderColor;
+        }
+        if (mixedBorderColor && borderOpacity > 0) {
+          decorationOptions.overviewRulerColor = mixedBorderColor;
+        }
       } else {
         // Single color decoration
         decorationOptions.backgroundColor = hexToRgba(color, effectiveOpacity);

@@ -90,7 +90,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextWrite: { enabled: true, color: '#1E90FF', transparency: 0.15 }
     },
     borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
+    mixPattern: MixPattern.HUMAN_BORDER
   },
   {
     name: 'dark',
@@ -105,7 +105,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextWrite: { enabled: true, color: '#4682B4', transparency: 0.3 }
     },
     borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
+    mixPattern: MixPattern.HUMAN_BORDER
   },
   {
     name: 'highContrast',
@@ -120,7 +120,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextWrite: { enabled: true, color: '#FF00FF', transparency: 1.0 }
     },
     borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
+    mixPattern: MixPattern.HUMAN_BORDER
   },
   {
     name: 'colorblind',
@@ -135,7 +135,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextWrite: { enabled: true, color: '#F0E442', transparency: 0.3 }
     },
     borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
+    mixPattern: MixPattern.HUMAN_BORDER
   },
   {
     name: 'ocean',
@@ -150,7 +150,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextWrite: { enabled: true, color: '#00BFFF', transparency: 0.3 }
     },
     borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
+    mixPattern: MixPattern.HUMAN_BORDER
   },
   {
     name: 'sunset',
@@ -165,7 +165,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextWrite: { enabled: true, color: '#FFA500', transparency: 0.3 }
     },
     borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
+    mixPattern: MixPattern.HUMAN_BORDER
   },
   {
     name: 'matrix',
@@ -180,7 +180,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextWrite: { enabled: true, color: '#9ACD32', transparency: 0.3 }
     },
     borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
+    mixPattern: MixPattern.HUMAN_BORDER
   },
   {
     name: 'neon',
@@ -195,7 +195,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextWrite: { enabled: true, color: '#FF69B4', transparency: 0.5 }
     },
     borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
+    mixPattern: MixPattern.HUMAN_BORDER
   },
   {
     name: 'pastel',
@@ -210,7 +210,7 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextWrite: { enabled: true, color: '#F5DEB3', transparency: 0.4 }
     },
     borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
+    mixPattern: MixPattern.HUMAN_BORDER
   },
   {
     name: 'cyberpunk',
@@ -503,7 +503,8 @@ export class ColorCustomizerPanel {
 
   private _sendCurrentColors() {
     const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    const colors = config.get<GuardColors>('guardColorsComplete') || DEFAULT_COLORS;
+    const savedColors = config.get<GuardColors>('guardColorsComplete');
+    const colors = savedColors ? mergeWithDefaults(savedColors) : DEFAULT_COLORS;
 
     void this._panel.webview.postMessage({
       command: 'updateColors',
@@ -529,12 +530,13 @@ export class ColorCustomizerPanel {
 
       // Update colors without showing notification
       const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-      await config.update('guardColorsComplete', theme.colors, vscode.ConfigurationTarget.Global);
+      const mergedColors = mergeWithDefaults(theme.colors);
+      await config.update('guardColorsComplete', mergedColors, vscode.ConfigurationTarget.Global);
       await config.update('selectedTheme', themeName, vscode.ConfigurationTarget.Global);
 
       void this._panel.webview.postMessage({
         command: 'updateColors',
-        colors: theme.colors
+        colors: mergedColors
       });
 
       // Send theme type info to webview
@@ -844,11 +846,11 @@ export class ColorCustomizerPanel {
     `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
                             </select>
                             <select id="mixPatternSelect" onchange="updateMixPattern(this.value)" style="width: 45%; margin-left: 5px;">
+                                <option value="aiBorder">AI Border</option>
+                                <option value="aiPriority">AI Priority</option>
                                 <option value="average">Average Blend</option>
-                                <option value="transparentAi">Human Priority</option>
-                                <option value="transparentHuman">AI Priority</option>
-                                <option value="checkerboard">Checkerboard</option>
-                                <option value="verticalSplit">Vertical Split</option>
+                                <option value="humanBorder">Human Border</option>
+                                <option value="humanPriority">Human Priority</option>
                             </select>
                             <button class="btn-icon" onclick="addNewTheme()" title="Add new theme">➕</button>
                             <button class="btn-icon" id="deleteThemeBtn" title="Delete theme" style="display: none;">🗑️</button>

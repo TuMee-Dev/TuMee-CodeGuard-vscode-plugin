@@ -1,9 +1,9 @@
 export enum MixPattern {
-  AVERAGE = 'average',           // Current behavior - average RGB values
-  TRANSPARENT_AI = 'transparentAi',      // AI color wins
-  TRANSPARENT_HUMAN = 'transparentHuman',  // Human color wins
-  CHECKERBOARD = 'checkerboard',     // Alternating pattern
-  VERTICAL_SPLIT = 'verticalSplit'    // 50/50 vertical split
+  AVERAGE = 'average',                 // Average RGB values
+  HUMAN_PRIORITY = 'humanPriority',    // Human color only
+  AI_PRIORITY = 'aiPriority',          // AI color only
+  AI_BORDER = 'aiBorder',              // Human background with AI left border
+  HUMAN_BORDER = 'humanBorder'         // AI background with Human left border
 }
 
 export interface MixPatternDefinition {
@@ -19,25 +19,25 @@ export const MIX_PATTERNS: MixPatternDefinition[] = [
     description: 'Blend AI and human colors equally'
   },
   {
-    id: MixPattern.TRANSPARENT_AI,
+    id: MixPattern.HUMAN_PRIORITY,
     name: 'Human Priority',
     description: 'Human color takes precedence'
   },
   {
-    id: MixPattern.TRANSPARENT_HUMAN,
+    id: MixPattern.AI_PRIORITY,
     name: 'AI Priority', 
     description: 'AI color takes precedence'
   },
   {
-    id: MixPattern.CHECKERBOARD,
-    name: 'Checkerboard',
-    description: 'Alternating pattern of AI and human colors'
+    id: MixPattern.AI_BORDER,
+    name: 'AI Border',
+    description: 'Human background with AI left border'
   },
   {
-    id: MixPattern.VERTICAL_SPLIT,
-    name: 'Vertical Split',
-    description: '50/50 split with AI on left, human on right'
+    id: MixPattern.HUMAN_BORDER,
+    name: 'Human Border',
+    description: 'AI background with Human left border'
   }
 ];
 
-export const DEFAULT_MIX_PATTERN = MixPattern.AVERAGE;
+export const DEFAULT_MIX_PATTERN = MixPattern.HUMAN_BORDER;

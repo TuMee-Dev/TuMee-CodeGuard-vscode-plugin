@@ -542,6 +542,12 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       // Set up permission example click handlers
       setupPermissionExampleHandlers();
       
+      // Initialize mix pattern dropdown to default if not set
+      const mixPatternSelect = document.getElementById('mixPatternSelect');
+      if (mixPatternSelect && !mixPatternSelect.value) {
+        mixPatternSelect.value = 'humanBorder';
+      }
+      
       // Don't initialize button states here - wait for colors to load
       // updateButtonStates();
       
@@ -886,14 +892,32 @@ export function getWebviewJavaScript(previewLines: any[]): string {
             opacity = aiConfig.transparency;
             borderColor = aiConfig.minimapColor || aiConfig.color;
             borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'transparentAi') {
+          } else if (mixPattern === 'humanPriority') {
             // Human Priority - use human color
             bgColor = humanConfig.color;
             opacity = humanConfig.transparency;
             borderColor = humanConfig.minimapColor || humanConfig.color;
             borderOpacity = humanConfig.borderOpacity ?? 1.0;
+          } else if (mixPattern === 'aiPriority') {
+            // AI Priority - use AI color
+            bgColor = aiConfig.color;
+            opacity = aiConfig.transparency;
+            borderColor = aiConfig.minimapColor || aiConfig.color;
+            borderOpacity = aiConfig.borderOpacity ?? 1.0;
+          } else if (mixPattern === 'aiBorder') {
+            // Human background, AI left border
+            bgColor = humanConfig.color;
+            opacity = humanConfig.transparency;
+            borderColor = aiConfig.minimapColor || aiConfig.color;
+            borderOpacity = aiConfig.borderOpacity ?? 1.0;
+          } else if (mixPattern === 'humanBorder') {
+            // AI background, Human left border
+            bgColor = aiConfig.color;
+            opacity = aiConfig.transparency;
+            borderColor = humanConfig.minimapColor || humanConfig.color;
+            borderOpacity = humanConfig.borderOpacity ?? 1.0;
           } else {
-            // Average blend (default for other patterns in preview)
+            // Average blend (default)
             bgColor = blendColors(aiConfig.color, humanConfig.color);
             opacity = (aiConfig.transparency + humanConfig.transparency) / 2;
             borderColor = aiConfig.minimapColor || aiConfig.color;
@@ -983,14 +1007,32 @@ export function getWebviewJavaScript(previewLines: any[]): string {
             opacity = aiConfig.transparency;
             borderColor = aiConfig.minimapColor || aiConfig.color;
             borderOpacity = aiConfig.borderOpacity ?? 1.0;
-          } else if (mixPattern === 'transparentAi') {
+          } else if (mixPattern === 'humanPriority') {
             // Human Priority - use human color
             bgColor = humanConfig.color;
             opacity = humanConfig.transparency;
             borderColor = humanConfig.minimapColor || humanConfig.color;
             borderOpacity = humanConfig.borderOpacity ?? 1.0;
+          } else if (mixPattern === 'aiPriority') {
+            // AI Priority - use AI color
+            bgColor = aiConfig.color;
+            opacity = aiConfig.transparency;
+            borderColor = aiConfig.minimapColor || aiConfig.color;
+            borderOpacity = aiConfig.borderOpacity ?? 1.0;
+          } else if (mixPattern === 'aiBorder') {
+            // Human background, AI left border
+            bgColor = humanConfig.color;
+            opacity = humanConfig.transparency;
+            borderColor = aiConfig.minimapColor || aiConfig.color;
+            borderOpacity = aiConfig.borderOpacity ?? 1.0;
+          } else if (mixPattern === 'humanBorder') {
+            // AI background, Human left border
+            bgColor = aiConfig.color;
+            opacity = aiConfig.transparency;
+            borderColor = humanConfig.minimapColor || humanConfig.color;
+            borderOpacity = humanConfig.borderOpacity ?? 1.0;
           } else {
-            // Average blend (default for other patterns in preview)
+            // Average blend (default)
             bgColor = blendColors(aiConfig.color, humanConfig.color);
             opacity = (aiConfig.transparency + humanConfig.transparency) / 2;
             borderColor = aiConfig.minimapColor || aiConfig.color;
@@ -1092,12 +1134,12 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       });
       
       const mixPatternElem = document.getElementById('mixPatternSelect');
-      const mixPattern = mixPatternElem ? mixPatternElem.value : 'average';
+      const mixPattern = mixPatternElem ? mixPatternElem.value : 'humanBorder';
       
       return {
         permissions: permissions,
         borderBarEnabled: true,
-        mixPattern: mixPattern
+        mixPattern: mixPattern || 'humanBorder'
       };
     }
     
@@ -1148,11 +1190,13 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       
       updatePreview();
       
-      // Update mix pattern if provided
-      if (colors.mixPattern) {
-        const mixPatternElem = document.getElementById('mixPatternSelect');
-        if (mixPatternElem) {
+      // Update mix pattern if provided, default to humanBorder
+      const mixPatternElem = document.getElementById('mixPatternSelect');
+      if (mixPatternElem) {
+        if (colors.mixPattern) {
           mixPatternElem.value = colors.mixPattern;
+        } else if (!mixPatternElem.value) {
+          mixPatternElem.value = 'humanBorder';
         }
       }
       
