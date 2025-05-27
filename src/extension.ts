@@ -587,21 +587,39 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     };
 
     // Get the border opacity for this permission
+    // For single permissions, use that permission's border settings
     // For mixed permissions, we need to determine which permission's border to use
     const parts = key.split('_');
     const aiPerm = parts[0];
     const humanPerm = parts[1] || '';
     
+    // If this is a single permission (no humanPerm), use the primary color's settings
+    let borderPermKey = aiPerm;
+    let borderColor = color; // Use the primary color by default
+    
+    // For mixed permissions, determine which permission differs from default
+    if (humanPerm) {
+      const defaults = getDefaultPermissions();
+      const defaultAiPerm = `ai${defaults.ai === 'r' ? 'Read' : defaults.ai === 'w' ? 'Write' : 'NoAccess'}`;
+      const defaultHumanPerm = `human${defaults.human === 'r' ? 'Read' : defaults.human === 'w' ? 'Write' : 'NoAccess'}`;
+      
+      // Use the permission that differs from default
+      if (aiPerm === defaultAiPerm && humanPerm !== defaultHumanPerm) {
+        borderPermKey = humanPerm;
+        borderColor = mixedColor || color;
+      }
+    }
+    
     // Check if the permission is enabled before applying border/minimap colors
-    const isPermissionEnabled = permissionEnabledStates[aiPerm] !== false;
+    const isPermissionEnabled = permissionEnabledStates[borderPermKey] !== false;
     
     // Get the actual border opacity value, defaulting to 1.0 ONLY if not set
-    const borderOpacity = isPermissionEnabled ? (permissionBorderOpacities[aiPerm] ?? 1.0) : 0;
-    const minimapColor = permissionMinimapColors[aiPerm] || color;
+    const borderOpacity = isPermissionEnabled ? (permissionBorderOpacities[borderPermKey] ?? 1.0) : 0;
+    const minimapColor = permissionMinimapColors[borderPermKey] || borderColor;
     
     // Debug logging
-    if (key.includes('Write')) {
-      console.log(`[DEBUG] ${key}: borderOpacity=${borderOpacity}, from ${aiPerm}, enabled=${isPermissionEnabled}, stored value=${permissionBorderOpacities[aiPerm]}`);
+    if (key.includes('Write') || key.includes('Read')) {
+      console.log(`[DEBUG] ${key}: borderOpacity=${borderOpacity}, from ${borderPermKey}, enabled=${isPermissionEnabled}, stored value=${permissionBorderOpacities[borderPermKey]}`);
     }
     
     // Only add border if borderBarEnabled is true AND border opacity > 0 AND permission is enabled
