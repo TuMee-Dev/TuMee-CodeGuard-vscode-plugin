@@ -394,7 +394,7 @@ export class ColorCustomizerPanel {
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
     this._panel.webview.onDidReceiveMessage(
-      async (message: { command: string; colors?: GuardColors; theme?: string; name?: string }) => {
+      async (message: { command: string; colors?: GuardColors; theme?: string; name?: string; defaultAiWrite?: boolean; defaultHumanWrite?: boolean }) => {
         switch (message.command) {
           case 'saveColors':
             if (message.colors) {
@@ -427,6 +427,9 @@ export class ColorCustomizerPanel {
             return;
           case 'requestThemeList':
             this._sendThemeList();
+            return;
+          case 'saveDefaultPermissions':
+            await this._saveDefaultPermissions(message.defaultAiWrite || false, message.defaultHumanWrite || false);
             return;
         }
       },
@@ -658,6 +661,12 @@ export class ColorCustomizerPanel {
     }
   }
 
+  private async _saveDefaultPermissions(defaultAiWrite: boolean, defaultHumanWrite: boolean) {
+    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+    await config.update('defaultAiWrite', defaultAiWrite, vscode.ConfigurationTarget.Global);
+    await config.update('defaultHumanWrite', defaultHumanWrite, vscode.ConfigurationTarget.Global);
+  }
+
   private async _exportTheme() {
     const colors = await this._getCurrentColorsFromWebview();
     if (colors) {
@@ -761,6 +770,16 @@ export class ColorCustomizerPanel {
         command: 'setThemeType',
         isSystem: this._isSystemTheme
       });
+
+      // Restore default permissions from user preferences
+      const defaultAiWrite = config.get<boolean>('defaultAiWrite', false);
+      const defaultHumanWrite = config.get<boolean>('defaultHumanWrite', true);
+      
+      void this._panel.webview.postMessage({
+        command: 'restoreDefaultPermissions',
+        defaultAiWrite: defaultAiWrite,
+        defaultHumanWrite: defaultHumanWrite
+      });
     }, 100);
   }
 
@@ -831,7 +850,7 @@ export class ColorCustomizerPanel {
     const javascript = getWebviewJavaScript(ColorCustomizerPanel.PREVIEW_LINES);
     
     const permissionSections = ColorCustomizerPanel.PERMISSION_SECTIONS.map(s => this._generatePermissionSection(s)).join('');
-    const lineNumbers = Array.from({ length: 70 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
+    const lineNumbers = Array.from({ length: 65 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
     const codeLines = ColorCustomizerPanel.PREVIEW_LINES.map((line, i) => this._generateCodeLine(i, line.content)).join('');
 
     return `<!DOCTYPE html>
@@ -890,6 +909,17 @@ export class ColorCustomizerPanel {
             <div class="preview-panel">
                 <div class="preview-scrollable">
                     <h1>Live Preview</h1>
+                    
+                    <div class="preview-controls">
+                        <label>
+                            <input type="checkbox" id="defaultAiWrite" onchange="updateDefaultPermissions()">
+                            <span>AI Write</span>
+                        </label>
+                        <label>
+                            <input type="checkbox" id="defaultHumanWrite" checked onchange="updateDefaultPermissions()">
+                            <span>Human Write</span>
+                        </label>
+                    </div>
                     
                     <div class="code-preview">
                         <div class="editor-container">

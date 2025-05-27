@@ -504,6 +504,32 @@ export function getWebviewStyles(): string {
       background-color: var(--vscode-list-activeSelectionBackground);
     }
     
+    .preview-controls {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 15px;
+      align-items: center;
+      padding: 10px;
+      background: var(--vscode-input-background);
+      border-radius: 4px;
+      border: 1px solid var(--vscode-panel-border);
+    }
+    
+    .preview-controls label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .preview-controls input[type="checkbox"] {
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
+    }
+    
     .split-context {
       display: flex;
       padding: 0;
@@ -630,6 +656,22 @@ export function getWebviewJavaScript(previewLines: any[]): string {
               updateThemeStatus(false);
             }
           }
+          break;
+        case 'restoreDefaultPermissions':
+          if (message.defaultAiWrite !== undefined) {
+            const aiWriteCheckbox = document.getElementById('defaultAiWrite');
+            if (aiWriteCheckbox) {
+              aiWriteCheckbox.checked = message.defaultAiWrite;
+            }
+          }
+          if (message.defaultHumanWrite !== undefined) {
+            const humanWriteCheckbox = document.getElementById('defaultHumanWrite');
+            if (humanWriteCheckbox) {
+              humanWriteCheckbox.checked = message.defaultHumanWrite;
+            }
+          }
+          // Update preview with restored defaults
+          updatePreview();
           break;
       }
     });
@@ -785,8 +827,6 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     function colorsEqual(colors1, colors2) {
       if (!colors1 || !colors2) return false;
       
-      // Check borderBarEnabled
-      if (colors1.borderBarEnabled !== colors2.borderBarEnabled) return false;
       
       // Check mixPattern
       if (colors1.mixPattern !== colors2.mixPattern) return false;
@@ -832,12 +872,38 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       });
     }
     
+    function getDefaultPermissions() {
+      const aiWriteCheckbox = document.getElementById('defaultAiWrite');
+      const humanWriteCheckbox = document.getElementById('defaultHumanWrite');
+      
+      const aiDefault = (aiWriteCheckbox && aiWriteCheckbox.checked) ? 'write' : 'read';
+      const humanDefault = (humanWriteCheckbox && humanWriteCheckbox.checked) ? 'write' : 'read';
+      
+      return { ai: aiDefault, human: humanDefault };
+    }
+    
+    function updateDefaultPermissions() {
+      updatePreview();
+      // Save the default permissions to user preferences
+      const defaults = getDefaultPermissions();
+      vscode.postMessage({
+        command: 'saveDefaultPermissions',
+        defaultAiWrite: defaults.ai === 'write',
+        defaultHumanWrite: defaults.human === 'write'
+      });
+    }
+    window.updateDefaultPermissions = updateDefaultPermissions;
+    
     function updatePreview() {
       const colors = getColors();
       currentColors = colors;
+      const defaults = getDefaultPermissions();
       
       PREVIEW_LINES.forEach((config, index) => {
-        updateLine(index + 1, config.ai, config.human);
+        // Always use both permissions - either from the line or from defaults
+        const aiPerm = config.ai !== null ? config.ai : defaults.ai;
+        const humanPerm = config.human !== null ? config.human : defaults.human;
+        updateLine(index + 1, aiPerm, humanPerm);
       });
       
       updateExample('ex-aiWrite', 'ai', 'write');
@@ -866,9 +932,26 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       let opacity = 1.0;
       let borderOpacity = 1.0;
       
-      if (aiPerm && humanPerm) {
+      // Check for context permissions first - they override everything else
+      if (aiPerm === 'context' || aiPerm === 'contextWrite') {
+        const configKey = aiPerm === 'context' ? 'contextRead' : 'contextWrite';
+        const config = colors.permissions[configKey];
+        if (config && config.enabled) {
+          bgColor = config.color;
+          opacity = config.transparency;
+          borderColor = config.minimapColor || config.color;
+          borderOpacity = config.borderOpacity ?? 1.0;
+        }
+      } else if (aiPerm && humanPerm) {
         const aiConfig = colors.permissions['ai' + capitalizeFirst(aiPerm)];
         const humanConfig = colors.permissions['human' + capitalizeFirst(humanPerm)];
+        
+        // Check if configs exist - this should not happen with valid permissions
+        if (!aiConfig || !humanConfig) {
+          console.warn('Missing config for permissions:', aiPerm, humanPerm, 'ai' + capitalizeFirst(aiPerm), 'human' + capitalizeFirst(humanPerm));
+          console.warn('Available permissions:', Object.keys(colors.permissions));
+          return;
+        }
         
         if (!aiConfig.enabled && !humanConfig.enabled) {
           bgColor = '';
@@ -960,7 +1043,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         line.style.backgroundColor = '';
       }
       
-      if (colors.borderBarEnabled && borderColor) {
+      if (borderColor && borderOpacity > 0) {
         const rgb = hexToRgb(borderColor);
         if (rgb) {
           border.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + borderOpacity + ')';
@@ -984,6 +1067,12 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       if (type === 'both') {
         const aiConfig = colors.permissions['ai' + capitalizeFirst(perm.ai)];
         const humanConfig = colors.permissions['human' + capitalizeFirst(perm.human)];
+        
+        // Check if configs exist
+        if (!aiConfig || !humanConfig) {
+          console.warn('Missing config in updateExample:', perm.ai, perm.human);
+          return;
+        }
         
         if (!aiConfig.enabled && !humanConfig.enabled) {
           bgColor = '';
@@ -1138,7 +1227,6 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       
       return {
         permissions: permissions,
-        borderBarEnabled: true,
         mixPattern: mixPattern || 'humanBorder'
       };
     }
