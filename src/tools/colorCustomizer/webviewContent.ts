@@ -15,6 +15,7 @@ export function getWebviewStyles(): string {
       overflow: hidden;
     }
     
+    
     .main-container {
       display: flex;
       height: 100vh;
@@ -526,8 +527,53 @@ export function getWebviewStyles(): string {
     
     .preview-controls input[type="checkbox"] {
       cursor: pointer;
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    
+    /* VSCode webview checkbox custom styling */
+    .preview-controls input[type="checkbox"] {
+      position: relative;
+      width: 18px;
+      height: 18px;
+      border: 1px solid var(--vscode-checkbox-border, var(--vscode-input-border));
+      background: var(--vscode-checkbox-background, var(--vscode-input-background));
+      border-radius: 3px;
+      -webkit-appearance: none;
+      appearance: none;
+      outline: none;
+      cursor: pointer;
+    }
+    
+    .preview-controls input[type="checkbox"]:checked {
+      background: var(--vscode-checkbox-background, #007ACC);
+      border-color: var(--vscode-checkbox-border, #007ACC);
+    }
+    
+    .preview-controls input[type="checkbox"]:checked::after {
+      content: '✓';
+      position: absolute;
+      left: 3px;
+      top: -1px;
+      color: var(--vscode-checkbox-foreground, white);
+      font-size: 14px;
+      font-weight: bold;
+    }
+    
+    .preview-controls input[type="checkbox"]:hover {
+      border-color: var(--vscode-focusBorder);
+    }
+    
+    .preview-controls input[type="checkbox"]:focus {
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
+    }
+    
+    .preview-controls span {
+      font-weight: 500;
+      color: var(--vscode-foreground);
     }
     
     .split-context {
