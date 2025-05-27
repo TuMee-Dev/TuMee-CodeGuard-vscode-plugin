@@ -225,6 +225,8 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
   // Store per-permission transparency values
   const permissionTransparencies: Record<string, number> = {};
+  const permissionBorderOpacities: Record<string, number> = {};
+  const permissionMinimapColors: Record<string, string> = {};
 
   // Convert from complete format to flat format for now
   const userColors: any = {};
@@ -237,6 +239,10 @@ function initializeCodeDecorations(_context: ExtensionContext) {
         userColors[key] = permission.color;
         // Store the transparency value
         permissionTransparencies[key] = permission.transparency || 0.3;
+        // Store the border opacity value
+        permissionBorderOpacities[key] = permission.borderOpacity !== undefined ? permission.borderOpacity : 1.0;
+        // Store the minimap color
+        permissionMinimapColors[key] = permission.minimapColor || permission.color;
         // Store the enabled state
         permissionEnabledStates[key] = permission.enabled !== false;
       }
@@ -265,6 +271,8 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       if (permission.enabled) {
         colors[key] = permission.color;
         permissionTransparencies[key] = permission.transparency;
+        permissionBorderOpacities[key] = (permission as any).borderOpacity !== undefined ? (permission as any).borderOpacity : 1.0;
+        permissionMinimapColors[key] = (permission as any).minimapColor || permission.color;
         permissionEnabledStates[key] = permission.enabled;
       }
     }
@@ -513,27 +521,48 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     }
 
     const decorationOptions: any = {
-      isWholeLine: true,
-      overviewRulerColor: hexToRgba(color, 0.8),
-      overviewRulerLane: 2,
+      isWholeLine: true
     };
 
-    // Only add border if borderBarEnabled is true
-    if (borderBarEnabled) {
+    // Get the border opacity for this permission
+    const borderOpacity = permissionBorderOpacities[key.split('_')[0]] || 1.0;
+    const minimapColor = permissionMinimapColors[key.split('_')[0]] || color;
+    
+    // Only add border if borderBarEnabled is true AND border opacity > 0
+    if (borderBarEnabled && borderOpacity > 0) {
       decorationOptions.borderWidth = '0 0 0 3px';
       decorationOptions.borderStyle = 'solid';
-      decorationOptions.borderColor = hexToRgba(color, 0.6);
+      decorationOptions.borderColor = hexToRgba(minimapColor, borderOpacity);
+    }
+    
+    // Only add overview ruler if border opacity > 0
+    if (borderOpacity > 0) {
+      decorationOptions.overviewRulerColor = hexToRgba(minimapColor, borderOpacity);
+      decorationOptions.overviewRulerLane = 2;
+    } else {
+      // Remove overview ruler properties if opacity is 0
+      delete decorationOptions.overviewRulerColor;
+      delete decorationOptions.overviewRulerLane;
     }
 
-    if (isMixed && mixedColor) {
-      // For mixed permissions, blend the two colors
-      console.log(`[DEBUG] ${key}: Creating mixed decoration with AI=${color} and Human=${mixedColor}`);
-      // Mix the colors by averaging the hex values
-      const mixedHex = blendColors(color, mixedColor);
-      decorationOptions.backgroundColor = hexToRgba(mixedHex, effectiveOpacity);
-    } else {
-      // Single color decoration
-      decorationOptions.backgroundColor = hexToRgba(color, effectiveOpacity);
+    // Only add background color if transparency > 0
+    if (effectiveOpacity > 0) {
+      if (isMixed && mixedColor) {
+        // For mixed permissions, blend the two colors
+        console.log(`[DEBUG] ${key}: Creating mixed decoration with AI=${color} and Human=${mixedColor}`);
+        // Mix the colors by averaging the hex values
+        const mixedHex = blendColors(color, mixedColor);
+        decorationOptions.backgroundColor = hexToRgba(mixedHex, effectiveOpacity);
+      } else {
+        // Single color decoration
+        decorationOptions.backgroundColor = hexToRgba(color, effectiveOpacity);
+      }
+    }
+    
+    // Skip creating decoration if both background and border are disabled
+    if (effectiveOpacity === 0 && borderOpacity === 0) {
+      console.log(`[DEBUG] Skipping decoration for ${key}: both background and border opacity are 0`);
+      return;
     }
 
     const decoration = window.createTextEditorDecorationType(decorationOptions);
