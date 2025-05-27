@@ -731,9 +731,9 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     window.openColorPicker = openColorPicker;
     
     function updateColorPreview(permission) {
-      const minimapColor = document.getElementById(permission + '-minimapColor').value;
-      const borderOpacity = document.getElementById(permission + '-borderOpacity').value / 100;
-      const minimapPreview = document.getElementById(permission + '-minimapColor-preview');
+      const minimapColor = getElementValue(permission + '-minimapColor');
+      const borderOpacity = getElementValue(permission + '-borderOpacity', '100') / 100;
+      const minimapPreview = getElement(permission + '-minimapColor-preview');
       if (minimapPreview) {
         const rgb = hexToRgb(minimapColor);
         if (rgb) {
@@ -741,9 +741,9 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         }
       }
       
-      const rowColor = document.getElementById(permission + '-color').value;
-      const rowOpacity = document.getElementById(permission + '-transparency').value / 100;
-      const rowPreview = document.getElementById(permission + '-color-preview');
+      const rowColor = getElementValue(permission + '-color');
+      const rowOpacity = getElementValue(permission + '-transparency', '20') / 100;
+      const rowPreview = getElement(permission + '-color-preview');
       if (rowPreview) {
         const rgb = hexToRgb(rowColor);
         if (rgb) {
@@ -765,8 +765,8 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       icon.className = colorLinks[permission] ? 'link-icon linked' : 'link-icon unlinked';
       
       if (colorLinks[permission]) {
-        const rowColor = document.getElementById(permission + '-color').value;
-        document.getElementById(permission + '-minimapColor').value = rowColor;
+        const rowColor = getElementValue(permission + '-color');
+        setElementValue(permission + '-minimapColor', rowColor);
       }
       updateColorPreview(permission);
       checkForChanges();
@@ -774,9 +774,9 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     window.toggleColorLink = toggleColorLink;
     
     function updateMinimapColor(permission) {
-      const minimapColor = document.getElementById(permission + '-minimapColor').value;
+      const minimapColor = getElementValue(permission + '-minimapColor');
       if (colorLinks[permission]) {
-        document.getElementById(permission + '-color').value = minimapColor;
+        setElementValue(permission + '-color', minimapColor);
       }
       updateColorPreview(permission);
       updatePreview();
@@ -785,9 +785,9 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     window.updateMinimapColor = updateMinimapColor;
     
     function updateRowColor(permission) {
-      const rowColor = document.getElementById(permission + '-color').value;
+      const rowColor = getElementValue(permission + '-color');
       if (colorLinks[permission]) {
-        document.getElementById(permission + '-minimapColor').value = rowColor;
+        setElementValue(permission + '-minimapColor', rowColor);
       }
       updateColorPreview(permission);
       updatePreview();
@@ -1196,6 +1196,31 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       }
       
       return { bgColor, opacity, borderColor, borderOpacity };
+    }
+    
+    // Helper functions for element access
+    function getElement(id) {
+      return document.getElementById(id);
+    }
+    
+    function getElementValue(id, defaultValue = '') {
+      const elem = getElement(id);
+      return elem ? elem.value : defaultValue;
+    }
+    
+    function setElementValue(id, value) {
+      const elem = getElement(id);
+      if (elem) elem.value = value;
+    }
+    
+    function isElementChecked(id, defaultValue = false) {
+      const elem = getElement(id);
+      return elem ? elem.checked : defaultValue;
+    }
+    
+    function setElementText(id, text) {
+      const elem = getElement(id);
+      if (elem) elem.textContent = text;
     }
     
     function hexToRgb(hex) {

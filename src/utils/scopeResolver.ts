@@ -4,42 +4,58 @@ import { parseDocument, findNodeAtPosition, findParentOfType, getNodeBoundaries,
 import type { Node, Tree } from 'web-tree-sitter';
 import { DebugLogger } from './debugLogger';
 
+// Common patterns shared across languages
+const COMMON_BLOCKS = ['if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'];
+const JS_BLOCKS = ['statement_block', 'object', 'object_expression', 'array', 'array_expression'];
+const JS_FUNCS = ['function_declaration', 'function_expression', 'arrow_function', 'method_definition'];
+const JS_CLASSES = ['class_declaration', 'class_expression'];
+
+// Base JavaScript/TypeScript patterns
+const JS_BASE = {
+  'func': JS_FUNCS,
+  'class': JS_CLASSES,
+  'block': [...COMMON_BLOCKS, ...JS_BLOCKS],
+  'sig': ['function_declaration', 'method_definition', 'function_signature'],
+  'body': ['statement_block', 'class_body'],
+  'method': ['method_definition'],
+  'import': ['import_statement'],
+  'export': ['export_statement'],
+};
+
+// TypeScript additions
+const TS_ADDITIONS = {
+  'func': ['method_signature'],
+  'class': ['interface_declaration'],
+  'sig': ['method_signature', 'function_signature'],
+  'body': ['interface_body'],
+  'method': ['method_signature'],
+};
+
+// Helper to merge base with additions
+function mergePatterns(base: Record<string, string[]>, additions: Record<string, string[]>): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  for (const key in base) {
+    result[key] = [...base[key]];
+  }
+  for (const key in additions) {
+    if (result[key]) {
+      result[key] = [...result[key], ...additions[key]];
+    } else {
+      result[key] = additions[key];
+    }
+  }
+  return result;
+}
+
 // Semantic scope to tree-sitter node type mappings
 const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
-  'javascript': {
-    'func': ['function_declaration', 'function_expression', 'arrow_function', 'method_definition'],
-    'class': ['class_declaration', 'class_expression'],
-    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement', 'object', 'object_expression', 'array', 'array_expression'],
-    'sig': ['function_declaration', 'method_definition', 'function_signature'],
-    'body': ['statement_block', 'class_body'],
-    'method': ['method_definition'],
-    'import': ['import_statement'],
-    'export': ['export_statement'],
-  },
-  'typescript': {
-    'func': ['function_declaration', 'function_expression', 'arrow_function', 'method_definition', 'method_signature'],
-    'class': ['class_declaration', 'class_expression', 'interface_declaration'],
-    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement', 'object', 'object_expression', 'array', 'array_expression'],
-    'sig': ['function_declaration', 'method_definition', 'method_signature', 'function_signature'],
-    'body': ['statement_block', 'class_body', 'interface_body'],
-    'method': ['method_definition', 'method_signature'],
-    'import': ['import_statement'],
-    'export': ['export_statement'],
-  },
-  'tsx': {
-    'func': ['function_declaration', 'function_expression', 'arrow_function', 'method_definition', 'method_signature'],
-    'class': ['class_declaration', 'class_expression', 'interface_declaration'],
-    'block': ['statement_block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement', 'object', 'object_expression', 'array', 'array_expression'],
-    'sig': ['function_declaration', 'method_definition', 'method_signature', 'function_signature'],
-    'body': ['statement_block', 'class_body', 'interface_body'],
-    'method': ['method_definition', 'method_signature'],
-    'import': ['import_statement'],
-    'export': ['export_statement'],
-  },
+  'javascript': JS_BASE,
+  'typescript': mergePatterns(JS_BASE, TS_ADDITIONS),
+  'tsx': mergePatterns(JS_BASE, TS_ADDITIONS),
   'python': {
     'func': ['function_definition'],
     'class': ['class_definition'],
-    'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'with_statement', 'dictionary', 'list', 'set'],
+    'block': ['block', ...COMMON_BLOCKS, 'with_statement', 'dictionary', 'list', 'set'],
     'sig': ['function_definition'],
     'body': ['block'],
     'method': ['function_definition'],
@@ -49,7 +65,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'java': {
     'func': ['method_declaration', 'constructor_declaration'],
     'class': ['class_declaration', 'interface_declaration', 'enum_declaration'],
-    'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
+    'block': ['block', ...COMMON_BLOCKS],
     'sig': ['method_declaration', 'constructor_declaration'],
     'body': ['block', 'class_body', 'interface_body', 'enum_body'],
     'method': ['method_declaration'],
@@ -58,7 +74,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'csharp': {
     'func': ['method_declaration', 'constructor_declaration', 'property_declaration', 'local_function_statement'],
     'class': ['class_declaration', 'interface_declaration', 'struct_declaration', 'record_declaration'],
-    'block': ['block', 'if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'],
+    'block': ['block', ...COMMON_BLOCKS],
     'sig': ['method_declaration', 'constructor_declaration'],
     'body': ['block', 'class_body', 'interface_body'],
     'method': ['method_declaration'],
@@ -94,7 +110,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'php': {
     'func': ['function_definition', 'method_declaration'],
     'class': ['class_declaration', 'interface_declaration', 'trait_declaration'],
-    'block': ['compound_statement', 'if_statement', 'for_statement', 'while_statement', 'switch_statement'],
+    'block': ['compound_statement', ...COMMON_BLOCKS],
     'sig': ['function_definition', 'method_declaration'],
     'body': ['compound_statement'],
     'method': ['method_declaration'],
@@ -103,7 +119,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'c': {
     'func': ['function_definition'],
     'class': ['struct_specifier', 'union_specifier'],
-    'block': ['compound_statement', 'if_statement', 'for_statement', 'while_statement', 'switch_statement'],
+    'block': ['compound_statement', ...COMMON_BLOCKS],
     'sig': ['function_declarator'],
     'body': ['compound_statement'],
     'method': ['function_definition'],
@@ -112,7 +128,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'cpp': {
     'func': ['function_definition', 'lambda_expression'],
     'class': ['class_specifier', 'struct_specifier', 'union_specifier'],
-    'block': ['compound_statement', 'if_statement', 'for_statement', 'while_statement', 'switch_statement'],
+    'block': ['compound_statement', ...COMMON_BLOCKS],
     'sig': ['function_declarator'],
     'body': ['compound_statement', 'field_declaration_list'],
     'method': ['function_definition'],
@@ -121,7 +137,7 @@ const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
   'swift': {
     'func': ['function_declaration'],
     'class': ['class_declaration', 'struct_declaration', 'protocol_declaration', 'enum_declaration'],
-    'block': ['code_block', 'if_statement', 'for_statement', 'while_statement', 'switch_statement'],
+    'block': ['code_block', ...COMMON_BLOCKS],
     'sig': ['function_declaration'],
     'body': ['code_block', 'class_body'],
     'method': ['function_declaration'],
@@ -587,60 +603,67 @@ function resolveSemanticWithRegex(
 }
 
 /**
- * Find function scope boundaries using regex
+ * Generic scope finder using regex patterns
  */
-function findFunctionScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
+function findScopeByPattern(
+  lines: string[],
+  guardLine: number,
+  language: string,
+  patternName: 'FUNCTION' | 'CLASS',
+  scopeType: string,
+  defaultPattern: RegExp
+): ScopeBoundary | null {
   // Get cached language patterns
   const langPatterns = getLanguagePatterns(language);
-  const pattern = langPatterns?.FUNCTION || /^\s*(async\s+)?function\s+\w+\s*\(|^\s*(const|let|var)\s+\w+\s*=\s*(async\s*)?\(/;
+  const pattern = langPatterns?.[patternName] || defaultPattern;
 
-  // Search for function start after guard line
-  let functionStart = -1;
+  // Search for scope start after guard line
+  let scopeStart = -1;
   for (let i = guardLine + 1; i < lines.length; i++) {
     if (pattern.test(lines[i])) {
-      functionStart = i;
+      scopeStart = i;
       break;
     }
   }
 
-  if (functionStart === -1) return null;
+  if (scopeStart === -1) return null;
 
-  // Find function end by tracking braces/indentation
-  const functionEnd = findScopeEnd(lines, functionStart, language);
+  // Find scope end by tracking braces/indentation
+  const scopeEnd = findScopeEnd(lines, scopeStart, language);
 
   return {
-    startLine: functionStart + 1,  // Convert to 1-based
-    endLine: functionEnd + 1,      // Convert to 1-based
-    type: 'function'
+    startLine: scopeStart + 1,  // Convert to 1-based
+    endLine: scopeEnd + 1,      // Convert to 1-based
+    type: scopeType
   };
+}
+
+/**
+ * Find function scope boundaries using regex
+ */
+function findFunctionScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
+  return findScopeByPattern(
+    lines,
+    guardLine,
+    language,
+    'FUNCTION',
+    'function',
+    /^\s*(async\s+)?function\s+\w+\s*\(|^\s*(const|let|var)\s+\w+\s*=\s*(async\s*)?\(/
+  );
 }
 
 /**
  * Find class scope boundaries using regex
  */
 function findClassScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
-  // Get cached language patterns
-  const langPatterns = getLanguagePatterns(language);
-  const pattern = langPatterns?.CLASS || /^\s*class\s+\w+/;
-
-  // Search for class start after guard line
-  let classStart = -1;
-  for (let i = guardLine + 1; i < lines.length; i++) {
-    if (pattern.test(lines[i])) {
-      classStart = i;
-      break;
-    }
-  }
-
-  if (classStart === -1) return null;
-
-  const classEnd = findScopeEnd(lines, classStart, language);
-
-  return {
-    startLine: classStart + 1,  // Convert to 1-based
-    endLine: classEnd + 1,      // Convert to 1-based
-    type: 'class'
-  };
+  return findScopeByPattern(
+    lines,
+    guardLine,
+    language,
+    'CLASS',
+    'class',
+    /^\s*class\s+\w+/
+  );
 }
 
 /**
@@ -648,104 +671,14 @@ function findClassScope(lines: string[], guardLine: number, language: string): S
  */
 function findBlockScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
   // For block scopes, search FORWARD for the next brace-delimited block
-  // This works for all languages including Python dictionaries/lists/sets
-
-  // Search forward for opening brace/bracket
-  let blockStart = -1;
-  let openChar = '';
-  let closeChar = '';
-
-  for (let i = guardLine + 1; i < lines.length; i++) {
-    const line = lines[i];
-    // Check for various block delimiters
-    if (line.includes('{')) {
-      blockStart = i;
-      openChar = '{';
-      closeChar = '}';
-      break;
-    } else if (line.includes('[') && language === 'python') {
-      blockStart = i;
-      openChar = '[';
-      closeChar = ']';
-      break;
-    }
-  }
-
-  if (blockStart === -1) return null;
-
-  // Find the matching closing brace/bracket
-  let nestCount = 0;
-  let blockEnd = -1;
-
-  for (let i = blockStart; i < lines.length; i++) {
-    const line = lines[i];
-    for (const char of line) {
-      if (char === openChar) nestCount++;
-      if (char === closeChar) {
-        nestCount--;
-        if (nestCount === 0) {
-          blockEnd = i;
-          break;
-        }
-      }
-    }
-    if (blockEnd !== -1) break;
-  }
-
-  if (blockEnd === -1) return null;
-
-  return {
-    startLine: blockStart + 1,  // Convert to 1-based
-    endLine: blockEnd + 1,      // Convert to 1-based
-    type: 'block'
-  };
+  return findDelimitedScope(lines, guardLine, language, 'block');
 }
 
 /**
  * Find signature scope (just the signature, not the body) using regex
  */
 function findSignatureScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
-  // Check if the guard tag is on the same line as a function signature
-  const currentLine = lines[guardLine];
-
-  // Language-specific patterns for function signatures
-  const signaturePatterns: Record<string, RegExp> = {
-    python: /^\s*(?:async\s+)?def\s+\w+\s*\(/,
-    javascript: /^\s*(?:async\s+)?(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:\([^)]*\)\s*=>|function))/,
-    typescript: /^\s*(?:async\s+)?(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:\([^)]*\)\s*=>|function))|^\s*(?:public|private|protected)?\s*(?:async\s+)?\w+\s*\(/,
-  };
-
-  const pattern = signaturePatterns[language] || signaturePatterns.javascript;
-
-  // If the guard is inline with the signature, only highlight that line
-  if (pattern.test(currentLine)) {
-    return {
-      startLine: guardLine + 1,  // Convert to 1-based
-      endLine: guardLine + 1,    // Convert to 1-based
-      type: 'signature'
-    };
-  }
-
-  // Otherwise, find the function below the guard comment
-  for (let i = guardLine + 1; i < lines.length && i <= guardLine + 3; i++) {
-    if (pattern.test(lines[i])) {
-      return {
-        startLine: i + 1,  // Convert to 1-based
-        endLine: i + 1,    // Convert to 1-based
-        type: 'signature'
-      };
-    }
-  }
-
-  // Fallback to the original logic if no signature found nearby
-  const functionScope = findFunctionScope(lines, guardLine, language);
-  if (!functionScope) return null;
-
-  return {
-    startLine: functionScope.startLine,  // Already 1-based from findFunctionScope
-    endLine: functionScope.startLine,    // Already 1-based from findFunctionScope
-    type: 'signature'
-  };
+  return findLinearScope(lines, guardLine, language, 'signature', 'FUNCTION');
 }
 
 /**
@@ -756,15 +689,7 @@ function findBodyScope(lines: string[], guardLine: number, language: string): Sc
   if (!functionScope) return null;
 
   // Skip the definition line(s) to get just the body
-  let bodyStart = functionScope.startLine;
-
-  // Find the opening brace or colon
-  for (let i = functionScope.startLine; i <= functionScope.endLine; i++) {
-    if (lines[i].includes('{') || (language === 'python' && lines[i].includes(':'))) {
-      bodyStart = i + 1;
-      break;
-    }
-  }
+  const bodyStart = findBodyStart(lines, functionScope.startLine - 1, language);
 
   return {
     startLine: bodyStart + 1,  // Convert to 1-based
@@ -777,11 +702,8 @@ function findBodyScope(lines: string[], guardLine: number, language: string): Sc
  * Find method scope (similar to function but within a class) using regex
  */
 function findMethodScope(lines: string[], guardLine: number, language: string): ScopeBoundary | null {
-  // First check if we're inside a class
-  const classScope = findClassScope(lines, guardLine, language);
-  if (!classScope) return null;
-
-  // Then find the function within the class
+  // For methods, we just use function scope - the class check is not necessary
+  // since the guard tag already indicates method scope
   return findFunctionScope(lines, guardLine, language);
 }
 
@@ -789,8 +711,7 @@ function findMethodScope(lines: string[], guardLine: number, language: string): 
  * Find statement scope (single logical statement) using regex
  */
 function findStatementScope(lines: string[], guardLine: number): ScopeBoundary | null {
-  // For now, just return the current line
-  // A full implementation would parse multi-line statements
+  // For statements, we return the current line
   return {
     startLine: guardLine + 1,  // Convert to 1-based
     endLine: guardLine + 1,    // Convert to 1-based
@@ -829,6 +750,19 @@ function findScopeEnd(lines: string[], startLine: number, language: string): num
 }
 
 /**
+ * Get indentation level of a line
+ */
+function getIndentLevel(line: string): number {
+  let indent = 0;
+  for (const char of line) {
+    if (char === ' ') indent++;
+    else if (char === '\t') indent += 4; // Treat tab as 4 spaces
+    else break;
+  }
+  return indent;
+}
+
+/**
  * Find Python scope end based on indentation
  */
 function findPythonScopeEnd(lines: string[], startLine: number): number {
@@ -860,56 +794,132 @@ function findPythonScopeEnd(lines: string[], startLine: number): number {
 }
 
 /**
- * Find Python block based on indentation
+ * Get comment pattern for a language
  */
-function _findPythonBlock(lines: string[], guardLine: number): ScopeBoundary | null {
-  // Find the line that starts the current indentation block
-  const currentIndent = getIndentLevel(lines[guardLine]);
-
-  let blockStart = guardLine;
-  for (let i = guardLine - 1; i >= 0; i--) {
-    const line = lines[i];
-    if (line.trim() === '') continue;
-
-    const indent = getIndentLevel(line);
-    if (indent < currentIndent) {
-      // This line starts the block
-      blockStart = i;
-      break;
-    }
+function getCommentPattern(language: string): RegExp {
+  switch (language) {
+    case 'python':
+      return /^\s*#|^\s*"""|^\s*'''/;
+    case 'javascript':
+    case 'typescript':
+    case 'tsx':
+    case 'java':
+    case 'c':
+    case 'cpp':
+      return /^\s*\/\/|^\s*\/\*|^\s*\*/;
+    default:
+      return /^\s*\/\/|^\s*#/;
   }
+}
 
-  // Find block end
-  let blockEnd = guardLine;
+/**
+ * Find delimited scope (blocks with braces/brackets)
+ */
+function findDelimitedScope(lines: string[], guardLine: number, language: string, scopeType: string): ScopeBoundary | null {
+  // Search forward for opening delimiter
+  let blockStart = -1;
+  let openChar = '';
+  let closeChar = '';
+
   for (let i = guardLine + 1; i < lines.length; i++) {
     const line = lines[i];
-    if (line.trim() === '') continue;
-
-    if (getIndentLevel(line) < currentIndent) {
-      blockEnd = i - 1;
+    // Check for various block delimiters
+    if (line.includes('{')) {
+      blockStart = i;
+      openChar = '{';
+      closeChar = '}';
+      break;
+    } else if (line.includes('[') && language === 'python') {
+      blockStart = i;
+      openChar = '[';
+      closeChar = ']';
       break;
     }
-    blockEnd = i;
   }
+
+  if (blockStart === -1) return null;
+
+  // Find the matching closing delimiter
+  let nestCount = 0;
+  let blockEnd = -1;
+
+  for (let i = blockStart; i < lines.length; i++) {
+    const line = lines[i];
+    for (const char of line) {
+      if (char === openChar) nestCount++;
+      if (char === closeChar) {
+        nestCount--;
+        if (nestCount === 0) {
+          blockEnd = i;
+          break;
+        }
+      }
+    }
+    if (blockEnd !== -1) break;
+  }
+
+  if (blockEnd === -1) return null;
 
   return {
     startLine: blockStart + 1,  // Convert to 1-based
     endLine: blockEnd + 1,      // Convert to 1-based
-    type: 'block'
+    type: scopeType
   };
 }
 
 /**
- * Get indentation level of a line
+ * Find linear scope (single line patterns like signatures)
  */
-function getIndentLevel(line: string): number {
-  let indent = 0;
-  for (const char of line) {
-    if (char === ' ') indent++;
-    else if (char === '\t') indent += 4; // Treat tab as 4 spaces
-    else break;
+function findLinearScope(lines: string[], guardLine: number, language: string, scopeType: string, patternName: 'FUNCTION' | 'CLASS'): ScopeBoundary | null {
+  const currentLine = lines[guardLine];
+  const langPatterns = getLanguagePatterns(language);
+  const pattern = langPatterns?.[patternName] || /^\s*(?:async\s+)?function\s+\w+\s*\(/;
+
+  // If the guard is inline with the pattern, only highlight that line
+  if (pattern.test(currentLine)) {
+    return {
+      startLine: guardLine + 1,  // Convert to 1-based
+      endLine: guardLine + 1,    // Convert to 1-based
+      type: scopeType
+    };
   }
-  return indent;
+
+  // Otherwise, find the pattern below the guard comment (within 3 lines)
+  for (let i = guardLine + 1; i < lines.length && i <= guardLine + 3; i++) {
+    if (pattern.test(lines[i])) {
+      return {
+        startLine: i + 1,  // Convert to 1-based
+        endLine: i + 1,    // Convert to 1-based
+        type: scopeType
+      };
+    }
+  }
+
+  // Fallback for signature scope
+  if (scopeType === 'signature') {
+    const functionScope = findFunctionScope(lines, guardLine, language);
+    if (!functionScope) return null;
+    return {
+      startLine: functionScope.startLine,
+      endLine: functionScope.startLine,
+      type: 'signature'
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Find the start of a function body
+ */
+function findBodyStart(lines: string[], functionStart: number, language: string): number {
+  // Find the opening brace or colon
+  for (let i = functionStart; i < lines.length && i <= functionStart + 10; i++) {
+    if (lines[i].includes('{') || (language === 'python' && lines[i].includes(':'))) {
+      return i + 1;
+    }
+  }
+  return functionStart + 1;
 }
 
 /**
@@ -921,25 +931,8 @@ function findContextScope(lines: string[], guardLine: number, language: string):
   const startLine = guardLine + 1;
   let lastContentLine = -1;  // Track last line with actual content
 
-  // Pattern for detecting comments based on language
-  let commentPattern: RegExp;
-  switch (language) {
-    case 'python':
-      commentPattern = /^\s*#|^\s*"""|^\s*'''/;
-      break;
-    case 'javascript':
-    case 'typescript':
-    case 'tsx':
-      commentPattern = /^\s*\/\/|^\s*\/\*|^\s*\*/;
-      break;
-    case 'java':
-    case 'c':
-    case 'cpp':
-      commentPattern = /^\s*\/\/|^\s*\/\*|^\s*\*/;
-      break;
-    default:
-      commentPattern = /^\s*\/\/|^\s*#/;
-  }
+  // Get comment pattern for the language
+  const commentPattern = getCommentPattern(language);
 
   // Check each line to see if it's documentation
   let inBlockComment = false;
