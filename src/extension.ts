@@ -12,6 +12,7 @@ import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
 import { registerColorCustomizerCommand, DEFAULT_COLORS } from '@/tools/colorCustomizer';
+import { MixPattern, DEFAULT_MIX_PATTERN } from '@/types/mixPatterns';
 import { disposeACLCache } from '@/utils/aclCache';
 import { performanceMonitor } from '@/utils/performanceMonitor';
 import { configValidator } from '@/utils/configValidator';
@@ -222,6 +223,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   // Get the complete guard colors configuration, or use DEFAULT_COLORS
   const guardColorsComplete = config.get<any>('guardColorsComplete') || DEFAULT_COLORS;
   const borderBarEnabled = guardColorsComplete?.borderBarEnabled !== false;
+  const mixPattern = guardColorsComplete?.mixPattern || DEFAULT_COLORS.mixPattern;
 
   // Store per-permission transparency values
   const permissionTransparencies: Record<string, number> = {};

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { getWebviewStyles, getWebviewJavaScript } from './colorCustomizer/webviewContent';
+import { MixPattern, DEFAULT_MIX_PATTERN } from '../types/mixPatterns';
 
 export interface PermissionColorConfig {
   enabled: boolean;                // Whether to use own color or other's
@@ -24,6 +25,9 @@ export interface GuardColors {
 
   // Global border bar toggle only
   borderBarEnabled: boolean;       // Enable border bar
+  
+  // Mix pattern for when both AI and human permissions are non-default
+  mixPattern?: MixPattern;
 
   // Optional custom colors for specific combinations
   combinations?: {
@@ -52,6 +56,7 @@ interface ThemeDefinition {
     [key: string]: { enabled: boolean; color: string; transparency: number };
   };
   borderBarEnabled: boolean;
+  mixPattern?: MixPattern;
 }
 
 // Default colors (Light theme)
@@ -66,7 +71,8 @@ export const DEFAULT_COLORS: GuardColors = {
     contextRead: { enabled: true, color: '#00CED1', transparency: 0.15 },
     contextWrite: { enabled: true, color: '#1E90FF', transparency: 0.15 }
   },
-  borderBarEnabled: true
+  borderBarEnabled: true,
+  mixPattern: DEFAULT_MIX_PATTERN
 };
 
 // Theme configurations as data
@@ -83,7 +89,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#00CED1', transparency: 0.15 },
       contextWrite: { enabled: true, color: '#1E90FF', transparency: 0.15 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   },
   {
     name: 'dark',
@@ -97,7 +104,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#20B2AA', transparency: 0.3 },
       contextWrite: { enabled: true, color: '#4682B4', transparency: 0.3 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   },
   {
     name: 'highContrast',
@@ -111,7 +119,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#00FFFF', transparency: 1.0 },
       contextWrite: { enabled: true, color: '#FF00FF', transparency: 1.0 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   },
   {
     name: 'colorblind',
@@ -125,7 +134,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#56B4E9', transparency: 0.3 },
       contextWrite: { enabled: true, color: '#F0E442', transparency: 0.3 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   },
   {
     name: 'ocean',
@@ -139,7 +149,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#48D1CC', transparency: 0.3 },
       contextWrite: { enabled: true, color: '#00BFFF', transparency: 0.3 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   },
   {
     name: 'sunset',
@@ -153,7 +164,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#FF8C00', transparency: 0.3 },
       contextWrite: { enabled: true, color: '#FFA500', transparency: 0.3 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   },
   {
     name: 'matrix',
@@ -167,7 +179,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#7FFF00', transparency: 0.3 },
       contextWrite: { enabled: true, color: '#9ACD32', transparency: 0.3 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   },
   {
     name: 'neon',
@@ -181,7 +194,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#7FFF00', transparency: 0.5 },
       contextWrite: { enabled: true, color: '#FF69B4', transparency: 0.5 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   },
   {
     name: 'pastel',
@@ -195,7 +209,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#B0E0E6', transparency: 0.4 },
       contextWrite: { enabled: true, color: '#F5DEB3', transparency: 0.4 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   },
   {
     name: 'cyberpunk',
@@ -209,7 +224,8 @@ const THEME_CONFIGS: ThemeDefinition[] = [
       contextRead: { enabled: true, color: '#9D00FF', transparency: 0.5 },
       contextWrite: { enabled: true, color: '#00FF88', transparency: 0.5 }
     },
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: MixPattern.AVERAGE
   }
 ];
 
@@ -220,7 +236,8 @@ THEME_CONFIGS.forEach(theme => {
     name: theme.name.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
     colors: {
       permissions: theme.permissions as GuardColors['permissions'],
-      borderBarEnabled: theme.borderBarEnabled
+      borderBarEnabled: theme.borderBarEnabled,
+      mixPattern: theme.mixPattern
     }
   };
 });
@@ -240,6 +257,10 @@ function mergeWithDefaults(colors: Partial<GuardColors> | undefined): GuardColor
 
   if (colors?.borderBarEnabled !== undefined) {
     merged.borderBarEnabled = colors.borderBarEnabled;
+  }
+  
+  if (colors?.mixPattern !== undefined) {
+    merged.mixPattern = colors.mixPattern;
   }
 
   if (colors?.combinations) {
