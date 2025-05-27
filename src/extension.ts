@@ -239,10 +239,15 @@ function initializeCodeDecorations(_context: ExtensionContext) {
         userColors[key] = permission.color;
         // Store the transparency value
         permissionTransparencies[key] = permission.transparency || 0.3;
-        // Store the border opacity value
-        permissionBorderOpacities[key] = permission.borderOpacity !== undefined ? permission.borderOpacity : 1.0;
+        // Store the border opacity value (0 is valid!)
+        permissionBorderOpacities[key] = permission.borderOpacity ?? 1.0;
         // Store the minimap color
         permissionMinimapColors[key] = permission.minimapColor || permission.color;
+        
+        // Debug logging
+        if (key.includes('Write')) {
+          console.log(`[DEBUG] Storing ${key}: borderOpacity=${permission.borderOpacity} -> ${permissionBorderOpacities[key]}`);
+        }
         // Store the enabled state
         permissionEnabledStates[key] = permission.enabled !== false;
       }
@@ -525,8 +530,19 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     };
 
     // Get the border opacity for this permission
-    const borderOpacity = permissionBorderOpacities[key.split('_')[0]] || 1.0;
-    const minimapColor = permissionMinimapColors[key.split('_')[0]] || color;
+    // For mixed permissions, we need to determine which permission's border to use
+    const parts = key.split('_');
+    const aiPerm = parts[0];
+    const humanPerm = parts[1] || '';
+    
+    // Get the actual border opacity value, defaulting to 1.0 ONLY if not set
+    const borderOpacity = permissionBorderOpacities[aiPerm] ?? 1.0;
+    const minimapColor = permissionMinimapColors[aiPerm] || color;
+    
+    // Debug logging
+    if (key.includes('Write')) {
+      console.log(`[DEBUG] ${key}: borderOpacity=${borderOpacity}, from ${aiPerm}, stored value=${permissionBorderOpacities[aiPerm]}`);
+    }
     
     // Only add border if borderBarEnabled is true AND border opacity > 0
     if (borderBarEnabled && borderOpacity > 0) {

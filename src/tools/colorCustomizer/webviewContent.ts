@@ -638,7 +638,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     
     function updateColorPreview(permission) {
       const minimapColor = document.getElementById(permission + '-minimapColor').value;
-      const borderOpacity = (document.getElementById(permission + '-borderOpacity').value / 100) || 1;
+      const borderOpacity = document.getElementById(permission + '-borderOpacity').value / 100;
       const minimapPreview = document.getElementById(permission + '-minimapColor-preview');
       if (minimapPreview) {
         const rgb = hexToRgb(minimapColor);
@@ -648,7 +648,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       }
       
       const rowColor = document.getElementById(permission + '-color').value;
-      const rowOpacity = (document.getElementById(permission + '-transparency').value / 100) || 1;
+      const rowOpacity = document.getElementById(permission + '-transparency').value / 100;
       const rowPreview = document.getElementById(permission + '-color-preview');
       if (rowPreview) {
         const rgb = hexToRgb(rowColor);
@@ -859,17 +859,17 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           bgColor = humanConfig.color;
           opacity = humanConfig.transparency;
           borderColor = humanConfig.minimapColor || humanConfig.color;
-          borderOpacity = humanConfig.borderOpacity || 1.0;
+          borderOpacity = humanConfig.borderOpacity ?? 1.0;
         } else if (!humanConfig.enabled) {
           bgColor = aiConfig.color;
           opacity = aiConfig.transparency;
           borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity || 1.0;
+          borderOpacity = aiConfig.borderOpacity ?? 1.0;
         } else {
           bgColor = aiConfig.color;
           opacity = aiConfig.transparency;
           borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity || 1.0;
+          borderOpacity = aiConfig.borderOpacity ?? 1.0;
         }
       } else if (aiPerm) {
         let configKey;
@@ -886,7 +886,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           bgColor = config.color;
           opacity = config.transparency;
           borderColor = config.minimapColor || config.color;
-          borderOpacity = config.borderOpacity || 1.0;
+          borderOpacity = config.borderOpacity ?? 1.0;
         }
       } else if (humanPerm) {
         const config = colors.permissions['human' + capitalizeFirst(humanPerm)];
@@ -894,7 +894,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           bgColor = config.color;
           opacity = config.transparency;
           borderColor = config.minimapColor || config.color;
-          borderOpacity = config.borderOpacity || 1.0;
+          borderOpacity = config.borderOpacity ?? 1.0;
         }
       }
       
@@ -938,17 +938,17 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           bgColor = humanConfig.color;
           opacity = humanConfig.transparency;
           borderColor = humanConfig.minimapColor || humanConfig.color;
-          borderOpacity = humanConfig.borderOpacity || 1.0;
+          borderOpacity = humanConfig.borderOpacity ?? 1.0;
         } else if (!humanConfig.enabled) {
           bgColor = aiConfig.color;
           opacity = aiConfig.transparency;
           borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity || 1.0;
+          borderOpacity = aiConfig.borderOpacity ?? 1.0;
         } else {
           bgColor = aiConfig.color;
           opacity = aiConfig.transparency;
           borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity || 1.0;
+          borderOpacity = aiConfig.borderOpacity ?? 1.0;
         }
       } else {
         let configKey;
@@ -967,7 +967,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
           bgColor = config.color;
           opacity = config.transparency;
           borderColor = config.minimapColor || config.color;
-          borderOpacity = config.borderOpacity || 1.0;
+          borderOpacity = config.borderOpacity ?? 1.0;
         }
       }
       
