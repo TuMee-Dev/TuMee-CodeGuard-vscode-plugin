@@ -25,7 +25,7 @@ export interface GuardColors {
 
   // Global border bar toggle only
   borderBarEnabled: boolean;       // Enable border bar
-  
+
   // Mix pattern for when both AI and human permissions are non-default
   mixPattern?: MixPattern;
 
@@ -258,7 +258,7 @@ function mergeWithDefaults(colors: Partial<GuardColors> | undefined): GuardColor
   if (colors?.borderBarEnabled !== undefined) {
     merged.borderBarEnabled = colors.borderBarEnabled;
   }
-  
+
   if (colors?.mixPattern !== undefined) {
     merged.mixPattern = colors.mixPattern;
   }
@@ -479,13 +479,13 @@ export class ColorCustomizerPanel {
       if (customThemes[this._currentTheme]) {
         customThemes[this._currentTheme] = colors;
         await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
-        
+
         // If this is the currently selected theme, update guardColorsComplete too
         const selectedTheme = config.get<string>('selectedTheme');
         if (selectedTheme === this._currentTheme) {
           await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
         }
-        
+
         void vscode.window.showInformationMessage(`Theme '${this._currentTheme}' updated successfully!`);
       }
       // Don't send colors back - webview already has current values
@@ -508,7 +508,7 @@ export class ColorCustomizerPanel {
     const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
     const savedColors = config.get<GuardColors>('guardColorsComplete');
     let colors: GuardColors;
-    
+
     if (savedColors) {
       colors = mergeWithDefaults(savedColors);
     } else {
@@ -594,9 +594,9 @@ export class ColorCustomizerPanel {
     if (this._isDeleting) {
       return;
     }
-    
+
     this._isDeleting = true;
-    
+
     try {
       // Show confirmation dialog
       const choice = await vscode.window.showWarningMessage(
@@ -604,18 +604,18 @@ export class ColorCustomizerPanel {
         'Delete',
         'Cancel'
       );
-      
+
       if (choice !== 'Delete') {
         return;
       }
-      
+
       const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
       const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
-      
+
       // Get list of all themes before deletion
       const allThemes = [...Object.keys(COLOR_THEMES), ...Object.keys(customThemes)];
       const currentIndex = allThemes.indexOf(name);
-      
+
       // Create a shallow copy to avoid proxy issues
       const updatedThemes = { ...customThemes };
       delete updatedThemes[name];
@@ -626,13 +626,13 @@ export class ColorCustomizerPanel {
       if (this._currentTheme === name) {
         // Remove the deleted theme from the list
         const remainingThemes = allThemes.filter(t => t !== name);
-        
+
         if (remainingThemes.length > 0) {
           // Select the next theme in the list, or the previous one if we deleted the last theme
           const nextIndex = Math.min(currentIndex, remainingThemes.length - 1);
           nextTheme = remainingThemes[nextIndex];
         }
-        
+
         // Apply the next theme or clear if no themes left
         if (nextTheme) {
           await this._applyTheme(nextTheme);
@@ -644,10 +644,10 @@ export class ColorCustomizerPanel {
       }
 
       void vscode.window.showInformationMessage(`Theme '${name}' deleted successfully!`);
-      
+
       // Send the theme list update first
       this._sendThemeList();
-      
+
       // Then send the deletion notification with a slight delay to ensure theme list is processed
       setTimeout(() => {
         void this._panel.webview.postMessage({
@@ -750,14 +750,14 @@ export class ColorCustomizerPanel {
 
       const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
       let selectedTheme = config.get<string>('selectedTheme');
-      
+
       // If no theme is selected, default to 'light'
       if (!selectedTheme) {
         selectedTheme = 'light';
         // Save the default theme selection
         void config.update('selectedTheme', selectedTheme, vscode.ConfigurationTarget.Global);
       }
-      
+
       this._currentTheme = selectedTheme;
       this._isSystemTheme = !!COLOR_THEMES[selectedTheme];
 
@@ -774,7 +774,7 @@ export class ColorCustomizerPanel {
       // Restore default permissions from user preferences
       const defaultAiWrite = config.get<boolean>('defaultAiWrite', false);
       const defaultHumanWrite = config.get<boolean>('defaultHumanWrite', true);
-      
+
       void this._panel.webview.postMessage({
         command: 'restoreDefaultPermissions',
         defaultAiWrite: defaultAiWrite,
@@ -844,11 +844,11 @@ export class ColorCustomizerPanel {
     return text.replace(/[&<>"']/g, m => map[m]);
   }
 
-  private _getHtmlForWebview(webview: vscode.Webview) {
+  private _getHtmlForWebview(_webview: vscode.Webview) {
     // Use external module for CSS and JavaScript
     const css = getWebviewStyles();
     const javascript = getWebviewJavaScript(ColorCustomizerPanel.PREVIEW_LINES);
-    
+
     const permissionSections = ColorCustomizerPanel.PERMISSION_SECTIONS.map(s => this._generatePermissionSection(s)).join('');
     const lineNumbers = Array.from({ length: 65 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
     const codeLines = ColorCustomizerPanel.PREVIEW_LINES.map((line, i) => this._generateCodeLine(i, line.content)).join('');
@@ -965,8 +965,6 @@ export class ColorCustomizerPanel {
     </body>
     </html>`;
   }
-
-
 
   public dispose() {
     ColorCustomizerPanel.currentPanel = undefined;

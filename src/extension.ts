@@ -1,5 +1,6 @@
 // The final extension.ts file with thoroughly verified line count handling
 
+import type * as vscode from 'vscode';
 import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, type StatusBarItem, window, workspace, commands, ThemeColor, Position, Range, StatusBarAlignment } from 'vscode';
 import { registerFileDecorationProvider } from '@/tools/file-customization-provider';
 import { registerContextMenu } from '@/tools/register-context-menu';
@@ -12,11 +13,13 @@ import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
 import { registerColorCustomizerCommand, DEFAULT_COLORS, COLOR_THEMES } from '@/tools/colorCustomizer';
-import { MixPattern, DEFAULT_MIX_PATTERN } from '@/types/mixPatterns';
+import { MixPattern } from '@/types/mixPatterns';
+import type { GuardColors } from '@/types/colorTypes';
 import { renderMixPattern, getMixedBorderColor } from '@/utils/mixPatternRenderer';
 import { disposeACLCache } from '@/utils/aclCache';
 import { performanceMonitor } from '@/utils/performanceMonitor';
 import { configValidator } from '@/utils/configValidator';
+import { DebugLogger } from '@/utils/debugLogger';
 import { backgroundProcessor } from '@/utils/backgroundProcessor';
 import { registerValidationCommands } from '@/utils/validationMode';
 
@@ -234,31 +237,31 @@ interface PermissionColorInfo {
 function initializeCodeDecorations(_context: ExtensionContext) {
   // Get configured colors and opacity
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
-  
+
   // First check if a theme is selected
   const selectedTheme = config.get<string>('selectedTheme');
-  let guardColorsComplete: any;
-  
+  let guardColorsComplete: GuardColors | undefined;
+
   if (selectedTheme) {
     // Check if it's a built-in theme
-    const builtInTheme = (COLOR_THEMES as any)[selectedTheme];
+    const builtInTheme = COLOR_THEMES[selectedTheme];
     if (builtInTheme) {
       guardColorsComplete = builtInTheme.colors;
     } else {
       // Check custom themes
-      const customThemes = config.get<Record<string, any>>('customThemes', {});
+      const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
       if (customThemes[selectedTheme]) {
         guardColorsComplete = customThemes[selectedTheme];
       } else {
         // Fallback to guardColorsComplete or DEFAULT_COLORS
-        guardColorsComplete = config.get<any>('guardColorsComplete') || DEFAULT_COLORS;
+        guardColorsComplete = config.get<GuardColors>('guardColorsComplete') || DEFAULT_COLORS;
       }
     }
   } else {
     // No theme selected, use guardColorsComplete or DEFAULT_COLORS
-    guardColorsComplete = config.get<any>('guardColorsComplete') || DEFAULT_COLORS;
+    guardColorsComplete = config.get<GuardColors>('guardColorsComplete') || DEFAULT_COLORS;
   }
-  
+
   const borderBarEnabled = guardColorsComplete?.borderBarEnabled !== false;
   const mixPattern = guardColorsComplete?.mixPattern || DEFAULT_COLORS.mixPattern;
 
@@ -268,11 +271,11 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   const permissionMinimapColors: Record<string, string> = {};
 
   // Convert from complete format to flat format for now
-  const userColors: any = {};
+  const userColors: Record<string, string> = {};
   const permissionEnabledStates: Record<string, boolean> = {};
   if (guardColorsComplete?.permissions) {
     for (const [key, cfg] of Object.entries(guardColorsComplete.permissions)) {
-      const permission = cfg as any;
+      const permission = cfg;
       // Always save the color, regardless of enabled state
       if (permission.color) {
         userColors[key] = permission.color;
@@ -282,10 +285,10 @@ function initializeCodeDecorations(_context: ExtensionContext) {
         permissionBorderOpacities[key] = permission.borderOpacity ?? 1.0;
         // Store the minimap color
         permissionMinimapColors[key] = permission.minimapColor || permission.color;
-        
+
         // Debug logging
         if (key.includes('Write')) {
-          console.log(`[DEBUG] Storing ${key}: borderOpacity=${permission.borderOpacity} -> ${permissionBorderOpacities[key]}`);
+          DebugLogger.log(`[DEBUG] Storing ${key}: borderOpacity=${permission.borderOpacity} -> ${permissionBorderOpacities[key]}`);
         }
         // Store the enabled state
         permissionEnabledStates[key] = permission.enabled !== false;
@@ -297,8 +300,8 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   }
 
   // Build colors object based on configuration or defaults
-  const colors: any = {};
-  
+  const colors: Record<string, string> = {};
+
   // If we have user colors in guardColorsComplete, use those
   if (userColors && Object.keys(userColors).length > 0) {
     // Apply user colors ONLY for enabled permissions
@@ -315,8 +318,8 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       if (permission.enabled) {
         colors[key] = permission.color;
         permissionTransparencies[key] = permission.transparency;
-        permissionBorderOpacities[key] = (permission as any).borderOpacity !== undefined ? (permission as any).borderOpacity : 1.0;
-        permissionMinimapColors[key] = (permission as any).minimapColor || permission.color;
+        permissionBorderOpacities[key] = permission.borderOpacity ?? 1.0;
+        permissionMinimapColors[key] = permission.minimapColor || permission.color;
         permissionEnabledStates[key] = permission.enabled;
       }
     }
@@ -336,29 +339,8 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       const b = parseInt(hex.slice(5, 7), 16);
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     } catch (error) {
-      console.error('Invalid hex color:', hex);
+      DebugLogger.error('Invalid hex color:', hex);
       return 'rgba(0, 0, 0, 0)';
-    }
-  };
-
-  // Helper function to blend two hex colors
-  const blendColors = (hex1: string, hex2: string): string => {
-    try {
-      const r1 = parseInt(hex1.slice(1, 3), 16);
-      const g1 = parseInt(hex1.slice(3, 5), 16);
-      const b1 = parseInt(hex1.slice(5, 7), 16);
-
-      const r2 = parseInt(hex2.slice(1, 3), 16);
-      const g2 = parseInt(hex2.slice(3, 5), 16);
-      const b2 = parseInt(hex2.slice(5, 7), 16);
-
-      const r = Math.round((r1 + r2) / 2);
-      const g = Math.round((g1 + g2) / 2);
-      const b = Math.round((b1 + b2) / 2);
-
-      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-    } catch (error) {
-      return hex1; // Fallback to first color
     }
   };
 
@@ -370,7 +352,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
   const getPermissionColor = (key: string): PermissionColorInfo => {
 
     // Check if there's a custom color for this exact combination
-    const customColor = (colors as Record<string, any>)[key] as string | undefined;
+    const customColor = colors[key];
     if (customColor && typeof customColor === 'string') {
       return { color: customColor, opacity };
     }
@@ -396,11 +378,11 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       read: colors.humanRead,
       noaccess: colors.humanNoAccess
     };
-    
+
     // Debug log what colors we actually have
     if (key.includes('NoAccess')) {
-      console.log(`[DEBUG] ${key}: aiNoAccess color = ${colors.aiNoAccess}, humanNoAccess color = ${colors.humanNoAccess}`);
-      console.log(`[DEBUG] Available colors:`, colors);
+      DebugLogger.log(`[DEBUG] ${key}: aiNoAccess color = ${colors.aiNoAccess}, humanNoAccess color = ${colors.humanNoAccess}`);
+      DebugLogger.log('[DEBUG] Available colors:', colors);
     }
     const contextColors = {
       write: colors.contextWrite,
@@ -418,7 +400,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
       // If context permission is disabled, return transparent
       if (!contextEnabled) {
-        console.log(`[DEBUG] ${key}: Context permission disabled - returning transparent`);
+        DebugLogger.log(`[DEBUG] ${key}: Context permission disabled - returning transparent`);
         return { color: '#000000', opacity: 0 };
       }
 
@@ -438,10 +420,10 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       // For mixed permissions, check if we need to blend colors
       const aiColor = aiColors[aiPermission as keyof typeof aiColors];
       const humanColor = humanColors[humanPermission as keyof typeof humanColors];
-      
+
       // If the color is undefined (because permission is disabled), treat as disabled
       if ((aiDiffersFromDefault && !aiColor) || (humanDiffersFromDefault && !humanColor)) {
-        console.log(`[DEBUG] ${key}: Color undefined for disabled permission - returning transparent`);
+        DebugLogger.log(`[DEBUG] ${key}: Color undefined for disabled permission - returning transparent`);
         return { color: '#000000', opacity: 0 };
       }
 
@@ -451,12 +433,12 @@ function initializeCodeDecorations(_context: ExtensionContext) {
       const aiEnabled = permissionEnabledStates[aiKey] !== false;
       const humanEnabled = permissionEnabledStates[humanKey] !== false;
 
-      console.log(`[DEBUG] ${key}: AI=${aiPermission} (default=${defaults.ai}, enabled=${aiEnabled}), Human=${humanPermission} (default=${defaults.human}, enabled=${humanEnabled})`);
-      console.log(`[DEBUG] ${key}: aiDiffers=${aiDiffersFromDefault}, humanDiffers=${humanDiffersFromDefault}`);
+      DebugLogger.log(`[DEBUG] ${key}: AI=${aiPermission} (default=${defaults.ai}, enabled=${aiEnabled}), Human=${humanPermission} (default=${defaults.human}, enabled=${humanEnabled})`);
+      DebugLogger.log(`[DEBUG] ${key}: aiDiffers=${aiDiffersFromDefault}, humanDiffers=${humanDiffersFromDefault}`);
 
       // If both permissions are disabled, return transparent
       if (!aiEnabled && !humanEnabled) {
-        console.log(`[DEBUG] ${key}: Both permissions disabled - returning transparent`);
+        DebugLogger.log(`[DEBUG] ${key}: Both permissions disabled - returning transparent`);
         return { color: '#000000', opacity: 0 };
       }
 
@@ -464,7 +446,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
         // Both differ from default - check enabled states
         if (aiEnabled && humanEnabled) {
           // Both enabled - use mixed pattern
-          console.log(`[DEBUG] ${key}: Using mixed colors - ${aiColor} and ${humanColor}`);
+          DebugLogger.log(`[DEBUG] ${key}: Using mixed colors - ${aiColor} and ${humanColor}`);
           return {
             color: aiColor,
             opacity: effectiveOpacity,
@@ -509,7 +491,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
         // Both are at default values - check which one to show based on enabled state
         if (aiEnabled && humanEnabled) {
           // Both enabled at default - use mixed pattern
-          console.log(`[DEBUG] ${key}: Both at default, using mixed pattern`);
+          DebugLogger.log(`[DEBUG] ${key}: Both at default, using mixed pattern`);
           return {
             color: aiColor,
             opacity: effectiveOpacity,
@@ -540,8 +522,8 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
     // Debug logging
     if (key === 'aiRead_humanWrite') {
-      console.log(`[DEBUG] Color for ${key}: baseColor=${baseColor}, opacity=${effectiveOpacity}`);
-      console.log('[DEBUG] aiColors:', aiColors);
+      DebugLogger.log(`[DEBUG] Color for ${key}: baseColor=${baseColor}, opacity=${effectiveOpacity}`);
+      DebugLogger.log('[DEBUG] aiColors:', aiColors);
     }
 
     return { color: baseColor, opacity: effectiveOpacity, isMixed: false };
@@ -574,17 +556,17 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
     // Skip creating decoration if opacity is 0 (disabled permissions)
     if (effectiveOpacity === 0) {
-      console.log(`[DEBUG] Skipping decoration for ${key}: opacity is 0 (disabled)`);
+      DebugLogger.log(`[DEBUG] Skipping decoration for ${key}: opacity is 0 (disabled)`);
       return;
     }
 
     if (key.includes('Write') || key.includes('NoAccess')) {
-      console.log(`[DEBUG] Creating decoration for ${key}: isMixed=${isMixed}, color=${color}, mixedColor=${mixedColor}, opacity=${effectiveOpacity}`);
+      DebugLogger.log(`[DEBUG] Creating decoration for ${key}: isMixed=${isMixed}, color=${color}, mixedColor=${mixedColor}, opacity=${effectiveOpacity}`);
     }
 
-    const decorationOptions: any = {
+    const decorationOptions: vscode.DecorationRenderOptions = {
       isWholeLine: true
-    };
+    } as vscode.DecorationRenderOptions;
 
     // Get the border opacity for this permission
     // For single permissions, use that permission's border settings
@@ -592,43 +574,43 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     const parts = key.split('_');
     const aiPerm = parts[0];
     const humanPerm = parts[1] || '';
-    
+
     // If this is a single permission (no humanPerm), use the primary color's settings
     let borderPermKey = aiPerm;
     let borderColor = color; // Use the primary color by default
-    
+
     // For mixed permissions, determine which permission differs from default
     if (humanPerm) {
       const defaults = getDefaultPermissions();
       const defaultAiPerm = `ai${defaults.ai === 'r' ? 'Read' : defaults.ai === 'w' ? 'Write' : 'NoAccess'}`;
       const defaultHumanPerm = `human${defaults.human === 'r' ? 'Read' : defaults.human === 'w' ? 'Write' : 'NoAccess'}`;
-      
+
       // Use the permission that differs from default
       if (aiPerm === defaultAiPerm && humanPerm !== defaultHumanPerm) {
         borderPermKey = humanPerm;
         borderColor = mixedColor || color;
       }
     }
-    
+
     // Check if the permission is enabled before applying border/minimap colors
     const isPermissionEnabled = permissionEnabledStates[borderPermKey] !== false;
-    
+
     // Get the actual border opacity value, defaulting to 1.0 ONLY if not set
     const borderOpacity = isPermissionEnabled ? (permissionBorderOpacities[borderPermKey] ?? 1.0) : 0;
     const minimapColor = permissionMinimapColors[borderPermKey] || borderColor;
-    
+
     // Debug logging
     if (key.includes('Write') || key.includes('Read')) {
-      console.log(`[DEBUG] ${key}: borderOpacity=${borderOpacity}, from ${borderPermKey}, enabled=${isPermissionEnabled}, stored value=${permissionBorderOpacities[borderPermKey]}`);
+      DebugLogger.log(`[DEBUG] ${key}: borderOpacity=${borderOpacity}, from ${borderPermKey}, enabled=${isPermissionEnabled}, stored value=${permissionBorderOpacities[borderPermKey]}`);
     }
-    
+
     // Only add border if borderBarEnabled is true AND border opacity > 0 AND permission is enabled
     if (borderBarEnabled && borderOpacity > 0 && isPermissionEnabled) {
       decorationOptions.borderWidth = '0 0 0 3px';
       decorationOptions.borderStyle = 'solid';
       decorationOptions.borderColor = hexToRgba(minimapColor, borderOpacity);
     }
-    
+
     // Only add overview ruler if border opacity > 0 AND permission is enabled
     if (borderOpacity > 0 && isPermissionEnabled) {
       decorationOptions.overviewRulerColor = hexToRgba(minimapColor, borderOpacity);
@@ -643,8 +625,8 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     if (effectiveOpacity > 0) {
       if (isMixed && mixedColor) {
         // For mixed permissions, use the mix pattern renderer
-        console.log(`[DEBUG] ${key}: Creating mixed decoration with pattern=${colorInfo.mixPattern}`);
-        
+        DebugLogger.log(`[DEBUG] ${key}: Creating mixed decoration with pattern=${colorInfo.mixPattern}`);
+
         const mixResult = renderMixPattern(colorInfo.mixPattern || MixPattern.AVERAGE, {
           aiColor: color,
           humanColor: mixedColor,
@@ -655,7 +637,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
           aiBorderOpacity: colorInfo.aiBorderOpacity,
           humanBorderOpacity: colorInfo.humanBorderOpacity
         });
-        
+
         // Apply the mix pattern result
         if (mixResult.backgroundColor) {
           decorationOptions.backgroundColor = mixResult.backgroundColor;
@@ -669,7 +651,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
         if (mixResult.borderStyle) {
           decorationOptions.borderStyle = mixResult.borderStyle;
         }
-        
+
         // Update minimap color for mixed patterns
         const mixedBorderColor = getMixedBorderColor(colorInfo.mixPattern || MixPattern.AVERAGE, {
           aiColor: color,
@@ -681,7 +663,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
           aiBorderOpacity: colorInfo.aiBorderOpacity,
           humanBorderOpacity: colorInfo.humanBorderOpacity
         });
-        
+
         if (mixedBorderColor && borderBarEnabled && borderOpacity > 0) {
           decorationOptions.borderColor = mixedBorderColor;
         }
@@ -693,10 +675,10 @@ function initializeCodeDecorations(_context: ExtensionContext) {
         decorationOptions.backgroundColor = hexToRgba(color, effectiveOpacity);
       }
     }
-    
+
     // Skip creating decoration if both background and border are disabled
     if (effectiveOpacity === 0 && borderOpacity === 0) {
-      console.log(`[DEBUG] Skipping decoration for ${key}: both background and border opacity are 0`);
+      DebugLogger.log(`[DEBUG] Skipping decoration for ${key}: both background and border opacity are 0`);
       return;
     }
 
@@ -903,7 +885,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
     // Get default permissions
     const defaults = getDefaultPermissions();
-    
+
     // Get debug flag
     const config = workspace.getConfiguration('tumee-vscode-plugin');
     const debugEnabled = config.get<boolean>('enableDebugLogging', false);
@@ -915,7 +897,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
       if (!perm) {
         if (debugEnabled) {
-          console.log(`[Extension] Line ${lineNumber}: No permission entry found`);
+          DebugLogger.log(`[Extension] Line ${lineNumber}: No permission entry found`);
         }
         continue;
       }
@@ -927,7 +909,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
       // Debug logging
       if (debugEnabled && (aiContext || humanContext || aiPerm === 'context' || humanPerm === 'context')) {
-        console.log(`[Extension] Line ${lineNumber}: permissions=${JSON.stringify(perm.permissions)}, isContext=${JSON.stringify(perm.isContext)}`);
+        DebugLogger.log(`[Extension] Line ${lineNumber}: permissions=${JSON.stringify(perm.permissions)}, isContext=${JSON.stringify(perm.isContext)}`);
       }
 
       // Filter out 'context' as a permission value - it should only be tracked in isContext
@@ -936,10 +918,10 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
       // Get decoration type based on permissions
       const decorationType = getDecorationType(effectiveAiPerm, effectiveHumanPerm, aiContext, humanContext);
-      
+
       // Debug logging for context lines
       if (debugEnabled && (aiContext || humanContext)) {
-        console.log(`[Extension] Line ${lineNumber}: effectiveAiPerm=${effectiveAiPerm}, effectiveHumanPerm=${effectiveHumanPerm}, aiContext=${aiContext}, humanContext=${humanContext}, decorationType=${decorationType}`);
+        DebugLogger.log(`[Extension] Line ${lineNumber}: effectiveAiPerm=${effectiveAiPerm}, effectiveHumanPerm=${effectiveHumanPerm}, aiContext=${aiContext}, humanContext=${humanContext}, decorationType=${decorationType}`);
       }
 
       // Skip lines with no decoration (default state)

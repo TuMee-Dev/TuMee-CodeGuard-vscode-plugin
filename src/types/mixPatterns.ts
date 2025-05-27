@@ -25,7 +25,7 @@ export const MIX_PATTERNS: MixPatternDefinition[] = [
   },
   {
     id: MixPattern.AI_PRIORITY,
-    name: 'AI Priority', 
+    name: 'AI Priority',
     description: 'AI color takes precedence'
   },
   {

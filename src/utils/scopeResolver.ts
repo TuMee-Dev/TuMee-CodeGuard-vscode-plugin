@@ -2,6 +2,7 @@ import type * as vscode from 'vscode';
 import { getLanguagePatterns, UTILITY_PATTERNS, GUARD_TAG_PREFIX } from './regexCache';
 import { parseDocument, findNodeAtPosition, findParentOfType, getNodeBoundaries, initializeTreeSitter } from './treeSitterParser';
 import type { Node, Tree } from 'web-tree-sitter';
+import { DebugLogger } from './debugLogger';
 
 // Semantic scope to tree-sitter node type mappings
 const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
@@ -266,7 +267,7 @@ async function resolveSemanticWithTreeSitter(
 
         if (targetNode && targetNode.startPosition.row >= line) {
           const bounds = getNodeBoundaries(targetNode);
-          console.log(`[ScopeResolver] Found ${scope} node: type=${targetNode.type}, start=${bounds.startLine}, end=${bounds.endLine}`);
+          DebugLogger.log(`[ScopeResolver] Found ${scope} node: type=${targetNode.type}, start=${bounds.startLine}, end=${bounds.endLine}`);
 
           // For Python classes, trim trailing whitespace
           if (scope === 'class' && document.languageId === 'python') {

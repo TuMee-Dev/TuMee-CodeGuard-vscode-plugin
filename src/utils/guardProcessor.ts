@@ -3,7 +3,7 @@ import type { GuardTag, LinePermission, ScopeBoundary } from '../types/guardType
 import { parseGuardTag } from './acl';
 import { resolveSemantic } from './scopeResolver';
 import { logError, validateDocument, GuardProcessingError, ErrorSeverity } from './errorHandler';
-import { GUARD_TAG_PATTERNS } from './regexCache';
+import { DebugLogger } from './debugLogger';
 
 // Cache for scope resolutions to avoid recalculating on every keystroke
 const scopeCacheMap = new WeakMap<vscode.TextDocument, Map<string, ScopeBoundary>>();
@@ -248,7 +248,7 @@ export async function parseGuardTags(
   // Get debug flag from configuration
   const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
   const debugEnabled = config.get<boolean>('enableDebugLogging', false);
-  
+
   // Validate input
   if (!validateDocument(document)) {
     return [];
@@ -336,7 +336,7 @@ export async function parseGuardTags(
                 guardTag.scopeEnd = scopeBoundary.endLine;
                 guardTag.lineCount = scopeBoundary.endLine - scopeBoundary.startLine + 1;
                 if (debugEnabled) {
-                  console.log(`[GuardProcessor] Resolved ${effectiveScope} at line ${lineNumber}: start=${scopeBoundary.startLine}, end=${scopeBoundary.endLine}`);
+                  DebugLogger.log(`[GuardProcessor] Resolved ${effectiveScope} at line ${lineNumber}: start=${scopeBoundary.startLine}, end=${scopeBoundary.endLine}`);
                 }
               } else {
                 // No block found - apply only to current line
@@ -420,12 +420,12 @@ export async function parseGuardTags(
             }
           }
           effectiveEndLine = lastContentLine;
-          
+
           if (debugEnabled) {
-            console.log(`[GuardProcessor] Context guard scope trimmed from ${endLine} to ${effectiveEndLine} (last content line)`);
+            DebugLogger.log(`[GuardProcessor] Context guard scope trimmed from ${endLine} to ${effectiveEndLine} (last content line)`);
           }
         }
-        
+
         const stackEntry = {
           permissions: currentPermissions,
           isContext: currentContext,
@@ -434,16 +434,16 @@ export async function parseGuardTags(
           isLineLimited: isLineLimited,
           sourceGuard: guardTag
         };
-        
+
         if (debugEnabled && guardTag.permission === 'context') {
-          console.log(`[GuardProcessor] Pushing context guard to stack:`, {
+          DebugLogger.log('[GuardProcessor] Pushing context guard to stack:', {
             target: guardTag.target,
             startLine: startLine,
             endLine: effectiveEndLine,
             scope: guardTag.scope
           });
         }
-        
+
         guardStack.push(stackEntry);
         guardTags.push(guardTag);
       }
@@ -542,7 +542,7 @@ function processGuardStack(
         };
 
         if (debugEnabled) {
-          console.log(`[GuardProcessor] Pushing guard to stack at line ${line}:`, {
+          DebugLogger.log(`[GuardProcessor] Pushing guard to stack at line ${line}:`, {
             permission: tag.permission,
             target: tag.target,
             startLine: entry.startLine,
@@ -576,9 +576,9 @@ function processGuardStack(
         if ((top.isContext.ai || top.isContext.human)) {
           // Context guard is active
           if (debugEnabled) {
-            console.log(`[GuardProcessor] Context guard active: line ${line}, guard range ${top.startLine}-${top.endLine}, isWhitespace=${isWhitespaceOnly}`);
+            DebugLogger.log(`[GuardProcessor] Context guard active: line ${line}, guard range ${top.startLine}-${top.endLine}, isWhitespace=${isWhitespaceOnly}`);
           }
-          
+
           // Since we already trimmed context guards to exclude trailing whitespace when pushing to stack,
           // if we reach here with a whitespace line, it must be within the content area
           // However, we should still only apply context to non-whitespace lines
@@ -653,10 +653,10 @@ function processGuardStack(
           const lineText = line === 0 ? '[DEFAULT]' : getLineText(line);
           const isEmpty = lineText.trim() === '' || lineText === '[DEFAULT]';
           if ((effectiveIsContext.ai || effectiveIsContext.human) || isEmpty) {
-            console.log(`[GuardProcessor] Line ${line} (${isEmpty ? 'EMPTY' : 'content'}): isContext=${JSON.stringify(effectiveIsContext)}, permissions=${JSON.stringify(effectivePermissions)}`);
+            DebugLogger.log(`[GuardProcessor] Line ${line} (${isEmpty ? 'EMPTY' : 'content'}): isContext=${JSON.stringify(effectiveIsContext)}, permissions=${JSON.stringify(effectivePermissions)}`);
           }
         }
-        
+
         linePermissions.set(line, {
           permissions: effectivePermissions,
           isContext: effectiveIsContext
@@ -704,7 +704,7 @@ export function getLinePermissions(
   // Get debug flag from configuration
   const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
   const debugEnabled = config.get<boolean>('enableDebugLogging', false);
-  
+
   const permissions = new Map<number, LinePermission>();
   const totalLines = document.lineCount;
 

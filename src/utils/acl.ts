@@ -79,7 +79,7 @@ export const parseGuardTag = (line: string): {
 
     // Normalize target: 'hu' -> 'human'
     const normalizedTarget = target.toLowerCase() === 'hu' ? 'human' : target.toLowerCase();
-    
+
     // Normalize permission: 'read' -> 'r', 'write' -> 'w', 'noaccess' -> 'n'
     let normalizedPermission = permission.toLowerCase();
     if (normalizedPermission === 'read') normalizedPermission = 'r';
@@ -106,7 +106,7 @@ export const parseGuardTag = (line: string): {
     if (normalizedPermission === 'read') normalizedPermission = 'r';
     else if (normalizedPermission === 'write') normalizedPermission = 'w';
     else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
-    
+
     return {
       target: 'ai',
       permission: normalizedPermission,
@@ -122,7 +122,7 @@ export const parseGuardTag = (line: string): {
     if (normalizedPermission === 'read') normalizedPermission = 'r';
     else if (normalizedPermission === 'write') normalizedPermission = 'w';
     else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
-    
+
     return {
       target: 'ai',
       permission: normalizedPermission,
@@ -138,7 +138,7 @@ export const parseGuardTag = (line: string): {
     if (normalizedPermission === 'read') normalizedPermission = 'r';
     else if (normalizedPermission === 'write') normalizedPermission = 'w';
     else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
-    
+
     return {
       target: 'ai',
       permission: normalizedPermission,
