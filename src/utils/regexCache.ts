@@ -8,13 +8,13 @@ export const GUARD_TAG_PREFIX = '@guard:';
 // Guard tag patterns - compile once and reuse
 export const GUARD_TAG_PATTERNS = {
   // Main guard tag pattern with new format support
-  GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(r|w|n|context)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/gi,
+  GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/gi,
 
   // Markdown-specific guard tag pattern
-  MARKDOWN_GUARD_TAG: /<!--\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(r|w|n|context)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?(?:\s*-->)?/gi,
+  MARKDOWN_GUARD_TAG: /<!--\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?(?:\s*-->)?/gi,
 
   // Legacy format pattern (backwards compatibility)
-  LEGACY_GUARD_TAG: /(?:\/\/|#|--)\s*@guard:(ai|human|hu):(r|w|n)(?:\.(\d+))?/gi,
+  LEGACY_GUARD_TAG: /(?:\/\/|#|--)\s*@guard:(ai|human|hu):(read|write|noaccess|r|w|n)(?:\.(\d+))?/gi,
 
   // Pattern for extracting scope modifiers
   SCOPE_MODIFIER: /([+-])([a-zA-Z]+)/g,
@@ -23,17 +23,17 @@ export const GUARD_TAG_PATTERNS = {
   NUMERIC_SCOPE: /^\d+$/,
 
   // Additional patterns for specific use cases
-  GUARD_TAG_NO_SPACE: /(?:\/\/|#|--|\*)\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(r|w|n|context)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/gi,
-  GUARD_TAG_LINE: /.*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(r|w|n|context)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?.*/gi,
+  GUARD_TAG_NO_SPACE: /(?:\/\/|#|--|\*)\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/gi,
+  GUARD_TAG_LINE: /.*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?.*/gi,
 
   // Language-specific line count patterns
-  LINE_COUNT: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)\.(\d+)/i,
-  PYTHON_LINE_COUNT: /#\s*@guard:ai:(r|w|n)\.(\d+)/i,
-  JAVASCRIPT_LINE_COUNT: /\/\/\s*@guard:ai:(r|w|n)\.(\d+)/i,
+  LINE_COUNT: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(read|write|noaccess|r|w|n)\.(\d+)/i,
+  PYTHON_LINE_COUNT: /#\s*@guard:ai:(read|write|noaccess|r|w|n)\.(\d+)/i,
+  JAVASCRIPT_LINE_COUNT: /\/\/\s*@guard:ai:(read|write|noaccess|r|w|n)\.(\d+)/i,
 
   // Inline guard tag patterns for parseGuardTag function
-  PARSE_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(r|w|n|context)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/i,
-  PARSE_LEGACY_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(r|w|n)(?:\.(\d+))?/i,
+  PARSE_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/i,
+  PARSE_LEGACY_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(read|write|noaccess|r|w|n)(?:\.(\d+))?/i,
 
   // Simple pattern to detect any guard tag (case-insensitive)
   HAS_GUARD_TAG: /@guard:/i

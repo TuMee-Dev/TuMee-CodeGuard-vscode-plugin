@@ -79,11 +79,17 @@ export const parseGuardTag = (line: string): {
 
     // Normalize target: 'hu' -> 'human'
     const normalizedTarget = target.toLowerCase() === 'hu' ? 'human' : target.toLowerCase();
+    
+    // Normalize permission: 'read' -> 'r', 'write' -> 'w', 'noaccess' -> 'n'
+    let normalizedPermission = permission.toLowerCase();
+    if (normalizedPermission === 'read') normalizedPermission = 'r';
+    else if (normalizedPermission === 'write') normalizedPermission = 'w';
+    else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
 
     return {
       target: normalizedTarget,
       identifier: identifier || undefined,
-      permission: permission.toLowerCase(),
+      permission: normalizedPermission,
       scope: isLineCount ? undefined : scopeOrCount,
       lineCount: isLineCount ? parseInt(scopeOrCount, 10) : undefined,
       addScopes: addScopesStr ? addScopesStr.split('+').filter(s => s) : undefined,
@@ -95,9 +101,15 @@ export const parseGuardTag = (line: string): {
   // Try legacy format for backwards compatibility
   const legacyMatch = line.match(GUARD_TAG_PATTERNS.PARSE_LEGACY_GUARD_TAG);
   if (legacyMatch) {
+    // Normalize permission for legacy format too
+    let normalizedPermission = legacyMatch[1].toLowerCase();
+    if (normalizedPermission === 'read') normalizedPermission = 'r';
+    else if (normalizedPermission === 'write') normalizedPermission = 'w';
+    else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
+    
     return {
       target: 'ai',
-      permission: legacyMatch[1].toLowerCase(),
+      permission: normalizedPermission,
       lineCount: legacyMatch[2] ? parseInt(legacyMatch[2], 10) : undefined,
       type: 'legacy'
     };
@@ -106,9 +118,14 @@ export const parseGuardTag = (line: string): {
   // Try Python-specific pattern (legacy)
   const pythonMatch = line.match(PYTHON_LINE_COUNT_REGEX);
   if (pythonMatch) {
+    let normalizedPermission = pythonMatch[1].toLowerCase();
+    if (normalizedPermission === 'read') normalizedPermission = 'r';
+    else if (normalizedPermission === 'write') normalizedPermission = 'w';
+    else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
+    
     return {
       target: 'ai',
-      permission: pythonMatch[1].toLowerCase(),
+      permission: normalizedPermission,
       lineCount: parseInt(pythonMatch[2], 10),
       type: 'python'
     };
@@ -117,9 +134,14 @@ export const parseGuardTag = (line: string): {
   // Try JavaScript-specific pattern (legacy)
   const jsMatch = line.match(JAVASCRIPT_LINE_COUNT_REGEX);
   if (jsMatch) {
+    let normalizedPermission = jsMatch[1].toLowerCase();
+    if (normalizedPermission === 'read') normalizedPermission = 'r';
+    else if (normalizedPermission === 'write') normalizedPermission = 'w';
+    else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
+    
     return {
       target: 'ai',
-      permission: jsMatch[1].toLowerCase(),
+      permission: normalizedPermission,
       lineCount: parseInt(jsMatch[2], 10),
       type: 'javascript'
     };
