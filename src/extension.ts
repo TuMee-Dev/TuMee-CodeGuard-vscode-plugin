@@ -11,7 +11,7 @@ import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTy
 import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
-import { registerColorCustomizerCommand } from '@/tools/colorCustomizer';
+import { registerColorCustomizerCommand, DEFAULT_COLORS } from '@/tools/colorCustomizer';
 import { disposeACLCache } from '@/utils/aclCache';
 import { performanceMonitor } from '@/utils/performanceMonitor';
 import { configValidator } from '@/utils/configValidator';
@@ -110,12 +110,27 @@ export async function activate(context: ExtensionContext) {
           // If guard colors changed, recreate decoration types and refresh all decorations
           if (event.affectsConfiguration('tumee-vscode-plugin.guardColors') ||
               event.affectsConfiguration('tumee-vscode-plugin.guardColorsComplete')) {
+            // Get current decorations from cache to reapply immediately
+            const cachedDecorations = new Map<TextDocument, DecorationRanges>();
+            for (const editor of window.visibleTextEditors) {
+              const cached = decorationCache.get(editor.document);
+              if (cached) {
+                cachedDecorations.set(editor.document, cached);
+              }
+            }
+
             // Recreate decoration types with new colors
             initializeCodeDecorations(context);
 
-            // Refresh decorations in all visible editors
+            // Immediately reapply cached decorations to prevent flash
             for (const editor of window.visibleTextEditors) {
-              void updateCodeDecorations(editor.document);
+              const cached = cachedDecorations.get(editor.document);
+              if (cached) {
+                decorationTypes.forEach((decoration, key) => {
+                  const ranges = cached[key as keyof DecorationRanges] || [];
+                  editor.setDecorations(decoration, ranges);
+                });
+              }
             }
           }
         })
@@ -203,20 +218,9 @@ export async function activate(context: ExtensionContext) {
 function initializeCodeDecorations(_context: ExtensionContext) {
   // Get configured colors and opacity
   const config = workspace.getConfiguration(getExtensionWithOptionalName());
-  const defaultColors = {
-    aiWrite: '#FFA500',
-    aiRead: '#808080',
-    aiNoAccess: '#90EE90',
-    humanWrite: '#0000FF',
-    humanRead: '#D3D3D3',
-    humanNoAccess: '#FF0000',
-    contextRead: '#00CED1',
-    contextWrite: '#1E90FF',
-    opacity: 0.3
-  };
-
-  // Get the complete guard colors configuration
-  const guardColorsComplete = config.get<any>('guardColorsComplete');
+  
+  // Get the complete guard colors configuration, or use DEFAULT_COLORS
+  const guardColorsComplete = config.get<any>('guardColorsComplete') || DEFAULT_COLORS;
   const borderBarEnabled = guardColorsComplete?.borderBarEnabled !== false;
 
   // Store per-permission transparency values
@@ -242,33 +246,31 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     Object.assign(userColors, guardColorsComplete.combinations);
   }
 
-  // Only use colors for enabled permissions
+  // Build colors object based on configuration or defaults
   const colors: any = {};
   
-  // First apply defaults for enabled permissions only
-  for (const [key, defaultColor] of Object.entries(defaultColors)) {
-    if (key === 'opacity') {
-      colors[key] = defaultColor;
-    } else {
-      // Check if this permission is enabled (default to true if not specified)
+  // If we have user colors in guardColorsComplete, use those
+  if (userColors && Object.keys(userColors).length > 0) {
+    // Apply user colors ONLY for enabled permissions
+    for (const [key, color] of Object.entries(userColors)) {
+      // Only add the color if the permission is enabled
       const isEnabled = permissionEnabledStates[key] !== false;
-      console.log(`[DEBUG] Permission ${key}: enabled=${isEnabled}, hasEnabledState=${key in permissionEnabledStates}`);
       if (isEnabled) {
-        colors[key] = defaultColor;
+        colors[key] = color;
+      }
+    }
+  } else {
+    // No user configuration, use DEFAULT_COLORS from theme
+    for (const [key, permission] of Object.entries(DEFAULT_COLORS.permissions)) {
+      if (permission.enabled) {
+        colors[key] = permission.color;
+        permissionTransparencies[key] = permission.transparency;
+        permissionEnabledStates[key] = permission.enabled;
       }
     }
   }
-  
-  // Then apply user colors ONLY for enabled permissions
-  for (const [key, color] of Object.entries(userColors)) {
-    // Only add the color if the permission is enabled
-    const isEnabled = permissionEnabledStates[key] !== false;
-    if (isEnabled) {
-      colors[key] = color;
-    }
-  }
 
-  const opacity = colors.opacity || config.get<number>('codeDecorationOpacity') || 0.1;
+  const opacity = config.get<number>('codeDecorationOpacity') || 0.1;
 
   // Helper function to convert hex to rgba
   const hexToRgba = (hex: string | undefined, alpha: number): string => {

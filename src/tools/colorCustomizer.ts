@@ -55,7 +55,7 @@ interface ThemeDefinition {
 }
 
 // Default colors (Light theme)
-const DEFAULT_COLORS: GuardColors = {
+export const DEFAULT_COLORS: GuardColors = {
   permissions: {
     aiWrite: { enabled: true, color: '#FFA500', transparency: 0.2 },
     aiRead: { enabled: true, color: '#808080', transparency: 0.15 },
@@ -440,6 +440,13 @@ export class ColorCustomizerPanel {
       if (customThemes[this._currentTheme]) {
         customThemes[this._currentTheme] = colors;
         await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
+        
+        // If this is the currently selected theme, update guardColorsComplete too
+        const selectedTheme = config.get<string>('selectedTheme');
+        if (selectedTheme === this._currentTheme) {
+          await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
+        }
+        
         void vscode.window.showInformationMessage(`Theme '${this._currentTheme}' updated successfully!`);
       }
       // Don't send colors back - webview already has current values
