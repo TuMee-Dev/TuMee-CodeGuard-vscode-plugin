@@ -885,21 +885,44 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
     // Get default permissions
     const defaults = getDefaultPermissions();
+    
+    // Get debug flag
+    const config = workspace.getConfiguration('tumee-vscode-plugin');
+    const debugEnabled = config.get<boolean>('enableDebugLogging', false);
 
     // Decorate each line - just use what guardProcessor calculated
     for (let i = 0; i < document.lineCount; i++) {
       const lineNumber = i + 1;
       const perm = linePermissions.get(lineNumber);
 
-      if (!perm) continue;
+      if (!perm) {
+        if (debugEnabled) {
+          console.log(`[Extension] Line ${lineNumber}: No permission entry found`);
+        }
+        continue;
+      }
 
       const aiPerm = perm.permissions?.ai || defaults.ai;
       const humanPerm = perm.permissions?.human || defaults.human;
       const aiContext = perm.isContext?.ai || false;
       const humanContext = perm.isContext?.human || false;
 
+      // Debug logging
+      if (debugEnabled && (aiContext || humanContext || aiPerm === 'context' || humanPerm === 'context')) {
+        console.log(`[Extension] Line ${lineNumber}: permissions=${JSON.stringify(perm.permissions)}, isContext=${JSON.stringify(perm.isContext)}`);
+      }
+
+      // Filter out 'context' as a permission value - it should only be tracked in isContext
+      const effectiveAiPerm = aiPerm === 'context' ? defaults.ai : aiPerm;
+      const effectiveHumanPerm = humanPerm === 'context' ? defaults.human : humanPerm;
+
       // Get decoration type based on permissions
-      const decorationType = getDecorationType(aiPerm, humanPerm, aiContext, humanContext);
+      const decorationType = getDecorationType(effectiveAiPerm, effectiveHumanPerm, aiContext, humanContext);
+      
+      // Debug logging for context lines
+      if (debugEnabled && (aiContext || humanContext)) {
+        console.log(`[Extension] Line ${lineNumber}: effectiveAiPerm=${effectiveAiPerm}, effectiveHumanPerm=${effectiveHumanPerm}, aiContext=${aiContext}, humanContext=${humanContext}, decorationType=${decorationType}`);
+      }
 
       // Skip lines with no decoration (default state)
       if (!decorationType) {

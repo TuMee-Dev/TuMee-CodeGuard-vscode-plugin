@@ -408,15 +408,43 @@ export async function parseGuardTags(
           currentContext[guardTag.target] = false;
         }
 
-        guardStack.push({
+        // For context guards, trim the endLine to exclude trailing whitespace
+        let effectiveEndLine = endLine;
+        if (guardTag.permission === 'context' && effectiveScope !== 'file') {
+          // Find the last line with content within the scope
+          let lastContentLine = startLine;
+          for (let i = startLine; i <= endLine; i++) {
+            const lineText = i > lines.length ? '' : lines[i - 1];
+            if (lineText.trim().length > 0) {
+              lastContentLine = i;
+            }
+          }
+          effectiveEndLine = lastContentLine;
+          
+          if (debugEnabled) {
+            console.log(`[GuardProcessor] Context guard scope trimmed from ${endLine} to ${effectiveEndLine} (last content line)`);
+          }
+        }
+        
+        const stackEntry = {
           permissions: currentPermissions,
           isContext: currentContext,
           startLine: startLine,
-          endLine: endLine,
+          endLine: effectiveEndLine,
           isLineLimited: isLineLimited,
           sourceGuard: guardTag
-        });
-
+        };
+        
+        if (debugEnabled && guardTag.permission === 'context') {
+          console.log(`[GuardProcessor] Pushing context guard to stack:`, {
+            target: guardTag.target,
+            startLine: startLine,
+            endLine: effectiveEndLine,
+            scope: guardTag.scope
+          });
+        }
+        
+        guardStack.push(stackEntry);
         guardTags.push(guardTag);
       }
     }
@@ -540,12 +568,49 @@ function processGuardStack(
       // Get the current state from the stack
       const top = guardStack[guardStack.length - 1];
       if (line >= top.startLine && line <= top.endLine) {
-        // For whitespace-only lines, check if we need to skip context guards
+        // Start with the top permissions
         let effectivePermissions = top.permissions;
+        let effectiveIsContext = top.isContext;
 
-        if (isWhitespaceOnly) {
-          // Check if this is trailing whitespace at the end of a guard
-          // Look ahead to see if there's a guard starting soon or if we're at the end of a block
+        // Handle context guards first
+        if ((top.isContext.ai || top.isContext.human)) {
+          // Context guard is active
+          if (debugEnabled) {
+            console.log(`[GuardProcessor] Context guard active: line ${line}, guard range ${top.startLine}-${top.endLine}, isWhitespace=${isWhitespaceOnly}`);
+          }
+          
+          // Since we already trimmed context guards to exclude trailing whitespace when pushing to stack,
+          // if we reach here with a whitespace line, it must be within the content area
+          // However, we should still only apply context to non-whitespace lines
+          if (!isWhitespaceOnly) {
+            // Non-whitespace line within context range - apply context
+            // Collect all non-context permissions from applicable stack entries
+            const nonContextPermissions: { [target: string]: string } = {};
+            for (let i = guardStack.length - 1; i >= 0; i--) {
+              const entry = guardStack[i];
+              if (line >= entry.startLine && line <= entry.endLine) {
+                // Add any non-context permissions we haven't seen yet
+                for (const [target, permission] of Object.entries(entry.permissions)) {
+                  if (permission !== 'context' && !nonContextPermissions[target]) {
+                    nonContextPermissions[target] = permission;
+                  }
+                }
+              }
+            }
+
+            // If we found any non-context permissions, use them
+            if (Object.keys(nonContextPermissions).length > 0) {
+              effectivePermissions = nonContextPermissions;
+            }
+          } else {
+            // Whitespace line within a context guard
+            // Don't apply context coloring to whitespace
+            effectiveIsContext = { ai: false, human: false };
+            // Use the permissions from the context guard (which should have the underlying permissions)
+            // not the context itself
+          }
+        } else if (isWhitespaceOnly) {
+          // Non-context guard with whitespace - check for trailing whitespace
           let isTrailing = false;
           let nextGuardLine = -1;
 
@@ -583,33 +648,18 @@ function processGuardStack(
           }
         }
 
-        // Context guard handling for ALL lines (not just whitespace)
-        if ((top.isContext.ai || top.isContext.human) && !isWhitespaceOnly) {
-          const nonContextPermissions: { [target: string]: string } = {};
-
-          // Collect all non-context permissions from applicable stack entries
-          for (let i = guardStack.length - 1; i >= 0; i--) {
-            const entry = guardStack[i];
-            if (line >= entry.startLine && line <= entry.endLine) {
-              // Add any non-context permissions we haven't seen yet
-              for (const [target, permission] of Object.entries(entry.permissions)) {
-                if (permission !== 'context' && !nonContextPermissions[target]) {
-                  nonContextPermissions[target] = permission;
-                }
-              }
-            }
-          }
-
-          // If we found any non-context permissions, use them
-          if (Object.keys(nonContextPermissions).length > 0) {
-            effectivePermissions = nonContextPermissions;
+        // Return the full permissions state for this line
+        if (debugEnabled) {
+          const lineText = line === 0 ? '[DEFAULT]' : getLineText(line);
+          const isEmpty = lineText.trim() === '' || lineText === '[DEFAULT]';
+          if ((effectiveIsContext.ai || effectiveIsContext.human) || isEmpty) {
+            console.log(`[GuardProcessor] Line ${line} (${isEmpty ? 'EMPTY' : 'content'}): isContext=${JSON.stringify(effectiveIsContext)}, permissions=${JSON.stringify(effectivePermissions)}`);
           }
         }
-
-        // Return the full permissions state for this line with context info
+        
         linePermissions.set(line, {
           permissions: effectivePermissions,
-          isContext: top.isContext
+          isContext: effectiveIsContext
         });
       }
     } else {
