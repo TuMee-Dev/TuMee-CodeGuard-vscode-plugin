@@ -1354,7 +1354,14 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     window.saveColors = saveColors;
     
     function resetColors() {
-      applyPreset('light');
+      if (!savedColors) return;
+      
+      // Restore the saved colors
+      updateAllColors(savedColors);
+      
+      // Clear any changes
+      hasChanges = false;
+      updateButtonStates();
     }
     window.resetColors = resetColors;
     
