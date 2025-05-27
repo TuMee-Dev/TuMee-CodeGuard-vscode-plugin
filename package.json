@@ -97,6 +97,12 @@
           "description": "Track and log performance metrics for debugging",
           "default": false
         },
+        "tumee-vscode-plugin.enableDebugLogging": {
+          "title": "Enable Debug Logging",
+          "type": "boolean",
+          "description": "Enable verbose debug logging for guard processing",
+          "default": false
+        },
         "tumee-vscode-plugin.guardColors": {
           "type": "object",
           "title": "Guard Tag Colors",

@@ -1,4 +1,4 @@
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import type { GuardTag, LinePermission, ScopeBoundary } from '../types/guardTypes';
 import { parseGuardTag } from './acl';
 import { resolveSemantic } from './scopeResolver';
@@ -245,6 +245,10 @@ export async function parseGuardTags(
   document: vscode.TextDocument,
   lines: string[]
 ): Promise<GuardTag[]> {
+  // Get debug flag from configuration
+  const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+  const debugEnabled = config.get<boolean>('enableDebugLogging', false);
+  
   // Validate input
   if (!validateDocument(document)) {
     return [];
@@ -331,10 +335,14 @@ export async function parseGuardTags(
                 guardTag.scopeStart = scopeBoundary.startLine;
                 guardTag.scopeEnd = scopeBoundary.endLine;
                 guardTag.lineCount = scopeBoundary.endLine - scopeBoundary.startLine + 1;
-                console.log(`[GuardProcessor] Resolved ${effectiveScope} at line ${lineNumber}: start=${scopeBoundary.startLine}, end=${scopeBoundary.endLine}`);
+                if (debugEnabled) {
+                  console.log(`[GuardProcessor] Resolved ${effectiveScope} at line ${lineNumber}: start=${scopeBoundary.startLine}, end=${scopeBoundary.endLine}`);
+                }
               } else {
                 // No block found - apply only to current line
-                console.warn(`[GuardProcessor] No ${effectiveScope} found for guard at line ${lineNumber}, applying to current line only`);
+                if (debugEnabled) {
+                  console.warn(`[GuardProcessor] No ${effectiveScope} found for guard at line ${lineNumber}, applying to current line only`);
+                }
                 guardTag.scopeStart = lineNumber;
                 guardTag.scopeEnd = lineNumber;
                 guardTag.lineCount = 1;
@@ -369,7 +377,9 @@ export async function parseGuardTags(
         } else {
           // This should only happen for languages without tree-sitter support
           // For supported languages, the scope resolution above would have thrown an error
-          console.warn(`[GuardProcessor] No scope resolution for line ${lineNumber} - using line-only fallback`);
+          if (debugEnabled) {
+            console.warn(`[GuardProcessor] No scope resolution for line ${lineNumber} - using line-only fallback`);
+          }
           guardTag.scopeStart = lineNumber;
           guardTag.scopeEnd = lineNumber;
         }
@@ -440,7 +450,8 @@ function processGuardStack(
   guardTags: GuardTag[],
   totalLines: number,
   getLineText: (lineNumber: number) => string,
-  defaultPermissions: { [target: string]: string } = { ai: 'r', human: 'w' }
+  defaultPermissions: { [target: string]: string } = { ai: 'r', human: 'w' },
+  debugEnabled: boolean = false
 ): Map<number, ProcessedLinePermission> {
   const linePermissions = new Map<number, ProcessedLinePermission>();
 
@@ -502,15 +513,17 @@ function processGuardStack(
           sourceGuard: tag
         };
 
-        console.log(`[GuardProcessor] Pushing guard to stack at line ${line}:`, {
-          permission: tag.permission,
-          target: tag.target,
-          startLine: entry.startLine,
-          endLine: entry.endLine,
-          scopeStart: tag.scopeStart,
-          scopeEnd: tag.scopeEnd,
-          isContext: currentContext
-        });
+        if (debugEnabled) {
+          console.log(`[GuardProcessor] Pushing guard to stack at line ${line}:`, {
+            permission: tag.permission,
+            target: tag.target,
+            startLine: entry.startLine,
+            endLine: entry.endLine,
+            scopeStart: tag.scopeStart,
+            scopeEnd: tag.scopeEnd,
+            isContext: currentContext
+          });
+        }
 
         // Before pushing new guard, remove any interrupted context guards
         removeInterruptedContextGuards(guardStack);
@@ -638,6 +651,10 @@ export function getLinePermissions(
   document: vscode.TextDocument,
   guardTags: GuardTag[]
 ): Map<number, LinePermission> {
+  // Get debug flag from configuration
+  const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+  const debugEnabled = config.get<boolean>('enableDebugLogging', false);
+  
   const permissions = new Map<number, LinePermission>();
   const totalLines = document.lineCount;
 
@@ -646,7 +663,8 @@ export function getLinePermissions(
     guardTags,
     totalLines,
     (line) => line === 0 ? '' : document.lineAt(line - 1).text,
-    getDefaultPermissions()
+    getDefaultPermissions(),
+    debugEnabled
   );
 
   // Convert permissions dictionary to LinePermission map
