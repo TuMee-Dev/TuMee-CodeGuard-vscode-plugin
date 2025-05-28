@@ -502,7 +502,7 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
       
       // Handle mixed permissions - use a special border character
       if (isMixed) {
-        borderChar = '│'; // Vertical bar to indicate mixed/conflict
+        borderChar = '█'; // Block character for better visibility
         // For mixed, we could also use a different background pattern
         // or alternate the background color
       }
