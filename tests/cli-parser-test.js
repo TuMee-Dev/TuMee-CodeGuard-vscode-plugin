@@ -266,7 +266,7 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
         const overlapStart = Math.max(g1.scopeStart, g2.scopeStart);
         const overlapEnd = Math.min(g1.scopeEnd, g2.scopeEnd);
         for (let line = overlapStart; line <= overlapEnd; line++) {
-          mixedLines.add(line + 1); // Convert to 1-based
+          mixedLines.add(line); // Already 1-based
         }
       }
     }

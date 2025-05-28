@@ -488,35 +488,10 @@ function initializeCodeDecorations(_context: ExtensionContext) {
           return { color: '#000000', opacity: 0 };
         }
       } else {
-        // Both are at default values - check which one to show based on enabled state
-        if (aiEnabled && humanEnabled) {
-          // Both enabled at default - use mixed pattern
-          DebugLogger.log(`[DEBUG] ${key}: Both at default, using mixed pattern`);
-          return {
-            color: aiColor,
-            opacity: effectiveOpacity,
-            mixedColor: humanColor,
-            isMixed: true,
-            aiOpacity: permissionTransparencies[aiKey] || opacity,
-            humanOpacity: permissionTransparencies[humanKey] || opacity,
-            aiMinimapColor: permissionMinimapColors[aiKey],
-            humanMinimapColor: permissionMinimapColors[humanKey],
-            aiBorderOpacity: permissionBorderOpacities[aiKey],
-            humanBorderOpacity: permissionBorderOpacities[humanKey],
-            mixPattern: mixPattern
-          };
-        } else if (humanEnabled) {
-          // Only human enabled
-          baseColor = humanColor;
-          effectiveOpacity = permissionTransparencies[humanKey] || opacity;
-        } else if (aiEnabled) {
-          // Only AI enabled
-          baseColor = aiColor;
-          effectiveOpacity = permissionTransparencies[aiKey] || opacity;
-        } else {
-          // Neither enabled - return transparent
-          return { color: '#000000', opacity: 0 };
-        }
+        // Both are at default values - don't show decoration
+        // When neither permission differs from default, this represents the unguarded/default state
+        // which should appear undecorated regardless of enabled states
+        return { color: '#000000', opacity: 0 };
       }
     }
 
@@ -927,6 +902,11 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       // Skip lines with no decoration (default state)
       if (!decorationType) {
         continue;
+      }
+
+      // Debug logging for line 11 issue
+      if (i === 10) { // Line 11 (0-based index 10)
+        DebugLogger.log(`[DEBUG] Line 11: decorationType=${decorationType}, aiPerm=${effectiveAiPerm}, humanPerm=${effectiveHumanPerm}`);
       }
 
       // Add decoration for this line
