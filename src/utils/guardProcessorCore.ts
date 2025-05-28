@@ -372,11 +372,11 @@ export async function parseGuardTagsCore(
                 console.log(`[DEBUG] Tree-sitter returned for ai:n.block:`, scopeBoundary);
               }
 
-              // Check if tree-sitter returned a meaningful block or just the whole file
+              // Check if tree-sitter returned a meaningful block
               const isMeaningfulBlock = scopeBoundary && 
                 (scopeBoundary.startLine !== lineNumber || scopeBoundary.endLine !== totalLines);
               
-              if (isMeaningfulBlock) {
+              if (isMeaningfulBlock && scopeBoundary) {
                 guardTag.scopeStart = scopeBoundary.startLine;
                 guardTag.scopeEnd = scopeBoundary.endLine;
                 guardTag.lineCount = scopeBoundary.endLine - scopeBoundary.startLine + 1;
