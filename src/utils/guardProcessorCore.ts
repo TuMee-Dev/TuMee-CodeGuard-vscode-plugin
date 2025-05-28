@@ -320,9 +320,6 @@ export async function parseGuardTagsCore(
         const top = guardStack[guardStack.length - 1];
         // Remove if we've passed the guard's end line (works for both line-limited and scope-based)
         if (lineNumber > top.endLine) {
-          if (lineNumber >= 11 && lineNumber <= 12) {
-            console.log(`[DEBUG] Line ${lineNumber}: Expiring guard with endLine=${top.endLine}, permissions=${JSON.stringify(top.permissions)}`);
-          }
           popGuardWithContextCleanup(guardStack);
         } else {
           break;
@@ -406,30 +403,27 @@ export async function parseGuardTagsCore(
                 tagInfo.removeScopes
               );
               
-              if (guardTag.target === 'ai' && guardTag.permission === 'n') {
-                console.log(`[DEBUG] Tree-sitter returned for ai:n.block:`, scopeBoundary);
-              }
 
               // Check if tree-sitter returned a meaningful block
-              // For guards in comments with block scope, we should NOT use tree-sitter's block
-              // Instead, we should extend from the guard line
+              // For guards in comments with block scope, we should use tree-sitter's block
+              // UNLESS it extends to end-of-file (suggesting no real block was found)
               const isGuardInComment = isLineAComment(lines[lineNumber - 1], document.languageId);
-              const isMeaningfulBlock = scopeBoundary && 
-                (scopeBoundary.startLine !== lineNumber || scopeBoundary.endLine !== totalLines) &&
-                (!isGuardInComment || effectiveScope !== 'block');
+              let isMeaningfulBlock = scopeBoundary && 
+                (scopeBoundary.startLine !== lineNumber || scopeBoundary.endLine !== totalLines);
+              
+              // For guards in comments with block scope, only use tree-sitter if it found a reasonable block
+              // (not extending to end of file)
+              if (isGuardInComment && effectiveScope === 'block' && scopeBoundary && scopeBoundary.endLine === totalLines) {
+                isMeaningfulBlock = false;
+              }
+              
               
               if (isMeaningfulBlock && scopeBoundary) {
-                if (lineNumber === 5) {
-                  console.log(`[DEBUG] Line ${lineNumber}: Tree-sitter found ${effectiveScope} at ${scopeBoundary.startLine}-${scopeBoundary.endLine}`);
-                }
                 guardTag.scopeStart = scopeBoundary.startLine;
                 guardTag.scopeEnd = scopeBoundary.endLine;
                 guardTag.lineCount = scopeBoundary.endLine - scopeBoundary.startLine + 1;
                 if (debugEnabled && logger) {
                   logger.log(`[GuardProcessor] Resolved ${effectiveScope} at line ${lineNumber}: start=${scopeBoundary.startLine}, end=${scopeBoundary.endLine}`);
-                }
-                if (guardTag.target === 'ai' && guardTag.permission === 'n') {
-                  console.log(`[DEBUG] ai:n.block at line ${lineNumber}: scopeStart=${guardTag.scopeStart}, scopeEnd=${guardTag.scopeEnd}`);
                 }
               } else {
                 // No block found - for block scope, extend to next guard or end of file
@@ -629,9 +623,6 @@ export async function parseGuardTagsCore(
           })}`);
         }
 
-        if (lineNumber === 5 || lineNumber === 10) {
-          console.log(`[DEBUG] Line ${lineNumber}: Pushing guard - start=${stackEntry.startLine}, end=${stackEntry.endLine}, permissions=${JSON.stringify(stackEntry.permissions)}`);
-        }
         
         guardStack.push(stackEntry);
         guardTags.push(guardTag);
@@ -664,9 +655,6 @@ export async function parseGuardTagsCore(
       
       // Only process block-scoped guards that extend to end-of-file
       if (currentTag.scope === 'block' && !currentTag.lineCount && currentTag.scopeEnd === totalLines) {
-        if (currentTag.target === 'ai' && currentTag.permission === 'n') {
-          console.log(`[DEBUG] Post-processing ai:n.block: scopeEnd=${currentTag.scopeEnd}, totalLines=${totalLines}`);
-        }
         // Look for the next guard that changes the same target
         for (let j = i + 1; j < guardTags.length; j++) {
           const nextTag = guardTags[j];

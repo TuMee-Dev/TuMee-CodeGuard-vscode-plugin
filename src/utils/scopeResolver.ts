@@ -237,36 +237,9 @@ async function resolveSemanticWithTreeSitter(
     // not apply to the comment itself
 
     // Start searching from the line after the guard
-    if (line === 145) {
-      console.log(`[DEBUG] Starting forward search for scope '${scope}' from line ${line + 1} to ${document.lineCount}`);
-    }
     for (let searchLine = line + 1; searchLine < document.lineCount; searchLine++) {
-      if (line === 145 && searchLine === 146) {
-        console.log(`[DEBUG] First iteration: searchLine = ${searchLine}, line + 1 = ${line + 1}`);
-      }
       const searchNode = findNodeAtPosition(tree, searchLine);
-      if (line === 145 && searchLine <= 157) {
-        if (searchNode) {
-          console.log(`[DEBUG] Line ${searchLine}: searchNode = ${searchNode.type}, start = ${searchNode.startPosition.row}, end = ${searchNode.endPosition.row}`);
-          if (searchNode.parent) {
-            console.log(`[DEBUG]   Parent: ${searchNode.parent.type}, start = ${searchNode.parent.startPosition.row}`);
-          }
-        } else {
-          console.log(`[DEBUG] Line ${searchLine}: searchNode = null`);
-        }
-      }
       if (searchNode) {
-        // Debug: log what we're seeing at each line
-        if (document.languageId === 'python' && line === 145 && searchLine >= 146 && searchLine <= 157) {
-          console.log(`[DEBUG] Searching from guard at line ${line + 1}, currently at line ${searchLine}: node type = ${searchNode.type}, text = "${searchNode.text.substring(0, 50)}..."`);
-          if (searchNode.children) {
-            for (const child of searchNode.children) {
-              if (child) {
-                console.log(`[DEBUG]   Child: type = ${child.type}`);
-              }
-            }
-          }
-        }
         
         // For block scope, we need to handle differently
         // Dictionary/list/set nodes might be children of assignments
@@ -282,17 +255,11 @@ async function resolveSemanticWithTreeSitter(
             // First check if the current node itself is a block type
             if (nodeTypes.includes(searchNode.type)) {
               targetNode = searchNode;
-              if (line === 145) {
-                console.log(`[DEBUG] Found block node at line ${searchLine}: type = ${searchNode.type}`);
-              }
             } else {
               // For assignments like "DICT = {}", search children
               for (const child of searchNode.children) {
                 if (child && nodeTypes.includes(child.type)) {
                   targetNode = child;
-                  if (line === 145) {
-                    console.log(`[DEBUG] Found block child at line ${searchLine}: type = ${child.type}`);
-                  }
                   break;
                 }
               }
@@ -320,9 +287,6 @@ async function resolveSemanticWithTreeSitter(
         if (targetNode && targetNode.startPosition.row >= line) {
           const bounds = getNodeBoundaries(targetNode);
           DebugLogger.log(`[ScopeResolver] Found ${scope} node: type=${targetNode.type}, start=${bounds.startLine}, end=${bounds.endLine}`);
-          if (line === 145) {
-            console.log(`[DEBUG] Found targetNode at searchLine ${searchLine}: type = ${targetNode.type}, startPosition.row = ${targetNode.startPosition.row}`);
-          }
 
           // For Python classes, trim trailing whitespace
           if (scope === 'class' && document.languageId === 'python') {
@@ -341,6 +305,7 @@ async function resolveSemanticWithTreeSitter(
             };
           }
 
+          
           return {
             startLine: line + 1, // Start from the guard line (1-based)
             endLine: bounds.endLine,
@@ -348,9 +313,6 @@ async function resolveSemanticWithTreeSitter(
           };
         }
       }
-    }
-    if (line === 145) {
-      console.log(`[DEBUG] Forward search completed, returning null`);
     }
     return null;
   }
@@ -378,15 +340,9 @@ async function resolveSemanticWithTreeSitter(
 
     default: {
       // For other scopes, find the nearest parent of the specified type
-      if (line === 145) {
-        console.log(`[DEBUG] Hit default case for scope '${scope}'`);
-      }
       const parentNode = findParentOfType(node, nodeTypes);
       if (parentNode) {
         const bounds = getNodeBoundaries(parentNode);
-        if (line === 145) {
-          console.log(`[DEBUG] Found parent node: type = ${parentNode.type}, bounds = ${bounds.startLine}-${bounds.endLine}`);
-        }
         return {
           startLine: bounds.startLine,
           endLine: bounds.endLine,
