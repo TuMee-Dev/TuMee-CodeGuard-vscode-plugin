@@ -33,8 +33,23 @@ Module.prototype.require = function(id) {
     // Return a comprehensive mock for tree-sitter and scope resolver
     return {
       workspace: {
-        getConfiguration: () => ({
-          get: (key, defaultValue) => defaultValue
+        getConfiguration: (namespace) => ({
+          get: (key, defaultValue) => {
+            // Try to load from VSCode settings file
+            try {
+              const os = require('os');
+              const settingsPath = path.join(os.homedir(), '.config', 'Code', 'User', 'settings.json');
+              if (fs.existsSync(settingsPath)) {
+                const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+                const fullKey = namespace ? `${namespace}.${key}` : key;
+                return settings[fullKey] !== undefined ? settings[fullKey] : defaultValue;
+              }
+            } catch (e) {
+              // Fall back to default
+            }
+            return defaultValue;
+          },
+          update: async () => {} // Mock update
         }),
         fs: {
           readFile: async (uri) => {
@@ -224,7 +239,7 @@ function mapPermission(permission) {
 /**
  * Generate debug output format showing permissions for each line
  */
-async function generateDebugOutput(filePath, content, useColor = false) {
+async function generateDebugOutput(filePath, content, useColor = false, themeName = null) {
   const languageId = detectLanguage(filePath);
   const document = new CLIDocument(content, languageId);
   const lines = content.split('\n');
@@ -234,6 +249,9 @@ async function generateDebugOutput(filePath, content, useColor = false) {
   
   // Get line permissions using the plugin's logic
   const linePermissions = getLinePermissions(document, guardTags);
+  
+  // Load theme colors once if using color
+  const themeColors = useColor ? loadThemeColors(themeName) : null;
   
   // Check for overlapping guards (mixed permissions)
   const mixedLines = new Set();
@@ -254,15 +272,158 @@ async function generateDebugOutput(filePath, content, useColor = false) {
     }
   }
   
+  // Function to convert hex color to nearest ANSI color
+  function hexToAnsi(hexColor) {
+    // Remove # if present
+    const hex = hexColor.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    // Map to nearest basic ANSI colors based on RGB values
+    // These are approximations of the 8 basic ANSI background colors
+    const ansiColors = [
+      { name: 'black', bg: '\x1b[40m', rgb: [0, 0, 0] },
+      { name: 'red', bg: '\x1b[41m', rgb: [205, 49, 49] },
+      { name: 'green', bg: '\x1b[42m', rgb: [13, 188, 121] },
+      { name: 'yellow', bg: '\x1b[43m', rgb: [229, 229, 16] },
+      { name: 'blue', bg: '\x1b[44m', rgb: [36, 114, 200] },
+      { name: 'magenta', bg: '\x1b[45m', rgb: [188, 63, 188] },
+      { name: 'cyan', bg: '\x1b[46m', rgb: [17, 168, 205] },
+      { name: 'white', bg: '\x1b[47m', rgb: [229, 229, 229] }
+    ];
+    
+    // Find closest color using Euclidean distance
+    let minDistance = Infinity;
+    let closestColor = ansiColors[0];
+    
+    for (const color of ansiColors) {
+      const distance = Math.sqrt(
+        Math.pow(r - color.rgb[0], 2) +
+        Math.pow(g - color.rgb[1], 2) +
+        Math.pow(b - color.rgb[2], 2)
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestColor = color;
+      }
+    }
+    
+    return closestColor.bg;
+  }
+  
+  // Load theme configuration
+  function loadThemeColors(overrideTheme = null) {
+    try {
+      // Try to load VSCode settings from various locations
+      const os = require('os');
+      const platform = os.platform();
+      const homeDir = os.homedir();
+      
+      // Possible settings paths by platform
+      const settingsPaths = [];
+      if (platform === 'darwin') {
+        settingsPaths.push(
+          path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'settings.json'),
+          path.join(homeDir, '.config', 'Code', 'User', 'settings.json')
+        );
+      } else if (platform === 'win32') {
+        settingsPaths.push(
+          path.join(process.env.APPDATA || '', 'Code', 'User', 'settings.json')
+        );
+      } else {
+        settingsPaths.push(
+          path.join(homeDir, '.config', 'Code', 'User', 'settings.json')
+        );
+      }
+      
+      // Also check workspace settings
+      settingsPaths.push(path.join(process.cwd(), '.vscode', 'settings.json'));
+      
+      for (const settingsPath of settingsPaths) {
+        if (fs.existsSync(settingsPath)) {
+          const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+          const customThemes = settings['tumee-vscode-plugin.customThemes'] || {};
+          const currentTheme = overrideTheme || settings['tumee-vscode-plugin.currentTheme'] || 'default';
+          
+          // Get theme colors
+          const themeColors = customThemes[currentTheme] || getBuiltInTheme(currentTheme);
+          if (themeColors) {
+            // Log which theme is being used
+            if (process.env.DEBUG || overrideTheme) {
+              console.error(`Using theme: ${currentTheme} from ${settingsPath}`);
+            }
+            return mapThemeToAnsi(themeColors);
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore errors, fall back to defaults
+      if (process.env.DEBUG) {
+        console.error('Error loading theme:', e.message);
+      }
+    }
+    
+    // Default color mapping
+    return {
+      aiWrite: '\x1b[43m',      // Yellow
+      aiRead: '\x1b[2m',         // Dim (no background)
+      aiNoAccess: '\x1b[41m',    // Red
+      humanWrite: '\x1b[2m',     // Dim (no background)
+      humanRead: '\x1b[44m',     // Blue
+      humanNoAccess: '\x1b[42m', // Green
+      contextRead: '\x1b[46m',   // Cyan
+      contextWrite: '\x1b[46m'   // Cyan
+    };
+  }
+  
+  // Get built-in theme colors
+  function getBuiltInTheme(themeName) {
+    const themes = {
+      default: {
+        aiWrite: { color: '#FFD700' },
+        aiNoAccess: { color: '#DC143C' },
+        humanRead: { color: '#4169E1' },
+        humanNoAccess: { color: '#228B22' },
+        contextRead: { color: '#20B2AA' },
+        contextWrite: { color: '#20B2AA' }
+      },
+      inverted: {
+        aiWrite: { color: '#4169E1' },
+        aiNoAccess: { color: '#32CD32' },
+        humanRead: { color: '#A9A9A9' },
+        humanNoAccess: { color: '#DC143C' },
+        contextRead: { color: '#20B2AA' },
+        contextWrite: { color: '#4682B4' }
+      },
+      colorblind: {
+        aiWrite: { color: '#E69F00' },
+        aiNoAccess: { color: '#009E73' },
+        humanRead: { color: '#CC79A7' },
+        humanNoAccess: { color: '#D55E00' },
+        contextRead: { color: '#56B4E9' },
+        contextWrite: { color: '#F0E442' }
+      }
+    };
+    return themes[themeName];
+  }
+  
+  // Map theme colors to ANSI codes
+  function mapThemeToAnsi(themeColors) {
+    const mapping = {};
+    for (const [key, value] of Object.entries(themeColors)) {
+      if (value && value.color && value.enabled !== false) {
+        mapping[key] = hexToAnsi(value.color);
+      } else {
+        mapping[key] = '\x1b[2m'; // Dim for disabled
+      }
+    }
+    return mapping;
+  }
+  
   // ANSI color codes
   const colors = {
     reset: '\x1b[0m',
-    // Background colors matching VSCode theme
-    red: '\x1b[41m',     // AI no access (red background)
-    green: '\x1b[42m',   // Human no access (green background)
-    yellow: '\x1b[43m',  // AI no write (yellow background)
-    blue: '\x1b[44m',    // Human no write (blue background)
-    cyan: '\x1b[46m',    // Context (cyan background)
     // Text colors for readability
     black: '\x1b[30m',   // Black text
     white: '\x1b[37m',   // White text
@@ -295,6 +456,7 @@ async function generateDebugOutput(filePath, content, useColor = false) {
     const lineNumStr = String(lineNum).padStart(5, ' ');
     
     if (useColor) {
+      
       // Check if this line has mixed permissions (from overlapping guards)
       const isMixed = mixedLines.has(lineNum);
       
@@ -304,24 +466,25 @@ async function generateDebugOutput(filePath, content, useColor = false) {
       let borderChar = ' '; // Character to show in the border position
       
       if (isContext) {
-        bgColor = colors.cyan;
-        textColor = colors.black;
+        bgColor = themeColors.contextRead || themeColors.contextWrite;
+        // Determine text color based on background brightness
+        textColor = bgColor.includes('46') ? colors.black : colors.white;
       } else if (aiPerm === 'n' && humanPerm === 'n') {
-        // Both no access - use red (AI takes precedence visually)
-        bgColor = colors.red;
-        textColor = colors.white;
+        // Both no access - use AI no access color (AI takes precedence visually)
+        bgColor = themeColors.aiNoAccess;
+        textColor = bgColor.includes('41') ? colors.white : colors.black;
       } else if (aiPerm === 'n') {
-        bgColor = colors.red;
-        textColor = colors.white;
+        bgColor = themeColors.aiNoAccess;
+        textColor = bgColor.includes('41') ? colors.white : colors.black;
       } else if (humanPerm === 'n') {
-        bgColor = colors.green;
-        textColor = colors.black;
-      } else if (aiPerm === 'rn') {
-        bgColor = colors.yellow;
-        textColor = colors.black;
+        bgColor = themeColors.humanNoAccess;
+        textColor = bgColor.includes('42') ? colors.black : colors.white;
+      } else if (aiPerm === 'w') {
+        bgColor = themeColors.aiWrite;
+        textColor = bgColor.includes('43') ? colors.black : colors.white;
       } else if (humanPerm === 'r') {
-        bgColor = colors.blue;
-        textColor = colors.white;
+        bgColor = themeColors.humanRead;
+        textColor = bgColor.includes('44') ? colors.white : colors.black;
       }
       
       // Handle mixed permissions - use a special border character
@@ -535,10 +698,14 @@ async function main() {
   // Parse command line options
   let outputFormat = 'json';
   let filePath = null;
+  let themeName = null;
   
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--output-format' && i + 1 < args.length) {
       outputFormat = args[i + 1];
+      i++; // Skip next arg
+    } else if (args[i] === '--theme' && i + 1 < args.length) {
+      themeName = args[i + 1];
       i++; // Skip next arg
     } else if (!args[i].startsWith('--')) {
       filePath = args[i];
@@ -549,14 +716,19 @@ async function main() {
     console.log('Usage: node tests/cli-parser-test.js [options] <filepath>');
     console.log('\nOptions:');
     console.log('  --output-format <format>  Output format: json (default), debug, or color');
+    console.log('  --theme <name>           Theme name (default, inverted, colorblind, ocean, etc.)');
     console.log('\nOutput formats:');
     console.log('  json   - Validate with CodeGuard CLI and show results');
     console.log('  debug  - Show line-by-line permissions with context markers (no colors)');
     console.log('  color  - Show line-by-line with colored backgrounds (terminal colors)');
+    console.log('\nThemes:');
+    console.log('  The color output will use your VSCode theme settings if available.');
+    console.log('  Override with --theme to test different themes.');
     console.log('\nExamples:');
     console.log('  node tests/cli-parser-test.js examples/api-key-manager.py');
     console.log('  node tests/cli-parser-test.js --output-format debug examples/api-key-manager.py');
     console.log('  node tests/cli-parser-test.js --output-format color examples/api-key-manager.js');
+    console.log('  node tests/cli-parser-test.js --output-format color --theme inverted examples/api-key-manager.js');
     console.log('\nNote: The visualguard.sh script defaults to color output.');
     console.log('      Use ./visualguard.sh --no-color <file> to disable colors.');
     console.log('\nThis test uses the SAME guard processing engine as the VS Code plugin.');
@@ -579,11 +751,11 @@ async function main() {
     
     if (outputFormat === 'debug') {
       // Generate debug output
-      await generateDebugOutput(filePath, content, false);
+      await generateDebugOutput(filePath, content, false, themeName);
       process.exit(0);
     } else if (outputFormat === 'color') {
       // Generate colored debug output
-      await generateDebugOutput(filePath, content, true);
+      await generateDebugOutput(filePath, content, true, themeName);
       process.exit(0);
     } else {
       // Original JSON validation flow

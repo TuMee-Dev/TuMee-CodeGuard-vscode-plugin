@@ -11,17 +11,31 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Check if --no-color flag is present
-if [[ "$*" == *"--no-color"* ]]; then
-    # Remove --no-color from arguments and use debug format
-    args=()
-    for arg in "$@"; do
-        if [[ "$arg" != "--no-color" ]]; then
-            args+=("$arg")
-        fi
-    done
-    node "$SCRIPT_DIR/tests/cli-parser-test.js" --output-format debug "${args[@]}"
+# Parse arguments
+NO_COLOR=false
+THEME=""
+ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-color)
+            NO_COLOR=true
+            shift
+            ;;
+        --theme)
+            THEME="--theme $2"
+            shift 2
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Run with appropriate format
+if [[ "$NO_COLOR" == true ]]; then
+    node "$SCRIPT_DIR/tests/cli-parser-test.js" --output-format debug $THEME "${ARGS[@]}"
 else
-    # Default to color output
-    node "$SCRIPT_DIR/tests/cli-parser-test.js" --output-format color "$@"
+    node "$SCRIPT_DIR/tests/cli-parser-test.js" --output-format color $THEME "${ARGS[@]}"
 fi
