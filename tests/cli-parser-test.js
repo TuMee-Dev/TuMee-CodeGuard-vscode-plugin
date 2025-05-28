@@ -199,7 +199,7 @@ function mapPermission(permission) {
 /**
  * Generate debug output format showing permissions for each line
  */
-async function generateDebugOutput(filePath, content) {
+async function generateDebugOutput(filePath, content, useColor = false) {
   const languageId = detectLanguage(filePath);
   const document = new CLIDocument(content, languageId);
   const lines = content.split('\n');
@@ -209,6 +209,40 @@ async function generateDebugOutput(filePath, content) {
   
   // Get line permissions using the plugin's logic
   const linePermissions = getLinePermissions(document, guardTags);
+  
+  // Check for overlapping guards (mixed permissions)
+  const mixedLines = new Set();
+  for (let i = 0; i < guardTags.length; i++) {
+    for (let j = i + 1; j < guardTags.length; j++) {
+      const g1 = guardTags[i];
+      const g2 = guardTags[j];
+      // Check if guards overlap and target the same entity (ai or human)
+      if (g1.target === g2.target && 
+          g1.scopeStart <= g2.scopeEnd && g2.scopeStart <= g1.scopeEnd) {
+        // Mark all overlapping lines as mixed
+        const overlapStart = Math.max(g1.scopeStart, g2.scopeStart);
+        const overlapEnd = Math.min(g1.scopeEnd, g2.scopeEnd);
+        for (let line = overlapStart; line <= overlapEnd; line++) {
+          mixedLines.add(line + 1); // Convert to 1-based
+        }
+      }
+    }
+  }
+  
+  // ANSI color codes
+  const colors = {
+    reset: '\x1b[0m',
+    // Background colors matching VSCode theme
+    red: '\x1b[41m',     // AI no access (red background)
+    green: '\x1b[42m',   // Human no access (green background)
+    yellow: '\x1b[43m',  // AI no write (yellow background)
+    blue: '\x1b[44m',    // Human no write (blue background)
+    cyan: '\x1b[46m',    // Context (cyan background)
+    // Text colors for readability
+    black: '\x1b[30m',   // Black text
+    white: '\x1b[37m',   // White text
+    dim: '\x1b[2m',      // Dim text
+  };
   
   // Generate output
   for (let i = 0; i < lines.length; i++) {
@@ -220,10 +254,6 @@ async function generateDebugOutput(filePath, content) {
     let isContext = false;
     
     if (perm) {
-      // Debug log for lines 54-60 to see what's in the data
-      if (lineNum >= 54 && lineNum <= 60 && filePath.includes('api-key-manager')) {
-        console.error(`DEBUG Line ${lineNum}:`, JSON.stringify(perm));
-      }
       
       // Extract AI and Human permissions
       aiPerm = perm.permissions?.ai || 'r';
@@ -238,7 +268,55 @@ async function generateDebugOutput(filePath, content) {
     
     // Output the line with line number (padded to 5 digits)
     const lineNumStr = String(lineNum).padStart(5, ' ');
-    console.log(`${lineNumStr} ${permBlock} ${lines[i]}`);
+    
+    if (useColor) {
+      // Check if this line has mixed permissions (from overlapping guards)
+      const isMixed = mixedLines.has(lineNum);
+      
+      // Determine background color based on permissions
+      let bgColor = '';
+      let textColor = colors.black;
+      let borderChar = ' '; // Character to show in the border position
+      
+      if (isContext) {
+        bgColor = colors.cyan;
+        textColor = colors.black;
+      } else if (aiPerm === 'n' && humanPerm === 'n') {
+        // Both no access - use red (AI takes precedence visually)
+        bgColor = colors.red;
+        textColor = colors.white;
+      } else if (aiPerm === 'n') {
+        bgColor = colors.red;
+        textColor = colors.white;
+      } else if (humanPerm === 'n') {
+        bgColor = colors.green;
+        textColor = colors.black;
+      } else if (aiPerm === 'rn') {
+        bgColor = colors.yellow;
+        textColor = colors.black;
+      } else if (humanPerm === 'r') {
+        bgColor = colors.blue;
+        textColor = colors.white;
+      }
+      
+      // Handle mixed permissions - use a special border character
+      if (isMixed) {
+        borderChar = '│'; // Vertical bar to indicate mixed/conflict
+        // For mixed, we could also use a different background pattern
+        // or alternate the background color
+      }
+      
+      // Apply color only to the border char and line content, not the permission block
+      if (bgColor) {
+        // Format: line# [perms]|content (where | is the colored border char)
+        console.log(`${lineNumStr} ${permBlock}${bgColor}${textColor}${borderChar}${lines[i]}${colors.reset}`);
+      } else {
+        // Default state - dimmed border and content only
+        console.log(`${lineNumStr} ${permBlock}${colors.dim}${borderChar}${lines[i]}${colors.reset}`);
+      }
+    } else {
+      console.log(`${lineNumStr} ${permBlock} ${lines[i]}`);
+    }
   }
 }
 
@@ -445,10 +523,15 @@ async function main() {
   if (!filePath) {
     console.log('Usage: node tests/cli-parser-test.js [options] <filepath>');
     console.log('\nOptions:');
-    console.log('  --output-format <format>  Output format: json (default) or debug');
+    console.log('  --output-format <format>  Output format: json (default), debug, or color');
+    console.log('\nOutput formats:');
+    console.log('  json   - Validate with CodeGuard CLI and show results');
+    console.log('  debug  - Show line-by-line permissions with context markers');
+    console.log('  color  - Show line-by-line with colored backgrounds (terminal colors)');
     console.log('\nExamples:');
     console.log('  node tests/cli-parser-test.js examples/api-key-manager.py');
     console.log('  node tests/cli-parser-test.js --output-format debug examples/api-key-manager.py');
+    console.log('  node tests/cli-parser-test.js --output-format color examples/api-key-manager.js');
     console.log('\nThis test uses the SAME guard processing engine as the VS Code plugin.');
     process.exit(1);
   }
@@ -469,7 +552,11 @@ async function main() {
     
     if (outputFormat === 'debug') {
       // Generate debug output
-      await generateDebugOutput(filePath, content);
+      await generateDebugOutput(filePath, content, false);
+      process.exit(0);
+    } else if (outputFormat === 'color') {
+      // Generate colored debug output
+      await generateDebugOutput(filePath, content, true);
       process.exit(0);
     } else {
       // Original JSON validation flow

@@ -98,8 +98,15 @@ export async function initializeTreeSitter(context: vscode.ExtensionContext): Pr
       locateFile: (scriptName: string) => {
         // For web-tree-sitter, we need to point to the WASM file
         if (scriptName === 'tree-sitter.wasm') {
-          // In VSCode extensions, we can use the extensionUri
-          return vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'web-tree-sitter', 'tree-sitter.wasm').toString();
+          // Check if we're in VSCode environment or CLI
+          if (context.extensionUri) {
+            // In VSCode extensions, we can use the extensionUri
+            return vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'web-tree-sitter', 'tree-sitter.wasm').toString();
+          } else if (context.extensionPath) {
+            // In CLI environment, use path.join
+            const path = require('path');
+            return path.join(context.extensionPath, 'node_modules', 'web-tree-sitter', 'tree-sitter.wasm');
+          }
         }
         return scriptName;
       }
@@ -136,15 +143,31 @@ async function getLanguageParser(context: vscode.ExtensionContext, languageId: s
 
   try {
     // Try to load from the extension's resources
-    const wasmPath = vscode.Uri.joinPath(context.extensionUri, 'resources', 'tree-sitter-wasm', wasmFile);
-
-    // For web compatibility, we need to use fetch
     let wasmBytes: ArrayBuffer;
-    try {
-      const wasmData = await vscode.workspace.fs.readFile(wasmPath);
-      wasmBytes = wasmData.buffer;
-    } catch {
-      // If local file doesn't exist, return null to gracefully fall back to regex
+    
+    if (context.extensionUri) {
+      // VSCode environment
+      const wasmPath = vscode.Uri.joinPath(context.extensionUri, 'resources', 'tree-sitter-wasm', wasmFile);
+      try {
+        const wasmData = await vscode.workspace.fs.readFile(wasmPath);
+        wasmBytes = wasmData.buffer;
+      } catch {
+        // If local file doesn't exist, return null to gracefully fall back to regex
+        return null;
+      }
+    } else if (context.extensionPath) {
+      // CLI environment
+      const path = require('path');
+      const fs = require('fs');
+      const wasmPath = path.join(context.extensionPath, 'resources', 'tree-sitter-wasm', wasmFile);
+      try {
+        const wasmData = fs.readFileSync(wasmPath);
+        wasmBytes = wasmData.buffer;
+      } catch {
+        // If local file doesn't exist, return null to gracefully fall back to regex
+        return null;
+      }
+    } else {
       return null;
     }
 
