@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import base64
 
-# @guard:ai:w.class
+# @guard:ai:w.class @guard:human:r.class
 # AI can optimize this configuration class - RED highlight
 class Config:
     def __init__(self):

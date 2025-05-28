@@ -1,5 +1,6 @@
 // API Key Manager Example - TypeScript with all guard tag colors
 
+// # @guard:ai:w.class @guard:human:r.class
 interface ApiConfig {
     version: string;
     environment: string;
