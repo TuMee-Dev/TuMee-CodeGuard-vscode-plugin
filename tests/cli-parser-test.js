@@ -30,12 +30,35 @@ const originalRequire = Module.prototype.require;
 
 Module.prototype.require = function(id) {
   if (id === 'vscode') {
-    // Return a minimal mock for what scopeResolver needs
+    // Return a comprehensive mock for tree-sitter and scope resolver
     return {
       workspace: {
         getConfiguration: () => ({
           get: (key, defaultValue) => defaultValue
-        })
+        }),
+        fs: {
+          readFile: async (uri) => {
+            const fs = require('fs');
+            const filePath = typeof uri === 'string' ? uri : (uri.fsPath || uri.path || uri.toString());
+            const buffer = fs.readFileSync(filePath);
+            return { buffer };
+          }
+        }
+      },
+      Uri: {
+        joinPath: (base, ...segments) => {
+          const basePath = typeof base === 'string' ? base : (base.fsPath || base.path || base.extensionUri?.fsPath || base.toString());
+          const fullPath = path.join(basePath, ...segments);
+          return { 
+            toString: () => fullPath,
+            fsPath: fullPath,
+            path: fullPath
+          };
+        }
+      },
+      window: {
+        showErrorMessage: () => {},
+        showWarningMessage: () => {}
       }
     };
   }
@@ -71,7 +94,7 @@ const {
 } = require('../src/utils/guardProcessorCore');
 
 // Import the semantic resolver
-const { resolveSemantic } = require('../src/utils/scopeResolver');
+const { resolveSemantic, initializeScopeResolver } = require('../src/utils/scopeResolver');
 
 // Simple document implementation for CLI
 class CLIDocument {
@@ -115,13 +138,15 @@ async function cliSemanticResolver(document, line, scope, addScopes, removeScope
   if (!global.extensionContext) {
     // Create a minimal extension context for tree-sitter
     global.extensionContext = {
-      extensionPath: path.join(__dirname, '..')
+      extensionPath: path.join(__dirname, '..'),
+      extensionUri: { fsPath: path.join(__dirname, '..') }
     };
     
     try {
-      await initializeTreeSitter(global.extensionContext);
+      // Initialize both the scope resolver and tree-sitter
+      await initializeScopeResolver(global.extensionContext);
     } catch (error) {
-      console.error('Failed to initialize tree-sitter:', error.message);
+      // Silently fail - tree-sitter not available in CLI
       return null;
     }
   }
@@ -130,7 +155,7 @@ async function cliSemanticResolver(document, line, scope, addScopes, removeScope
   try {
     return await resolveSemantic(document, line, scope, addScopes, removeScopes);
   } catch (error) {
-    console.error(`Semantic resolution failed: ${error.message}`);
+    // Silently fail - tree-sitter not available in CLI
     return null;
   }
 }
@@ -526,12 +551,14 @@ async function main() {
     console.log('  --output-format <format>  Output format: json (default), debug, or color');
     console.log('\nOutput formats:');
     console.log('  json   - Validate with CodeGuard CLI and show results');
-    console.log('  debug  - Show line-by-line permissions with context markers');
+    console.log('  debug  - Show line-by-line permissions with context markers (no colors)');
     console.log('  color  - Show line-by-line with colored backgrounds (terminal colors)');
     console.log('\nExamples:');
     console.log('  node tests/cli-parser-test.js examples/api-key-manager.py');
     console.log('  node tests/cli-parser-test.js --output-format debug examples/api-key-manager.py');
     console.log('  node tests/cli-parser-test.js --output-format color examples/api-key-manager.js');
+    console.log('\nNote: The visualguard.sh script defaults to color output.');
+    console.log('      Use ./visualguard.sh --no-color <file> to disable colors.');
     console.log('\nThis test uses the SAME guard processing engine as the VS Code plugin.');
     process.exit(1);
   }
