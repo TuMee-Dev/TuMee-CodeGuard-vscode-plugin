@@ -8,7 +8,7 @@ import { DebugLogger } from './debugLogger';
 const COMMON_BLOCKS = ['if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'];
 const JS_BLOCKS = ['statement_block', 'object', 'object_expression', 'array', 'array_expression'];
 const JS_FUNCS = ['function_declaration', 'function_expression', 'arrow_function', 'method_definition'];
-const JS_CLASSES = ['class_declaration', 'class_expression'];
+const JS_CLASSES = ['class_declaration', 'class_expression', 'object', 'object_expression'];
 
 // Base JavaScript/TypeScript patterns
 const JS_BASE = {
