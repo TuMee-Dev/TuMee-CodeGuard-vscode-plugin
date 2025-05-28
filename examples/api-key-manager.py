@@ -74,6 +74,7 @@ def quantum_resistant_encrypt(data: bytes, key: bytes) -> bytes:
 # - Layer 2: Encryption at rest using AES-256
 # - Layer 3: Access control and audit logging
 # - Layer 4: Automatic key rotation
+
 # Integration points: Vault, HSM, SIEM systems
 
 # @guard:ai:n.block

@@ -1,4 +1,6 @@
+// @guard:hu:r
 // API Key Manager Example - Demonstrates all guard tag colors
+
 
 // @guard:ai:w
 // AI can modify this initialization code - RED highlight
@@ -12,10 +14,10 @@ const apiManager = {
 const PRODUCTION_KEYS = {
     stripe: 'sk_live_abcd1234',
     openai: 'sk-prod-xyz789'
+
 };
 
 // @guard:human:r
-// Humans cannot modify this validated configuration - PURPLE highlight
 const VALIDATED_CONFIG = {
     maxRetries: 3,
     timeout: 5000,
@@ -52,6 +54,7 @@ function optimizedHashFunction(input) {
 // @guard:ai:context
 // API Documentation Context - CYAN highlight
 // This module handles API key rotation and validation
+
 // Dependencies: crypto, axios, rate-limiter
 // Security Level: High
 // Last Security Audit: 2024-01-15

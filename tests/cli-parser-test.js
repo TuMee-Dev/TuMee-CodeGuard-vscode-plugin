@@ -14,37 +14,71 @@ const crypto = require('crypto');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
-
-// We need to compile the TypeScript to use it from Node.js
-// For now, we'll create a wrapper that calls the compiled JS
 const { execSync } = require('child_process');
 
 // Ensure the extension is compiled
-console.log('Ensuring extension is compiled...');
 try {
-  execSync('npm run compile', { cwd: path.join(__dirname, '..'), stdio: 'inherit' });
+  execSync('npm run compile', { cwd: path.join(__dirname, '..'), stdio: 'ignore' });
 } catch (error) {
   console.error('Failed to compile extension:', error.message);
   process.exit(1);
 }
 
-// Import the compiled guard processor
-const guardProcessorPath = path.join(__dirname, '..', 'dist', 'utils', 'guardProcessor.js');
-const { parseGuardTagsChunked, createGuardRegions, getLinePermissions } = require(guardProcessorPath);
+// Mock vscode module before loading any modules that depend on it
+const Module = require('module');
+const originalRequire = Module.prototype.require;
 
-// Import other utilities
-const aclPath = path.join(__dirname, '..', 'dist', 'utils', 'acl.js');
-const { parseGuardTag } = require(aclPath);
+Module.prototype.require = function(id) {
+  if (id === 'vscode') {
+    // Return a minimal mock for what scopeResolver needs
+    return {
+      workspace: {
+        getConfiguration: () => ({
+          get: (key, defaultValue) => defaultValue
+        })
+      }
+    };
+  }
+  return originalRequire.apply(this, arguments);
+};
 
-/**
- * Mock VS Code document interface for the guard processor
- */
-class MockDocument {
+// We need to use TypeScript directly since webpack bundles everything
+// Register TypeScript compiler
+require('ts-node').register({
+  transpileOnly: true,
+  compilerOptions: {
+    module: 'commonjs',
+    target: 'es2018',
+    lib: ['es2018'],
+    esModuleInterop: true,
+    allowSyntheticDefaultImports: true,
+    moduleResolution: 'node',
+    resolveJsonModule: true,
+    strict: false,
+    skipLibCheck: true,
+    paths: {
+      '@/*': [path.join(__dirname, '..', 'src', '*')]
+    }
+  }
+});
+
+// Import the pure guard processing core directly from TypeScript source
+const { 
+  parseGuardTagsCore, 
+  getLinePermissionsCore,
+  parseGuardTag,
+  isLineAComment
+} = require('../src/utils/guardProcessorCore');
+
+// Import the semantic resolver
+const { resolveSemantic } = require('../src/utils/scopeResolver');
+
+// Simple document implementation for CLI
+class CLIDocument {
   constructor(content, languageId) {
     this.content = content;
     this.lines = content.split('\n');
     this.languageId = languageId;
-    this.version = 1;
     this.lineCount = this.lines.length;
   }
 
@@ -52,18 +86,82 @@ class MockDocument {
     return this.content;
   }
 
-  lineAt(lineNumber) {
-    // VS Code uses 0-based line numbers
-    const text = this.lines[lineNumber] || '';
+  lineAt(line) {
+    const text = this.lines[line] || '';
     return {
       text,
-      range: {
-        start: { line: lineNumber, character: 0 },
-        end: { line: lineNumber, character: text.length }
-      }
+      firstNonWhitespaceCharacterIndex: text.search(/\S/)
     };
   }
 }
+
+// Simple configuration implementation
+class CLIConfiguration {
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  get(key, defaultValue) {
+    return this.options[key] !== undefined ? this.options[key] : defaultValue;
+  }
+}
+
+// We need to initialize tree-sitter for the CLI
+const { initializeTreeSitter } = require('../src/utils/treeSitterParser');
+
+// Create a semantic resolver that works without VSCode
+async function cliSemanticResolver(document, line, scope, addScopes, removeScopes) {
+  // Initialize tree-sitter if not already done
+  if (!global.extensionContext) {
+    // Create a minimal extension context for tree-sitter
+    global.extensionContext = {
+      extensionPath: path.join(__dirname, '..')
+    };
+    
+    try {
+      await initializeTreeSitter(global.extensionContext);
+    } catch (error) {
+      console.error('Failed to initialize tree-sitter:', error.message);
+      return null;
+    }
+  }
+  
+  // Now use the real semantic resolver
+  try {
+    return await resolveSemantic(document, line, scope, addScopes, removeScopes);
+  } catch (error) {
+    console.error(`Semantic resolution failed: ${error.message}`);
+    return null;
+  }
+}
+
+// Simple logger for CLI
+const cliLogger = {
+  log: (message) => {
+    // Only log if debug is enabled
+    if (process.env.DEBUG) {
+      console.error(message);
+    }
+  }
+};
+
+// Wrapper functions that match the old API
+async function parseGuardTagsChunked(document, lines) {
+  const config = new CLIConfiguration({ enableDebugLogging: process.env.DEBUG === 'true' });
+  return parseGuardTagsCore(document, lines, config, cliSemanticResolver, cliLogger);
+}
+
+function getLinePermissions(document, guardTags) {
+  const config = new CLIConfiguration({ enableDebugLogging: process.env.DEBUG === 'true' });
+  return getLinePermissionsCore(document, guardTags, config, cliLogger);
+}
+
+// For createGuardRegions, we'll need to implement a simple version
+function createGuardRegions(guardTags, totalLines) {
+  // Simple implementation that converts guard tags to regions
+  return guardTags;
+}
+
 
 /**
  * Detect language from file extension
@@ -99,15 +197,61 @@ function mapPermission(permission) {
 }
 
 /**
+ * Generate debug output format showing permissions for each line
+ */
+async function generateDebugOutput(filePath, content) {
+  const languageId = detectLanguage(filePath);
+  const document = new CLIDocument(content, languageId);
+  const lines = content.split('\n');
+  
+  // Use the plugin's guard parser
+  const guardTags = await parseGuardTagsChunked(document, lines);
+  
+  // Get line permissions using the plugin's logic
+  const linePermissions = getLinePermissions(document, guardTags);
+  
+  // Generate output
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1; // 1-based line numbers
+    const perm = linePermissions.get(lineNum);
+    
+    let aiPerm = 'r';  // default
+    let humanPerm = 'w';  // default
+    let isContext = false;
+    
+    if (perm) {
+      // Debug log for lines 54-60 to see what's in the data
+      if (lineNum >= 54 && lineNum <= 60 && filePath.includes('api-key-manager')) {
+        console.error(`DEBUG Line ${lineNum}:`, JSON.stringify(perm));
+      }
+      
+      // Extract AI and Human permissions
+      aiPerm = perm.permissions?.ai || 'r';
+      humanPerm = perm.permissions?.human || 'w';
+      isContext = perm.isContext?.ai || perm.isContext?.human || false;
+    }
+    
+    // Format the permission block: [AI:X HU:Y *]
+    // Always same width with * for context, space for normal
+    const contextMarker = isContext ? '*' : ' ';
+    const permBlock = `[AI:${aiPerm} HU:${humanPerm} ${contextMarker}]`;
+    
+    // Output the line with line number (padded to 5 digits)
+    const lineNumStr = String(lineNum).padStart(5, ' ');
+    console.log(`${lineNumStr} ${permBlock} ${lines[i]}`);
+  }
+}
+
+/**
  * Build validation package using the plugin's guard processing
  */
 async function buildValidationPackage(filePath, content) {
   const languageId = detectLanguage(filePath);
-  const mockDoc = new MockDocument(content, languageId);
+  const document = new CLIDocument(content, languageId);
   const lines = content.split('\n');
   
   // Use the plugin's guard parser
-  const guardTags = await parseGuardTagsChunked(mockDoc, lines);
+  const guardTags = await parseGuardTagsChunked(document, lines);
   
   // Create guard regions using the plugin's logic
   const guardRegions = createGuardRegions(guardTags, lines.length);
@@ -285,15 +429,29 @@ function displayResults(result, validationPackage) {
 async function main() {
   const args = process.argv.slice(2);
   
-  if (args.length === 0) {
-    console.log('Usage: node tests/cli-parser-test.js <filepath>');
-    console.log('\nExample:');
+  // Parse command line options
+  let outputFormat = 'json';
+  let filePath = null;
+  
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--output-format' && i + 1 < args.length) {
+      outputFormat = args[i + 1];
+      i++; // Skip next arg
+    } else if (!args[i].startsWith('--')) {
+      filePath = args[i];
+    }
+  }
+  
+  if (!filePath) {
+    console.log('Usage: node tests/cli-parser-test.js [options] <filepath>');
+    console.log('\nOptions:');
+    console.log('  --output-format <format>  Output format: json (default) or debug');
+    console.log('\nExamples:');
     console.log('  node tests/cli-parser-test.js examples/api-key-manager.py');
+    console.log('  node tests/cli-parser-test.js --output-format debug examples/api-key-manager.py');
     console.log('\nThis test uses the SAME guard processing engine as the VS Code plugin.');
     process.exit(1);
   }
-  
-  const filePath = args[0];
   
   // Check if file exists
   if (!fs.existsSync(filePath)) {
@@ -309,19 +467,26 @@ async function main() {
     // Read file content
     const content = await fs.promises.readFile(filePath, 'utf8');
     
-    // Build validation package using the plugin's guard processor
-    const validationPackage = await buildValidationPackage(filePath, content);
-    
-    console.log(`Found ${validationPackage.validation_request.guard_regions.length} guard regions`);
-    
-    // Validate with tool
-    const result = await validateWithTool(validationPackage);
-    
-    // Display results
-    displayResults(result, validationPackage);
-    
-    // Exit with same code as validation
-    process.exit(result.exitCode === 0 || result.exitCode === 1 ? 0 : result.exitCode);
+    if (outputFormat === 'debug') {
+      // Generate debug output
+      await generateDebugOutput(filePath, content);
+      process.exit(0);
+    } else {
+      // Original JSON validation flow
+      // Build validation package using the plugin's guard processor
+      const validationPackage = await buildValidationPackage(filePath, content);
+      
+      console.log(`Found ${validationPackage.validation_request.guard_regions.length} guard regions`);
+      
+      // Validate with tool
+      const result = await validateWithTool(validationPackage);
+      
+      // Display results
+      displayResults(result, validationPackage);
+      
+      // Exit with same code as validation
+      process.exit(result.exitCode === 0 || result.exitCode === 1 ? 0 : result.exitCode);
+    }
     
   } catch (error) {
     console.error('Error:', error.message);

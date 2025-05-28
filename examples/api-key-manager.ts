@@ -71,6 +71,7 @@ const ANOMALY_DETECTION_WEIGHTS = {
 
 // @guard:ai:context
 // API Gateway Architecture - CYAN highlight
+
 // Request flow: Client -> Load Balancer -> API Gateway -> Services
 // Authentication: OAuth2 + JWT with 15-minute token expiry
 // Rate limiting: 1000 requests/minute per client
