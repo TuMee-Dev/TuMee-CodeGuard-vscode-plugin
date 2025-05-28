@@ -4,15 +4,18 @@ import type { Range } from 'vscode';
 
 export interface GuardTag {
   lineNumber: number;
-  target: 'ai' | 'human';
+  target: 'ai' | 'human' | 'all';  // 'all' for combined tags
   identifier?: string;
-  permission: 'r' | 'w' | 'n' | 'context';
+  permission: 'r' | 'w' | 'n' | 'context' | 'combined';  // 'combined' for tags with both AI and human permissions
   scope?: string;
   lineCount?: number;
   addScopes?: string[];
   removeScopes?: string[];
   scopeStart?: number;
   scopeEnd?: number;
+  // For combined tags, store the actual permissions
+  aiPermission?: 'r' | 'w' | 'n' | 'context';
+  humanPermission?: 'r' | 'w' | 'n' | 'context';
 }
 
 export interface LinePermission {
