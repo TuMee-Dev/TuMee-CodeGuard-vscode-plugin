@@ -377,35 +377,48 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
     };
   }
   
-  // Get built-in theme colors
+  // Get built-in theme colors from the actual VSCode extension
   function getBuiltInTheme(themeName) {
-    const themes = {
+    // Read the theme data directly from the colorCustomizer source file
+    try {
+      const colorCustomizerPath = path.join(__dirname, '..', 'src', 'tools', 'colorCustomizer.ts');
+      const content = fs.readFileSync(colorCustomizerPath, 'utf8');
+      
+      // Extract THEME_CONFIGS array from the source
+      const themeConfigMatch = content.match(/const THEME_CONFIGS[^=]*=\s*(\[[^;]+\]);/s);
+      if (themeConfigMatch) {
+        // Parse the theme configs (this is a bit hacky but works for our needs)
+        const themeConfigsStr = themeConfigMatch[1]
+          .replace(/MixPattern\.\w+/g, '"HUMAN_BORDER"') // Replace enum references
+          .replace(/(['"])?(\w+)(['"])?:/g, '"$2":'); // Ensure all keys are quoted
+        
+        const themeConfigs = eval(themeConfigsStr); // Safe here as we control the source
+        const theme = themeConfigs.find(t => t.name === themeName);
+        if (theme) {
+          return theme.permissions;
+        }
+      }
+    } catch (e) {
+      if (process.env.DEBUG) {
+        console.error('Could not parse theme configs:', e.message);
+      }
+    }
+    
+    // Minimal fallback - only default theme if we can't read the source
+    const fallbackThemes = {
       default: {
-        aiWrite: { color: '#FFD700' },
-        aiNoAccess: { color: '#DC143C' },
-        humanRead: { color: '#4169E1' },
-        humanNoAccess: { color: '#228B22' },
-        contextRead: { color: '#20B2AA' },
-        contextWrite: { color: '#20B2AA' }
-      },
-      inverted: {
-        aiWrite: { color: '#4169E1' },
-        aiNoAccess: { color: '#32CD32' },
-        humanRead: { color: '#A9A9A9' },
-        humanNoAccess: { color: '#DC143C' },
-        contextRead: { color: '#20B2AA' },
-        contextWrite: { color: '#4682B4' }
-      },
-      colorblind: {
-        aiWrite: { color: '#E69F00' },
-        aiNoAccess: { color: '#009E73' },
-        humanRead: { color: '#CC79A7' },
-        humanNoAccess: { color: '#D55E00' },
-        contextRead: { color: '#56B4E9' },
-        contextWrite: { color: '#F0E442' }
+        aiWrite: { enabled: true, color: '#FFD700', transparency: 0.4 },
+        aiRead: { enabled: true, color: '#FFFFE0', transparency: 0.2 },
+        aiNoAccess: { enabled: true, color: '#DC143C', transparency: 0.4 },
+        humanWrite: { enabled: false, color: '#00FF00', transparency: 0.4 },
+        humanRead: { enabled: true, color: '#4169E1', transparency: 0.5 },
+        humanNoAccess: { enabled: true, color: '#228B22', transparency: 0.4 },
+        contextRead: { enabled: true, color: '#20B2AA', transparency: 0.3 },
+        contextWrite: { enabled: true, color: '#20B2AA', transparency: 0.3 }
       }
     };
-    return themes[themeName];
+    
+    return fallbackThemes[themeName];
   }
   
   // Map theme colors to ANSI codes
@@ -690,10 +703,108 @@ function displayResults(result, validationPackage) {
 }
 
 /**
+ * List available themes
+ */
+function listThemes() {
+  console.log('Available Themes:');
+  console.log('=================\n');
+  
+  // Built-in themes from the actual extension
+  console.log('Built-in Themes:');
+  try {
+    const colorCustomizerPath = path.join(__dirname, '..', 'src', 'tools', 'colorCustomizer.ts');
+    const content = fs.readFileSync(colorCustomizerPath, 'utf8');
+    
+    // Extract theme names from THEME_CONFIGS
+    const themeMatches = content.matchAll(/{\s*name:\s*['"](\w+)['"]/g);
+    const themes = [];
+    for (const match of themeMatches) {
+      themes.push(match[1]);
+    }
+    
+    if (themes.length > 0) {
+      themes.forEach(name => {
+        console.log(`  ${name.padEnd(12)}`);
+      });
+    } else {
+      console.log('  default      - Red for AI no access, Green for human no access');
+      console.log('  (Unable to parse themes from extension)');
+    }
+  } catch (e) {
+    // Fallback if we can't read the file
+    console.log('  default      - Red for AI no access, Green for human no access');
+    console.log('  (Unable to load themes from extension)');
+  }
+  
+  // Try to load custom themes from VSCode settings
+  try {
+    const os = require('os');
+    const platform = os.platform();
+    const homeDir = os.homedir();
+    
+    const settingsPaths = [];
+    if (platform === 'darwin') {
+      settingsPaths.push(
+        path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'settings.json'),
+        path.join(homeDir, '.config', 'Code', 'User', 'settings.json')
+      );
+    } else if (platform === 'win32') {
+      settingsPaths.push(
+        path.join(process.env.APPDATA || '', 'Code', 'User', 'settings.json')
+      );
+    } else {
+      settingsPaths.push(
+        path.join(homeDir, '.config', 'Code', 'User', 'settings.json')
+      );
+    }
+    
+    // Also check workspace settings
+    settingsPaths.push(path.join(process.cwd(), '.vscode', 'settings.json'));
+    
+    let customThemes = {};
+    let currentTheme = 'default';
+    
+    for (const settingsPath of settingsPaths) {
+      if (fs.existsSync(settingsPath)) {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        if (settings['tumee-vscode-plugin.customThemes']) {
+          Object.assign(customThemes, settings['tumee-vscode-plugin.customThemes']);
+        }
+        if (settings['tumee-vscode-plugin.currentTheme']) {
+          currentTheme = settings['tumee-vscode-plugin.currentTheme'];
+        }
+      }
+    }
+    
+    if (Object.keys(customThemes).length > 0) {
+      console.log('\nCustom Themes:');
+      for (const themeName of Object.keys(customThemes)) {
+        console.log(`  ${themeName}${themeName === currentTheme ? ' (current)' : ''}`);
+      }
+    }
+    
+    console.log(`\nCurrent VSCode theme: ${currentTheme}`);
+    
+  } catch (e) {
+    // Ignore errors
+  }
+  
+  console.log('\nUsage:');
+  console.log('  ./visualguard.sh --theme <name> <file>');
+  console.log('  ./visualguard.sh --theme colorblind examples/api-key-manager.js');
+}
+
+/**
  * Main function
  */
 async function main() {
   const args = process.argv.slice(2);
+  
+  // Check for list themes flag first
+  if (args.includes('--list-themes')) {
+    listThemes();
+    process.exit(0);
+  }
   
   // Parse command line options
   let outputFormat = 'json';

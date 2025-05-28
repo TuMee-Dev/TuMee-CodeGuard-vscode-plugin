@@ -242,6 +242,15 @@ THEME_CONFIGS.forEach(theme => {
   };
 });
 
+// Export themes for CLI usage
+export function getBuiltInThemes(): Record<string, any> {
+  const themes: Record<string, any> = {};
+  THEME_CONFIGS.forEach(config => {
+    themes[config.name] = config;
+  });
+  return themes;
+}
+
 // Helper function to merge colors with defaults
 function mergeWithDefaults(colors: Partial<GuardColors> | undefined): GuardColors {
   const merged = JSON.parse(JSON.stringify(DEFAULT_COLORS)) as GuardColors;
