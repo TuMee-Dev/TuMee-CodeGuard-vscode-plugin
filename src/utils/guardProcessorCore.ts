@@ -337,53 +337,20 @@ export async function parseGuardTagsCore(
       if (tagInfo) {
         // lineNumber is already 1-based from the loop
         
-        // Create a unified guard tag that can handle both single and combined tags
-        let guardTag: GuardTag;
-        let aiPermission: string | undefined;
-        let humanPermission: string | undefined;
-        
-        if (tagInfo.type === 'combined' && tagInfo.aiPermission && tagInfo.humanPermission) {
-          // Combined tag - has both AI and human permissions
-          aiPermission = tagInfo.aiPermission;
-          humanPermission = tagInfo.humanPermission;
-          const effectiveScope = tagInfo.scope || (!tagInfo.lineCount && (tagInfo.aiPermission !== 'context' && tagInfo.humanPermission !== 'context') ? 'block' : undefined);
-          
-          // Create a special guard tag that represents both permissions
-          guardTag = {
-            lineNumber: lineNumber,
-            target: 'all', // Special target for combined tags
-            identifier: tagInfo.identifier,
-            permission: 'combined', // Special permission type
-            scope: effectiveScope,
-            lineCount: tagInfo.lineCount,
-            addScopes: tagInfo.addScopes,
-            removeScopes: tagInfo.removeScopes,
-            aiPermission: tagInfo.aiPermission as 'r' | 'w' | 'n' | 'context',
-            humanPermission: tagInfo.humanPermission as 'r' | 'w' | 'n' | 'context'
-          };
-        } else {
-          // Single tag - only updates one target
-          const effectiveScope = tagInfo.scope || (!tagInfo.lineCount && tagInfo.permission !== 'context' ? 'block' : undefined);
-          guardTag = {
-            lineNumber: lineNumber,
-            target: tagInfo.target as 'ai' | 'human',
-            identifier: tagInfo.identifier,
-            permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-            scope: effectiveScope,
-            lineCount: tagInfo.lineCount,
-            addScopes: tagInfo.addScopes,
-            removeScopes: tagInfo.removeScopes
-          };
-          
-          // For single tags, set the appropriate permission
-          if (tagInfo.target === 'ai') {
-            aiPermission = tagInfo.permission;
-          } else if (tagInfo.target === 'human') {
-            humanPermission = tagInfo.permission;
-          }
-        }
+        // Create ONE guard tag - no differentiation between single/combined
+        const guardTag: GuardTag = {
+          lineNumber: lineNumber,
+          target: tagInfo.target as 'ai' | 'human' | 'all',
+          identifier: tagInfo.identifier,
+          permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context' | 'combined',
+          scope: tagInfo.scope || (!tagInfo.lineCount && tagInfo.permission !== 'context' ? 'block' : undefined),
+          lineCount: tagInfo.lineCount,
+          addScopes: tagInfo.addScopes,
+          removeScopes: tagInfo.removeScopes,
+          aiPermission: tagInfo.aiPermission as 'r' | 'w' | 'n' | 'context' | undefined,
+          humanPermission: tagInfo.humanPermission as 'r' | 'w' | 'n' | 'context' | undefined
+        };
 
-        // Now process the single unified guard tag
         const effectiveScope = guardTag.scope;
 
         // Handle semantic scope resolution
@@ -510,14 +477,14 @@ export async function parseGuardTagsCore(
           startLine = guardTag.scopeStart;
           endLine = guardTag.scopeEnd;
         } else {
-          // This should only happen for languages without tree-sitter support
-          // For supported languages, the scope resolution above would have thrown an error
+          // No scope specified - guard only applies to current line
           if (debugEnabled) {
             console.warn(`[GuardProcessor] No scope resolution for line ${lineNumber} - using line-only fallback`);
           }
           guardTag.scopeStart = lineNumber;
           guardTag.scopeEnd = lineNumber;
-          
+          startLine = lineNumber;
+          endLine = lineNumber;
         }
 
         // Before pushing new guard, remove any interrupted context guards
@@ -542,39 +509,38 @@ export async function parseGuardTagsCore(
           }
         }
 
-        // Handle different permission types
-        if (guardTag.permission === 'combined' && guardTag.aiPermission && guardTag.humanPermission) {
-          // Combined tag - update both AI and human permissions
+        // Update permissions based on the guard tag
+        // Check if aiPermission is set (could be from a combined tag or single ai tag)
+        if (guardTag.aiPermission) {
           if (guardTag.aiPermission !== 'context') {
             currentPermissions.ai = guardTag.aiPermission;
             currentContext.ai = false;
           } else {
             currentContext.ai = true;
           }
+        }
+        
+        // Check if humanPermission is set (could be from a combined tag or single human tag)
+        if (guardTag.humanPermission) {
           if (guardTag.humanPermission !== 'context') {
             currentPermissions.human = guardTag.humanPermission;
             currentContext.human = false;
           } else {
             currentContext.human = true;
           }
-        } else if (guardTag.permission === 'context') {
-          // Context doesn't change read/write permissions
-          if (guardTag.target === 'ai' || guardTag.target === 'human') {
-            currentContext[guardTag.target] = true;
-          } else if (guardTag.target === 'all') {
-            // Combined context - set both
-            currentContext.ai = true;
-            currentContext.human = true;
-          }
-        } else {
-          // Update ONLY the permission for the specified target
-          // Don't modify permissions for other targets
-          if (guardTag.target === 'ai' || guardTag.target === 'human') {
+        }
+        
+        // Handle tags that don't have aiPermission or humanPermission set
+        // (legacy single target tags)
+        if (!guardTag.aiPermission && !guardTag.humanPermission) {
+          if (guardTag.permission === 'context') {
+            if (guardTag.target === 'ai' || guardTag.target === 'human') {
+              currentContext[guardTag.target] = true;
+            }
+          } else if (guardTag.target === 'ai' || guardTag.target === 'human') {
             currentPermissions[guardTag.target] = guardTag.permission;
-            // Clear context when setting a new permission
             currentContext[guardTag.target] = false;
           }
-          // Note: 'all' target is handled by the combined tag logic above
         }
 
         // For context guards, trim the endLine to exclude trailing whitespace
@@ -626,23 +592,6 @@ export async function parseGuardTagsCore(
         
         guardStack.push(stackEntry);
         guardTags.push(guardTag);
-        
-        
-        // For combined tags, we need to also record them as individual tags for reporting
-        if (guardTag.permission === 'combined' && guardTag.aiPermission && guardTag.humanPermission) {
-          // Add AI tag for reporting
-          guardTags.push({
-            ...guardTag,
-            target: 'ai' as const,
-            permission: guardTag.aiPermission
-          });
-          // Add human tag for reporting
-          guardTags.push({
-            ...guardTag,
-            target: 'human' as const,
-            permission: guardTag.humanPermission
-          });
-        }
       }
     }
 
@@ -775,36 +724,35 @@ function processGuardStack(
           }
         }
 
-        // Handle different permission types
-        if (tag.permission === 'combined' && tag.aiPermission && tag.humanPermission) {
-          // Combined tag - update both AI and human permissions
+        // Update permissions based on the guard tag
+        // Check if aiPermission is set
+        if (tag.aiPermission) {
           if (tag.aiPermission !== 'context') {
             currentPermissions.ai = tag.aiPermission;
             currentContext.ai = false;
           } else {
             currentContext.ai = true;
           }
+        }
+        
+        // Check if humanPermission is set
+        if (tag.humanPermission) {
           if (tag.humanPermission !== 'context') {
             currentPermissions.human = tag.humanPermission;
             currentContext.human = false;
           } else {
             currentContext.human = true;
           }
-        } else if (tag.permission === 'context') {
-          // Context doesn't change read/write permissions
-          if (tag.target === 'all') {
-            // Combined context tag
-            currentContext.ai = true;
-            currentContext.human = true;
+        }
+        
+        // Handle tags that don't have aiPermission or humanPermission set
+        if (!tag.aiPermission && !tag.humanPermission) {
+          if (tag.permission === 'context') {
+            if (tag.target === 'ai' || tag.target === 'human') {
+              currentContext[tag.target] = true;
+            }
           } else if (tag.target === 'ai' || tag.target === 'human') {
-            currentContext[tag.target] = true;
-          }
-        } else {
-          // Update ONLY the permission for the specified target
-          // Don't modify permissions for other targets
-          if (tag.target === 'ai' || tag.target === 'human') {
             currentPermissions[tag.target] = tag.permission;
-            // Clear context when setting a new permission
             currentContext[tag.target] = false;
           }
         }
