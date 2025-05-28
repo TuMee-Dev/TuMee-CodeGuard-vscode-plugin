@@ -1,4 +1,4 @@
-// @guard:hu:r
+// @guard:hu:r @guard:ai:w
 // API Key Manager Example - Demonstrates all guard tag colors
 
 

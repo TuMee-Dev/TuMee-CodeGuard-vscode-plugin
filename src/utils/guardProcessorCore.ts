@@ -336,24 +336,58 @@ export async function parseGuardTagsCore(
       if (tagInfo) {
         // lineNumber is already 1-based from the loop
 
-        // Create guard tag entry
-        // Default to 'block' scope if no scope specified (unless it's a line count or context)
-        const effectiveScope = tagInfo.scope || (!tagInfo.lineCount && tagInfo.permission !== 'context' ? 'block' : undefined);
+        // Prepare an array of tags to process
+        const tagsToProcess: GuardTag[] = [];
 
-        const guardTag: GuardTag = {
-          lineNumber: lineNumber,
-          target: tagInfo.target as 'ai' | 'human',
-          identifier: tagInfo.identifier,
-          permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
-          scope: effectiveScope,
-          lineCount: tagInfo.lineCount,
-          addScopes: tagInfo.addScopes,
-          removeScopes: tagInfo.removeScopes
-        };
+        // Handle combined tags (when multiple guard tags are on the same line)
+        if (tagInfo.type === 'combined' && tagInfo.aiPermission && tagInfo.humanPermission) {
+          // Process AI tag
+          const aiScope = tagInfo.scope || (!tagInfo.lineCount && tagInfo.aiPermission !== 'context' ? 'block' : undefined);
+          tagsToProcess.push({
+            lineNumber: lineNumber,
+            target: 'ai',
+            identifier: tagInfo.identifier,
+            permission: tagInfo.aiPermission as 'r' | 'w' | 'n' | 'context',
+            scope: aiScope,
+            lineCount: tagInfo.lineCount,
+            addScopes: tagInfo.addScopes,
+            removeScopes: tagInfo.removeScopes
+          });
 
-        // Handle semantic scope resolution
-        if (effectiveScope && !tagInfo.lineCount) {
-          // Special handling for 'file' scope
+          // Process Human tag
+          const humanScope = tagInfo.scope || (!tagInfo.lineCount && tagInfo.humanPermission !== 'context' ? 'block' : undefined);
+          tagsToProcess.push({
+            lineNumber: lineNumber,
+            target: 'human',
+            identifier: tagInfo.identifier,
+            permission: tagInfo.humanPermission as 'r' | 'w' | 'n' | 'context',
+            scope: humanScope,
+            lineCount: tagInfo.lineCount,
+            addScopes: tagInfo.addScopes,
+            removeScopes: tagInfo.removeScopes
+          });
+        } else {
+          // Single tag
+          const effectiveScope = tagInfo.scope || (!tagInfo.lineCount && tagInfo.permission !== 'context' ? 'block' : undefined);
+          tagsToProcess.push({
+            lineNumber: lineNumber,
+            target: tagInfo.target as 'ai' | 'human',
+            identifier: tagInfo.identifier,
+            permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context',
+            scope: effectiveScope,
+            lineCount: tagInfo.lineCount,
+            addScopes: tagInfo.addScopes,
+            removeScopes: tagInfo.removeScopes
+          });
+        }
+
+        // Process each tag
+        for (const guardTag of tagsToProcess) {
+          const effectiveScope = guardTag.scope;
+
+          // Handle semantic scope resolution
+          if (effectiveScope && !guardTag.lineCount) {
+            // Special handling for 'file' scope
           if (effectiveScope === 'file') {
             guardTag.scopeStart = lineNumber;
             guardTag.scopeEnd = totalLines;
@@ -563,6 +597,7 @@ export async function parseGuardTagsCore(
 
         guardStack.push(stackEntry);
         guardTags.push(guardTag);
+        } // End of for (const guardTag of tagsToProcess)
       }
     }
 

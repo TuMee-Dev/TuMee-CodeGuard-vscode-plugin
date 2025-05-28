@@ -58,6 +58,7 @@ export const JAVASCRIPT_LINE_COUNT_REGEX = GUARD_TAG_PATTERNS.JAVASCRIPT_LINE_CO
 /**
  * Helper function to parse a guard tag from a line of text
  * Returns the parsed guard tag information
+ * If multiple tags exist, they are merged into a single combined state
  */
 export const parseGuardTag = (line: string): {
   target: string,
@@ -67,12 +68,21 @@ export const parseGuardTag = (line: string): {
   lineCount?: number,
   addScopes?: string[],
   removeScopes?: string[],
-  type: string
+  type: string,
+  aiPermission?: string,
+  humanPermission?: string
 } | null => {
-  // Try the new format first
-  const newFormatMatch = line.match(GUARD_TAG_PATTERNS.PARSE_GUARD_TAG);
-  if (newFormatMatch) {
-    const [, target, identifier, permission, scopeOrCount, addScopesStr, removeScopesStr] = newFormatMatch;
+  // Track found permissions for each target
+  let aiTag: any = null;
+  let humanTag: any = null;
+  let otherTag: any = null;
+
+  // Use global flag to find all matches in the line
+  const newFormatRegex = new RegExp(GUARD_TAG_PATTERNS.PARSE_GUARD_TAG.source, 'g');
+  let match;
+  
+  while ((match = newFormatRegex.exec(line)) !== null) {
+    const [, target, identifier, permission, scopeOrCount, addScopesStr, removeScopesStr] = match;
 
     // Check if scope is numeric (line count) or semantic
     const isLineCount = scopeOrCount && GUARD_TAG_PATTERNS.NUMERIC_SCOPE.test(scopeOrCount);
@@ -86,7 +96,7 @@ export const parseGuardTag = (line: string): {
     else if (normalizedPermission === 'write') normalizedPermission = 'w';
     else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
 
-    return {
+    const tag = {
       target: normalizedTarget,
       identifier: identifier || undefined,
       permission: normalizedPermission,
@@ -96,9 +106,40 @@ export const parseGuardTag = (line: string): {
       removeScopes: removeScopesStr ? removeScopesStr.split('-').filter(s => s) : undefined,
       type: 'new-format'
     };
+
+    // Store tag by target
+    if (normalizedTarget === 'ai') {
+      aiTag = tag;
+    } else if (normalizedTarget === 'human') {
+      humanTag = tag;
+    } else {
+      otherTag = tag;
+    }
   }
 
-  // Try legacy format for backwards compatibility
+  // If we found multiple tags for different targets, merge them
+  if (aiTag && humanTag) {
+    // Create a combined tag with both permissions
+    return {
+      target: 'all', // Special target indicating both AI and human
+      identifier: aiTag.identifier || humanTag.identifier,
+      permission: 'combined', // Special permission type
+      aiPermission: aiTag.permission,
+      humanPermission: humanTag.permission,
+      scope: aiTag.scope || humanTag.scope,
+      lineCount: aiTag.lineCount || humanTag.lineCount,
+      addScopes: [...(aiTag.addScopes || []), ...(humanTag.addScopes || [])].filter((v, i, a) => a.indexOf(v) === i),
+      removeScopes: [...(aiTag.removeScopes || []), ...(humanTag.removeScopes || [])].filter((v, i, a) => a.indexOf(v) === i),
+      type: 'combined'
+    };
+  }
+
+  // Return single tag if found
+  if (aiTag) return aiTag;
+  if (humanTag) return humanTag;
+  if (otherTag) return otherTag;
+
+  // Try legacy formats if no new format tags found
   const legacyMatch = line.match(GUARD_TAG_PATTERNS.PARSE_LEGACY_GUARD_TAG);
   if (legacyMatch) {
     // Normalize permission for legacy format too
