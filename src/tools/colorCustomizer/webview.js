@@ -192,8 +192,19 @@ window.updateSlider = updateSlider;
 function updatePreview() {
   const colors = getColors();
   
+  // Get default permissions from checkboxes
+  const defaultAiWrite = document.getElementById('defaultAiWrite');
+  const defaultHumanWrite = document.getElementById('defaultHumanWrite');
+  
+  const defaultAi = (defaultAiWrite && defaultAiWrite.checked) ? 'write' : 'read';
+  const defaultHuman = (defaultHumanWrite && defaultHumanWrite.checked) ? 'write' : 'read';
+  
   PREVIEW_LINES.forEach((config, index) => {
-    updateLine(index + 1, config.ai, config.human);
+    // Apply defaults only to lines where BOTH permissions are null
+    const aiPerm = (config.ai === null && config.human === null) ? defaultAi : config.ai;
+    const humanPerm = (config.ai === null && config.human === null) ? defaultHuman : config.human;
+    
+    updateLine(index + 1, aiPerm, humanPerm);
   });
   
   updateExample('ex-aiWrite', 'ai', 'write');
@@ -635,6 +646,11 @@ function updateMixPattern(pattern) {
   updatePreview();
 }
 window.updateMixPattern = updateMixPattern;
+
+function updateDefaultPermissions() {
+  updatePreview();
+}
+window.updateDefaultPermissions = updateDefaultPermissions;
 
 function blendColors(hex1, hex2) {
   const r1 = parseInt(hex1.slice(1, 3), 16);
