@@ -28,7 +28,20 @@ export function loadLanguageScopes(): LanguageScopeConfig {
   }
 
   try {
-    const configPath = path.join(__dirname, '..', 'resources', 'language-scopes.json');
+    // In production, __dirname is dist/utils, so we need to go up one level
+    // In development, it might be src/utils
+    let configPath = path.join(__dirname, '..', 'resources', 'language-scopes.json');
+    
+    // If not found in the expected location, try the dist location
+    if (!fs.existsSync(configPath)) {
+      configPath = path.join(__dirname, '..', '..', 'dist', 'resources', 'language-scopes.json');
+    }
+    
+    // If still not found, try relative to process.cwd() for CLI usage
+    if (!fs.existsSync(configPath)) {
+      configPath = path.join(process.cwd(), 'dist', 'resources', 'language-scopes.json');
+    }
+    
     const configData = fs.readFileSync(configPath, 'utf8');
     cachedConfig = JSON.parse(configData) as LanguageScopeConfig;
     return cachedConfig;

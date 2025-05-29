@@ -1,0 +1,152 @@
+{
+  "$schema": "./themes.schema.json",
+  "description": "Theme definitions for TuMee VSCode Plugin",
+  "version": "1.0.0",
+  "defaultMixPattern": "humanBorder",
+  "themes": {
+    "light": {
+      "displayName": "Light",
+      "permissions": {
+        "aiWrite": { "color": "#FFA500", "transparency": 0.2 },
+        "aiRead": { "color": "#808080", "transparency": 0.15 },
+        "aiNoAccess": { "color": "#90EE90", "transparency": 0.2 },
+        "humanWrite": { "color": "#0000FF", "transparency": 0.2, "enabled": false },
+        "humanRead": { "color": "#D3D3D3", "transparency": 0.3 },
+        "humanNoAccess": { "color": "#FF0000", "transparency": 0.25 },
+        "contextRead": { "color": "#00CED1", "transparency": 0.15 },
+        "contextWrite": { "color": "#1E90FF", "transparency": 0.15 }
+      }
+    },
+    "dark": {
+      "displayName": "Dark",
+      "permissions": {
+        "aiWrite": { "color": "#FF8C00", "transparency": 0.4 },
+        "aiRead": { "color": "#696969", "transparency": 0.3 },
+        "aiNoAccess": { "color": "#32CD32", "transparency": 0.35 },
+        "humanWrite": { "color": "#4169E1", "transparency": 0.4, "enabled": false },
+        "humanRead": { "color": "#A9A9A9", "transparency": 0.5 },
+        "humanNoAccess": { "color": "#DC143C", "transparency": 0.4 },
+        "contextRead": { "color": "#20B2AA", "transparency": 0.3 },
+        "contextWrite": { "color": "#4682B4", "transparency": 0.3 }
+      }
+    },
+    "highContrast": {
+      "displayName": "High Contrast",
+      "permissions": {
+        "aiWrite": { "color": "#FFFF00", "transparency": 1.0 },
+        "aiRead": { "color": "#C0C0C0", "transparency": 1.0 },
+        "aiNoAccess": { "color": "#00FF00", "transparency": 1.0 },
+        "humanWrite": { "color": "#0000FF", "transparency": 1.0 },
+        "humanRead": { "color": "#808080", "transparency": 1.0 },
+        "humanNoAccess": { "color": "#FF0000", "transparency": 1.0 },
+        "contextRead": { "color": "#00FFFF", "transparency": 1.0 },
+        "contextWrite": { "color": "#FF00FF", "transparency": 1.0 }
+      }
+    },
+    "colorblind": {
+      "displayName": "Colorblind Friendly",
+      "permissions": {
+        "aiWrite": { "color": "#E69F00", "transparency": 0.4 },
+        "aiRead": { "color": "#999999", "transparency": 0.3 },
+        "aiNoAccess": { "color": "#009E73", "transparency": 0.4 },
+        "humanWrite": { "color": "#0072B2", "transparency": 0.4, "enabled": false },
+        "humanRead": { "color": "#CC79A7", "transparency": 0.5 },
+        "humanNoAccess": { "color": "#D55E00", "transparency": 0.4 },
+        "contextRead": { "color": "#56B4E9", "transparency": 0.3 },
+        "contextWrite": { "color": "#F0E442", "transparency": 0.3 }
+      }
+    },
+    "ocean": {
+      "displayName": "Ocean",
+      "permissions": {
+        "aiWrite": { "color": "#00CED1", "transparency": 0.4 },
+        "aiRead": { "color": "#4682B4", "transparency": 0.3 },
+        "aiNoAccess": { "color": "#20B2AA", "transparency": 0.4 },
+        "humanWrite": { "color": "#1E90FF", "transparency": 0.4, "enabled": false },
+        "humanRead": { "color": "#87CEEB", "transparency": 0.5 },
+        "humanNoAccess": { "color": "#000080", "transparency": 0.4 },
+        "contextRead": { "color": "#48D1CC", "transparency": 0.3 },
+        "contextWrite": { "color": "#00BFFF", "transparency": 0.3 }
+      }
+    },
+    "sunset": {
+      "displayName": "Sunset",
+      "permissions": {
+        "aiWrite": { "color": "#FF6347", "transparency": 0.4 },
+        "aiRead": { "color": "#FFA07A", "transparency": 0.3 },
+        "aiNoAccess": { "color": "#FFD700", "transparency": 0.4 },
+        "humanWrite": { "color": "#FF1493", "transparency": 0.4, "enabled": false },
+        "humanRead": { "color": "#FF69B4", "transparency": 0.5 },
+        "humanNoAccess": { "color": "#8B0000", "transparency": 0.4 },
+        "contextRead": { "color": "#FF8C00", "transparency": 0.3 },
+        "contextWrite": { "color": "#FFA500", "transparency": 0.3 }
+      }
+    },
+    "matrix": {
+      "displayName": "Matrix",
+      "permissions": {
+        "aiWrite": { "color": "#00FF00", "transparency": 0.5 },
+        "aiRead": { "color": "#32CD32", "transparency": 0.4 },
+        "aiNoAccess": { "color": "#008000", "transparency": 0.5 },
+        "humanWrite": { "color": "#00FF00", "transparency": 0.4, "enabled": false },
+        "humanRead": { "color": "#90EE90", "transparency": 0.5 },
+        "humanNoAccess": { "color": "#006400", "transparency": 0.5 },
+        "contextRead": { "color": "#228B22", "transparency": 0.4 },
+        "contextWrite": { "color": "#00FA9A", "transparency": 0.4 }
+      }
+    },
+    "pastel": {
+      "displayName": "Pastel",
+      "permissions": {
+        "aiWrite": { "color": "#FFB3BA", "transparency": 0.5 },
+        "aiRead": { "color": "#FFDFBA", "transparency": 0.4 },
+        "aiNoAccess": { "color": "#FFFFBA", "transparency": 0.5 },
+        "humanWrite": { "color": "#BAFFC9", "transparency": 0.5, "enabled": false },
+        "humanRead": { "color": "#BAE1FF", "transparency": 0.6 },
+        "humanNoAccess": { "color": "#C9BAFF", "transparency": 0.5 },
+        "contextRead": { "color": "#FFBAEB", "transparency": 0.4 },
+        "contextWrite": { "color": "#BAFFDA", "transparency": 0.4 }
+      }
+    },
+    "neon": {
+      "displayName": "Neon",
+      "permissions": {
+        "aiWrite": { "color": "#FF073A", "transparency": 0.6 },
+        "aiRead": { "color": "#FF0099", "transparency": 0.5 },
+        "aiNoAccess": { "color": "#F0F600", "transparency": 0.6 },
+        "humanWrite": { "color": "#00FFFF", "transparency": 0.6, "enabled": false },
+        "humanRead": { "color": "#FF00FF", "transparency": 0.7 },
+        "humanNoAccess": { "color": "#0033FF", "transparency": 0.6 },
+        "contextRead": { "color": "#00FF00", "transparency": 0.5 },
+        "contextWrite": { "color": "#FFFF00", "transparency": 0.5 }
+      }
+    },
+    "earth": {
+      "displayName": "Earth Tones",
+      "permissions": {
+        "aiWrite": { "color": "#8B4513", "transparency": 0.4 },
+        "aiRead": { "color": "#A0522D", "transparency": 0.3 },
+        "aiNoAccess": { "color": "#DEB887", "transparency": 0.4 },
+        "humanWrite": { "color": "#228B22", "transparency": 0.4, "enabled": false },
+        "humanRead": { "color": "#D2691E", "transparency": 0.5 },
+        "humanNoAccess": { "color": "#800000", "transparency": 0.4 },
+        "contextRead": { "color": "#BDB76B", "transparency": 0.3 },
+        "contextWrite": { "color": "#8FBC8F", "transparency": 0.3 }
+      }
+    },
+    "cyberpunk": {
+      "displayName": "Cyberpunk",
+      "permissions": {
+        "aiWrite": { "color": "#FF0080", "transparency": 0.7 },
+        "aiRead": { "color": "#00D9FF", "transparency": 0.6 },
+        "aiNoAccess": { "color": "#FFD300", "transparency": 0.7 },
+        "humanWrite": { "color": "#FF0080", "transparency": 0.5, "enabled": false },
+        "humanRead": { "color": "#00D9FF", "transparency": 0.6 },
+        "humanNoAccess": { "color": "#FF3131", "transparency": 0.5 },
+        "contextRead": { "color": "#9D00FF", "transparency": 0.5 },
+        "contextWrite": { "color": "#00FF88", "transparency": 0.5 }
+      },
+      "mixPattern": "average"
+    }
+  }
+}

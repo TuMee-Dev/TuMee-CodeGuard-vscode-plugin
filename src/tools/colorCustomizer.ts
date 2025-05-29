@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getWebviewStyles, getWebviewJavaScript } from './colorCustomizer/webviewContent';
 import { MixPattern, DEFAULT_MIX_PATTERN } from '../types/mixPatterns';
+import { getColorThemes } from '../utils/themeLoader';
 
 export interface PermissionColorConfig {
   enabled: boolean;                // Whether to use own color or other's
@@ -51,15 +52,8 @@ export interface GuardColors {
   };
 }
 
-// Theme definition interface
-interface ThemeDefinition {
-  name: string;
-  permissions: {
-    [key: string]: { enabled: boolean; color: string; transparency: number };
-  };
-  borderBarEnabled: boolean;
-  mixPattern?: MixPattern;
-}
+// Get themes from external configuration
+export const COLOR_THEMES = getColorThemes();
 
 // Default colors (Light theme)
 export const DEFAULT_COLORS: GuardColors = {
@@ -77,178 +71,17 @@ export const DEFAULT_COLORS: GuardColors = {
   mixPattern: DEFAULT_MIX_PATTERN
 };
 
-// Theme configurations as data
-const THEME_CONFIGS: ThemeDefinition[] = [
-  {
-    name: 'light',
-    permissions: {
-      aiWrite: { enabled: true, color: '#FFA500', transparency: 0.2 },
-      aiRead: { enabled: true, color: '#808080', transparency: 0.15 },
-      aiNoAccess: { enabled: true, color: '#90EE90', transparency: 0.2 },
-      humanWrite: { enabled: false, color: '#0000FF', transparency: 0.2 },
-      humanRead: { enabled: true, color: '#D3D3D3', transparency: 0.3 },
-      humanNoAccess: { enabled: true, color: '#FF0000', transparency: 0.25 },
-      contextRead: { enabled: true, color: '#00CED1', transparency: 0.15 },
-      contextWrite: { enabled: true, color: '#1E90FF', transparency: 0.15 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.HUMAN_BORDER
-  },
-  {
-    name: 'dark',
-    permissions: {
-      aiWrite: { enabled: true, color: '#FF8C00', transparency: 0.4 },
-      aiRead: { enabled: true, color: '#696969', transparency: 0.3 },
-      aiNoAccess: { enabled: true, color: '#32CD32', transparency: 0.35 },
-      humanWrite: { enabled: false, color: '#4169E1', transparency: 0.4 },
-      humanRead: { enabled: true, color: '#A9A9A9', transparency: 0.5 },
-      humanNoAccess: { enabled: true, color: '#DC143C', transparency: 0.4 },
-      contextRead: { enabled: true, color: '#20B2AA', transparency: 0.3 },
-      contextWrite: { enabled: true, color: '#4682B4', transparency: 0.3 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.HUMAN_BORDER
-  },
-  {
-    name: 'highContrast',
-    permissions: {
-      aiWrite: { enabled: true, color: '#FFFF00', transparency: 1.0 },
-      aiRead: { enabled: true, color: '#C0C0C0', transparency: 1.0 },
-      aiNoAccess: { enabled: true, color: '#00FF00', transparency: 1.0 },
-      humanWrite: { enabled: true, color: '#0000FF', transparency: 1.0 },
-      humanRead: { enabled: true, color: '#808080', transparency: 1.0 },
-      humanNoAccess: { enabled: true, color: '#FF0000', transparency: 1.0 },
-      contextRead: { enabled: true, color: '#00FFFF', transparency: 1.0 },
-      contextWrite: { enabled: true, color: '#FF00FF', transparency: 1.0 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.HUMAN_BORDER
-  },
-  {
-    name: 'colorblind',
-    permissions: {
-      aiWrite: { enabled: true, color: '#E69F00', transparency: 0.4 },
-      aiRead: { enabled: true, color: '#999999', transparency: 0.3 },
-      aiNoAccess: { enabled: true, color: '#009E73', transparency: 0.4 },
-      humanWrite: { enabled: false, color: '#0072B2', transparency: 0.4 },
-      humanRead: { enabled: true, color: '#CC79A7', transparency: 0.5 },
-      humanNoAccess: { enabled: true, color: '#D55E00', transparency: 0.4 },
-      contextRead: { enabled: true, color: '#56B4E9', transparency: 0.3 },
-      contextWrite: { enabled: true, color: '#F0E442', transparency: 0.3 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.HUMAN_BORDER
-  },
-  {
-    name: 'ocean',
-    permissions: {
-      aiWrite: { enabled: true, color: '#00CED1', transparency: 0.4 },
-      aiRead: { enabled: true, color: '#4682B4', transparency: 0.3 },
-      aiNoAccess: { enabled: true, color: '#20B2AA', transparency: 0.4 },
-      humanWrite: { enabled: false, color: '#1E90FF', transparency: 0.4 },
-      humanRead: { enabled: true, color: '#87CEEB', transparency: 0.5 },
-      humanNoAccess: { enabled: true, color: '#000080', transparency: 0.4 },
-      contextRead: { enabled: true, color: '#48D1CC', transparency: 0.3 },
-      contextWrite: { enabled: true, color: '#00BFFF', transparency: 0.3 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.HUMAN_BORDER
-  },
-  {
-    name: 'sunset',
-    permissions: {
-      aiWrite: { enabled: true, color: '#FF6347', transparency: 0.4 },
-      aiRead: { enabled: true, color: '#FFA07A', transparency: 0.3 },
-      aiNoAccess: { enabled: true, color: '#FFD700', transparency: 0.4 },
-      humanWrite: { enabled: false, color: '#FF1493', transparency: 0.4 },
-      humanRead: { enabled: true, color: '#FF69B4', transparency: 0.5 },
-      humanNoAccess: { enabled: true, color: '#8B0000', transparency: 0.4 },
-      contextRead: { enabled: true, color: '#FF8C00', transparency: 0.3 },
-      contextWrite: { enabled: true, color: '#FFA500', transparency: 0.3 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.HUMAN_BORDER
-  },
-  {
-    name: 'matrix',
-    permissions: {
-      aiWrite: { enabled: true, color: '#00FF00', transparency: 0.5 },
-      aiRead: { enabled: true, color: '#32CD32', transparency: 0.4 },
-      aiNoAccess: { enabled: true, color: '#008000', transparency: 0.5 },
-      humanWrite: { enabled: false, color: '#00FF00', transparency: 0.4 },
-      humanRead: { enabled: true, color: '#90EE90', transparency: 0.5 },
-      humanNoAccess: { enabled: true, color: '#006400', transparency: 0.4 },
-      contextRead: { enabled: true, color: '#7FFF00', transparency: 0.3 },
-      contextWrite: { enabled: true, color: '#9ACD32', transparency: 0.3 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.HUMAN_BORDER
-  },
-  {
-    name: 'neon',
-    permissions: {
-      aiWrite: { enabled: true, color: '#FF1493', transparency: 0.6 },
-      aiRead: { enabled: true, color: '#00FFFF', transparency: 0.5 },
-      aiNoAccess: { enabled: true, color: '#FFFF00', transparency: 0.6 },
-      humanWrite: { enabled: false, color: '#FF00FF', transparency: 0.5 },
-      humanRead: { enabled: true, color: '#00FF00', transparency: 0.6 },
-      humanNoAccess: { enabled: true, color: '#FF4500', transparency: 0.5 },
-      contextRead: { enabled: true, color: '#7FFF00', transparency: 0.5 },
-      contextWrite: { enabled: true, color: '#FF69B4', transparency: 0.5 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.HUMAN_BORDER
-  },
-  {
-    name: 'pastel',
-    permissions: {
-      aiWrite: { enabled: true, color: '#FFB6C1', transparency: 0.5 },
-      aiRead: { enabled: true, color: '#E6E6FA', transparency: 0.4 },
-      aiNoAccess: { enabled: true, color: '#98FB98', transparency: 0.5 },
-      humanWrite: { enabled: false, color: '#87CEFA', transparency: 0.5 },
-      humanRead: { enabled: true, color: '#DDA0DD', transparency: 0.6 },
-      humanNoAccess: { enabled: true, color: '#F0E68C', transparency: 0.5 },
-      contextRead: { enabled: true, color: '#B0E0E6', transparency: 0.4 },
-      contextWrite: { enabled: true, color: '#F5DEB3', transparency: 0.4 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.HUMAN_BORDER
-  },
-  {
-    name: 'cyberpunk',
-    permissions: {
-      aiWrite: { enabled: true, color: '#FF0080', transparency: 0.7 },
-      aiRead: { enabled: true, color: '#00D9FF', transparency: 0.6 },
-      aiNoAccess: { enabled: true, color: '#FFD300', transparency: 0.7 },
-      humanWrite: { enabled: false, color: '#FF0080', transparency: 0.5 },
-      humanRead: { enabled: true, color: '#00D9FF', transparency: 0.6 },
-      humanNoAccess: { enabled: true, color: '#FF3131', transparency: 0.5 },
-      contextRead: { enabled: true, color: '#9D00FF', transparency: 0.5 },
-      contextWrite: { enabled: true, color: '#00FF88', transparency: 0.5 }
-    },
-    borderBarEnabled: true,
-    mixPattern: MixPattern.AVERAGE
-  }
-];
-
-// Convert theme configs to old format for compatibility
-export const COLOR_THEMES: Record<string, { name: string; colors: GuardColors }> = {};
-THEME_CONFIGS.forEach(theme => {
-  COLOR_THEMES[theme.name] = {
-    name: theme.name.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
-    colors: {
-      permissions: theme.permissions as GuardColors['permissions'],
-      borderBarEnabled: theme.borderBarEnabled,
-      mixPattern: theme.mixPattern
-    }
-  };
-});
-
 // Export themes for CLI usage
 export function getBuiltInThemes(): Record<string, any> {
   const themes: Record<string, any> = {};
-  THEME_CONFIGS.forEach(config => {
-    themes[config.name] = config;
+  // Convert COLOR_THEMES back to the format expected by CLI
+  Object.entries(COLOR_THEMES).forEach(([name, theme]) => {
+    themes[name] = {
+      name,
+      permissions: theme.colors.permissions,
+      borderBarEnabled: theme.colors.borderBarEnabled,
+      mixPattern: theme.colors.mixPattern
+    };
   });
   return themes;
 }
