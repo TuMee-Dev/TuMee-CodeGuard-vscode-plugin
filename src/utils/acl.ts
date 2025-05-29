@@ -124,16 +124,30 @@ export const parseGuardTag = (line: string): {
 
     // Store permission by target
     if (normalizedTarget === 'ai') {
-      aiPermission = normalizedPermission;
-      aiIsContext = normalizedPermission === 'context';
+      if (normalizedPermission === 'context') {
+        aiIsContext = true;
+        // For context, we need to set a permission (will be inherited from current state)
+        // Set to undefined here - the processor will use the current permission
+        aiPermission = undefined;
+      } else {
+        aiPermission = normalizedPermission;
+        aiIsContext = false;
+      }
     } else if (normalizedTarget === 'human') {
-      humanPermission = normalizedPermission;
-      humanIsContext = normalizedPermission === 'context';
+      if (normalizedPermission === 'context') {
+        humanIsContext = true;
+        // For context, we need to set a permission (will be inherited from current state)
+        // Set to undefined here - the processor will use the current permission
+        humanPermission = undefined;
+      } else {
+        humanPermission = normalizedPermission;
+        humanIsContext = false;
+      }
     }
   }
 
-  // If we found any permissions from new format tags, return them
-  if (aiPermission || humanPermission) {
+  // If we found any permissions or context flags from new format tags, return them
+  if (aiPermission || humanPermission || aiIsContext || humanIsContext) {
     return {
       identifier,
       scope,
@@ -160,7 +174,7 @@ export const parseGuardTag = (line: string): {
     return {
       lineCount: legacyMatch[2] ? parseInt(legacyMatch[2], 10) : undefined,
       type: 'legacy',
-      aiPermission: normalizedPermission,
+      aiPermission: normalizedPermission === 'context' ? undefined : normalizedPermission,
       aiIsContext: normalizedPermission === 'context'
     };
   }
@@ -176,7 +190,7 @@ export const parseGuardTag = (line: string): {
     return {
       lineCount: parseInt(pythonMatch[2], 10),
       type: 'python',
-      aiPermission: normalizedPermission,
+      aiPermission: normalizedPermission === 'context' ? undefined : normalizedPermission,
       aiIsContext: normalizedPermission === 'context'
     };
   }
@@ -192,7 +206,7 @@ export const parseGuardTag = (line: string): {
     return {
       lineCount: parseInt(jsMatch[2], 10),
       type: 'javascript',
-      aiPermission: normalizedPermission,
+      aiPermission: normalizedPermission === 'context' ? undefined : normalizedPermission,
       aiIsContext: normalizedPermission === 'context'
     };
   }

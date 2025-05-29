@@ -340,12 +340,12 @@ export async function parseGuardTagsCore(
         const guardTag: GuardTag = {
           lineNumber: lineNumber,
           identifier: tagInfo.identifier,
-          scope: tagInfo.scope || (!tagInfo.lineCount && (tagInfo.aiPermission !== 'context' && tagInfo.humanPermission !== 'context') ? 'block' : undefined),
+          scope: tagInfo.scope || (!tagInfo.lineCount && (!tagInfo.aiIsContext && !tagInfo.humanIsContext) ? 'block' : undefined),
           lineCount: tagInfo.lineCount,
           addScopes: tagInfo.addScopes,
           removeScopes: tagInfo.removeScopes,
-          aiPermission: tagInfo.aiPermission as 'r' | 'w' | 'n' | 'context' | undefined,
-          humanPermission: tagInfo.humanPermission as 'r' | 'w' | 'n' | 'context' | undefined,
+          aiPermission: tagInfo.aiPermission as 'r' | 'w' | 'n' | undefined,
+          humanPermission: tagInfo.humanPermission as 'r' | 'w' | 'n' | undefined,
           aiIsContext: tagInfo.aiIsContext,
           humanIsContext: tagInfo.humanIsContext
         };
@@ -456,7 +456,7 @@ export async function parseGuardTagsCore(
           // Don't overwrite the resolved boundaries!
           startLine = guardTag.scopeStart;
           endLine = guardTag.scopeEnd;
-        } else if (guardTag.aiPermission === 'context' || guardTag.humanPermission === 'context') {
+        } else if (tagInfo.aiIsContext || tagInfo.humanIsContext) {
           // Context guards without explicit scope extend until the next guard
           guardTag.scopeStart = lineNumber;
           // Find the next guard tag
@@ -508,23 +508,21 @@ export async function parseGuardTagsCore(
 
         // Update permissions based on the guard tag
         // Check if aiPermission is set (could be from a combined tag or single ai tag)
-        if (guardTag.aiPermission) {
-          if (guardTag.aiPermission !== 'context') {
-            currentPermissions.ai = guardTag.aiPermission;
-            currentContext.ai = false;
-          } else {
-            currentContext.ai = true;
-          }
+        if (guardTag.aiPermission !== undefined) {
+          currentPermissions.ai = guardTag.aiPermission;
+        }
+        // Always check context flag
+        if (tagInfo.aiIsContext) {
+          currentContext.ai = true;
         }
 
         // Check if humanPermission is set (could be from a combined tag or single human tag)
-        if (guardTag.humanPermission) {
-          if (guardTag.humanPermission !== 'context') {
-            currentPermissions.human = guardTag.humanPermission;
-            currentContext.human = false;
-          } else {
-            currentContext.human = true;
-          }
+        if (guardTag.humanPermission !== undefined) {
+          currentPermissions.human = guardTag.humanPermission;
+        }
+        // Always check context flag
+        if (tagInfo.humanIsContext) {
+          currentContext.human = true;
         }
 
         // Note: Legacy tags are now handled by parseGuardTag directly,
@@ -532,7 +530,7 @@ export async function parseGuardTagsCore(
 
         // For context guards, trim the endLine to exclude trailing whitespace
         let effectiveEndLine = endLine;
-        if ((guardTag.aiPermission === 'context' || guardTag.humanPermission === 'context') && effectiveScope !== 'file') {
+        if ((tagInfo.aiIsContext || tagInfo.humanIsContext) && effectiveScope !== 'file') {
           // Find the last line with content within the scope
           let lastContentLine = startLine; // Default to start if all lines are empty
           // Work backwards from the end to find the last non-empty line
@@ -570,7 +568,7 @@ export async function parseGuardTagsCore(
           logger.log(`[GuardProcessor] Creating guard stack entry at line ${lineNumber}: ${permissions.join(', ')}, startLine=${startLine}, endLine=${effectiveEndLine}, inherited permissions: ${JSON.stringify(currentPermissions)}`);
         }
 
-        if (debugEnabled && (guardTag.aiPermission === 'context' || guardTag.humanPermission === 'context') && logger) {
+        if (debugEnabled && (tagInfo.aiIsContext || tagInfo.humanIsContext) && logger) {
           logger.log(`[GuardProcessor] Pushing context guard to stack: ${JSON.stringify({
             aiPermission: guardTag.aiPermission,
             humanPermission: guardTag.humanPermission,
@@ -601,8 +599,8 @@ export async function parseGuardTagsCore(
           // Check if the next guard changes any of the same targets (and isn't a context guard)
           const currentAffectsAI = currentTag.aiPermission !== undefined;
           const currentAffectsHuman = currentTag.humanPermission !== undefined;
-          const nextAffectsAI = nextTag.aiPermission !== undefined && nextTag.aiPermission !== 'context';
-          const nextAffectsHuman = nextTag.humanPermission !== undefined && nextTag.humanPermission !== 'context';
+          const nextAffectsAI = nextTag.aiPermission !== undefined && !nextTag.aiIsContext;
+          const nextAffectsHuman = nextTag.humanPermission !== undefined && !nextTag.humanIsContext;
 
           const affectsSameTarget = (currentAffectsAI && nextAffectsAI) || (currentAffectsHuman && nextAffectsHuman);
 
@@ -729,23 +727,21 @@ function processGuardStack(
 
         // Update permissions based on the guard tag
         // Check if aiPermission is set
-        if (tag.aiPermission) {
-          if (tag.aiPermission !== 'context') {
-            currentPermissions.ai = tag.aiPermission;
-            currentContext.ai = false;
-          } else {
-            currentContext.ai = true;
-          }
+        if (tag.aiPermission !== undefined) {
+          currentPermissions.ai = tag.aiPermission;
+        }
+        // Always check context flag
+        if (tag.aiIsContext) {
+          currentContext.ai = true;
         }
 
         // Check if humanPermission is set
-        if (tag.humanPermission) {
-          if (tag.humanPermission !== 'context') {
-            currentPermissions.human = tag.humanPermission;
-            currentContext.human = false;
-          } else {
-            currentContext.human = true;
-          }
+        if (tag.humanPermission !== undefined) {
+          currentPermissions.human = tag.humanPermission;
+        }
+        // Always check context flag
+        if (tag.humanIsContext) {
+          currentContext.human = true;
         }
 
         // Note: Legacy tags are now handled by parseGuardTag directly
@@ -760,7 +756,7 @@ function processGuardStack(
         };
 
         // DEBUG: Log context guard scope
-        if ((tag.aiPermission === 'context' || tag.humanPermission === 'context') && debugEnabled && logger) {
+        if ((tag.aiIsContext || tag.humanIsContext) && debugEnabled && logger) {
           logger.log(`[GuardProcessor] Context guard scope: startLine=${entry.startLine}, endLine=${entry.endLine}, scopeStart=${tag.scopeStart}, scopeEnd=${tag.scopeEnd}`);
         }
 
@@ -812,7 +808,7 @@ function processGuardStack(
             if (line >= entry.startLine && line <= entry.endLine) {
               // Add any non-context permissions we haven't seen yet
               for (const [target, permission] of Object.entries(entry.permissions)) {
-                if (permission !== 'context' && !nonContextPermissions[target]) {
+                if (!nonContextPermissions[target]) {
                   nonContextPermissions[target] = permission;
                 }
               }

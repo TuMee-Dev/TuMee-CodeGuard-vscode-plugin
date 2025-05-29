@@ -12,8 +12,8 @@ export interface GuardTag {
   scopeStart?: number;
   scopeEnd?: number;
   // Store the actual permissions for each target
-  aiPermission?: 'r' | 'w' | 'n' | 'context';
-  humanPermission?: 'r' | 'w' | 'n' | 'context';
+  aiPermission?: 'r' | 'w' | 'n';
+  humanPermission?: 'r' | 'w' | 'n';
   // Track if permissions are context-based
   aiIsContext?: boolean;
   humanIsContext?: boolean;
