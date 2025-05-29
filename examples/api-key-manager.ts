@@ -145,7 +145,7 @@ const CACHE_EVICTION_RULES = {
     }
 };
 
-// @guard:ai:context
+// @guard:ai:w @guard:ai:context
 // Deployment Configuration - CYAN highlight (2nd occurrence)
 // Production: 3 regions (us-east-1, eu-west-1, ap-southeast-1)
 // Disaster Recovery: RPO = 1 hour, RTO = 4 hours

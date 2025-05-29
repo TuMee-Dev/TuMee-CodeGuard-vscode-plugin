@@ -100,7 +100,7 @@ const CACHE_STRATEGY = {
     evictionPolicy: (key, value) => value.accessCount < 10
 };
 
-// @guard:ai:context
+// @guard:ai:w @guard:ai:context
 // Performance Metrics Context - CYAN highlight (2nd occurrence)
 // Average response time: 45ms
 // Peak load handling: 10,000 requests/second

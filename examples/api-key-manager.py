@@ -119,7 +119,7 @@ class PerformanceMonitor:
             / self.metrics['api_calls']
         )
 
-# @guard:human:n
+# @guard:ai:w @guard:human:n
 # AI-generated optimization lookup table - ORANGE highlight (2nd occurrence)
 OPTIMIZATION_MATRIX = {
     'cache_strategy': {
