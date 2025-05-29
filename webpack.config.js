@@ -42,7 +42,8 @@ const config = {
       patterns: [
         { from: 'node_modules/web-tree-sitter/tree-sitter.wasm', to: 'node_modules/web-tree-sitter/tree-sitter.wasm' },
         { from: 'resources/tree-sitter-wasm', to: 'resources/tree-sitter-wasm', noErrorOnMissing: true },
-        { from: 'src/tools/colorCustomizer/styles.css', to: 'tools/colorCustomizer/styles.css' }
+        { from: 'src/tools/colorCustomizer/styles.css', to: 'tools/colorCustomizer/styles.css' },
+        { from: 'resources/preview-lines.json', to: 'resources/preview-lines.json' }
       ],
     }),
   ]
