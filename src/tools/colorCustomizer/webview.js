@@ -113,6 +113,7 @@ function toggleColorLink(event, permission) {
     document.getElementById(permission + '-minimapColor').value = rowColor;
   }
   updateColorPreview(permission);
+  updatePreview();
 }
 window.toggleColorLink = toggleColorLink;
 
@@ -190,7 +191,6 @@ window.updateSlider = updateSlider;
 
 function updatePreview() {
   const colors = getColors();
-  currentColors = colors;
   
   PREVIEW_LINES.forEach((config, index) => {
     updateLine(index + 1, config.ai, config.human);
@@ -206,6 +206,64 @@ function updatePreview() {
   updateExample('ex-mixed2', 'both', { ai: 'read', human: 'write' });
   updateExample('ex-contextRead', 'ai', 'context');
   updateExample('ex-contextWrite', 'ai', 'contextWrite');
+  
+  // Enable Apply button when changes are detected
+  checkForChanges();
+  
+  // Update currentColors AFTER checking for changes
+  currentColors = colors;
+}
+
+// Track original colors to detect changes
+let originalColors = null;
+
+function checkForChanges() {
+  const applyButton = document.querySelector('button[onclick="saveColors()"]');
+  const resetButton = document.querySelector('button[onclick="resetColors()"]');
+  
+  if (!applyButton || !resetButton) return;
+  
+  // Get current colors fresh from the UI
+  const freshColors = getColors();
+  
+  // Compare against original colors - need to normalize the format
+  let hasChanges = false;
+  if (originalColors && originalColors.permissions) {
+    // Compare each permission's colors
+    for (const [key, original] of Object.entries(originalColors.permissions)) {
+      const current = freshColors.permissions[key];
+      if (!current) continue;
+      
+      // Check if any values differ
+      if (original.enabled !== current.enabled ||
+          original.color !== current.color ||
+          original.minimapColor !== current.minimapColor ||
+          Math.abs((original.transparency || 0.2) - current.transparency) > 0.001 ||
+          Math.abs((original.borderOpacity || 1.0) - current.borderOpacity) > 0.001) {
+        hasChanges = true;
+        console.log(`Change detected in ${key}:`, original, current);
+        break;
+      }
+    }
+  }
+  
+  if (hasChanges) {
+    applyButton.disabled = false;
+    applyButton.style.opacity = '1';
+    applyButton.style.cursor = 'pointer';
+    
+    resetButton.disabled = false;
+    resetButton.style.opacity = '1';
+    resetButton.style.cursor = 'pointer';
+  } else {
+    applyButton.disabled = true;
+    applyButton.style.opacity = '0.5';
+    applyButton.style.cursor = 'not-allowed';
+    
+    resetButton.disabled = true;
+    resetButton.style.opacity = '0.5';
+    resetButton.style.cursor = 'not-allowed';
+  }
 }
 
 function updateLine(lineNum, aiPerm, humanPerm) {
@@ -413,6 +471,11 @@ function getColors() {
 function updateAllColors(colors) {
   if (!colors || !colors.permissions) return;
   
+  // Store original colors BEFORE modifying the UI
+  if (!originalColors) {
+    originalColors = JSON.parse(JSON.stringify(colors));
+  }
+  
   Object.entries(colors.permissions).forEach(([key, config]) => {
     const enabledElem = document.getElementById(key + '-enabled');
     if (enabledElem) {
@@ -426,8 +489,17 @@ function updateAllColors(colors) {
     const minimapInput = document.getElementById(key + '-minimapColor');
     if (minimapInput && config.minimapColor) {
       minimapInput.value = config.minimapColor;
+      // Set link state based on whether colors match
+      colorLinks[key] = config.color === config.minimapColor;
     } else if (minimapInput) {
       minimapInput.value = config.color;
+      colorLinks[key] = true; // Default to linked if no separate minimap color
+    }
+    
+    // Update the link icon to match the state
+    const icon = document.getElementById(key + '-link');
+    if (icon) {
+      icon.className = colorLinks[key] ? 'link-icon linked' : 'link-icon unlinked';
     }
     
     const transInput = document.getElementById(key + '-transparency');
@@ -453,6 +525,9 @@ function updateAllColors(colors) {
   });
   
   updatePreview();
+  
+  // Set currentColors to match what's in the UI after all updates
+  currentColors = getColors();
 }
 
 function applyPreset(presetName) {
@@ -621,11 +696,19 @@ function saveColors() {
     command: 'saveColors',
     colors: colors
   });
+  
+  // Update original colors after saving
+  originalColors = JSON.parse(JSON.stringify(colors));
+  checkForChanges(); // This will disable the buttons
 }
 window.saveColors = saveColors;
 
 function resetColors() {
-  applyPreset('light');
+  // Reset to original colors
+  if (originalColors) {
+    updateAllColors(originalColors);
+    checkForChanges(); // This will disable the buttons
+  }
 }
 window.resetColors = resetColors;
 

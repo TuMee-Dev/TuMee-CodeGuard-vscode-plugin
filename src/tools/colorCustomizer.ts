@@ -709,8 +709,8 @@ export class ColorCustomizerPanel {
                 <div class="control-footer">
                     <div class="buttons">
                         <div class="button-row">
-                            <button class="btn btn-primary" onclick="saveColors()" disabled style="opacity: 0.5; cursor: not-allowed;">Apply Colors</button>
-                            <button class="btn btn-secondary" onclick="resetColors()" disabled style="opacity: 0.5; cursor: not-allowed;">Reset</button>
+                            <button class="btn btn-primary" onclick="saveColors()" disabled>Apply Colors</button>
+                            <button class="btn btn-secondary" onclick="resetColors()" disabled>Reset</button>
                         </div>
                         <div class="button-row" style="margin-top: 10px;">
                             <button class="btn btn-secondary" onclick="exportTheme()">Export to Clipboard</button>

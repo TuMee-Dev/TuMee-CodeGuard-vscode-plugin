@@ -207,6 +207,7 @@ export class DecorationTypeFactory {
       read: colors.contextRead
     };
 
+
     let baseColor: string = '#000000'; // Default fallback color
     let effectiveOpacity = opacity;
 
@@ -287,8 +288,20 @@ export class DecorationTypeFactory {
     const colorInfo = this.getPermissionColor(key, colors, opacity);
     const { color } = colorInfo;
     
-    // Get effective opacity
-    let effectiveOpacity = permissionTransparencies[key] || colorInfo.opacity;
+    // Get effective opacity - need to look up by permission type, not full key
+    let effectiveOpacity = colorInfo.opacity;
+    
+    // For context types, look up transparency by contextRead/contextWrite
+    if (key.includes('Context')) {
+      if (key.includes('WriteContext')) {
+        effectiveOpacity = permissionTransparencies.contextWrite || colorInfo.opacity;
+      } else if (key.includes('ReadContext')) {
+        effectiveOpacity = permissionTransparencies.contextRead || colorInfo.opacity;
+      }
+    } else {
+      // For non-context, use the key directly
+      effectiveOpacity = permissionTransparencies[key] || colorInfo.opacity;
+    }
 
     // Check if this permission is enabled
     const isPermissionEnabled = permissionEnabledStates[key] !== false;

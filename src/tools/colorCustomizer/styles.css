@@ -96,6 +96,15 @@
     
     .btn-icon:active { transform: scale(0.95); }
     
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    button:disabled:hover {
+      transform: none;
+    }
+    
     .permission-section {
       margin-bottom: 20px;
       padding: 15px;
