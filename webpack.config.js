@@ -47,7 +47,8 @@ const config = {
         { from: 'resources/preview-lines.json', to: 'resources/preview-lines.json' },
         { from: 'resources/language-scopes.json', to: 'resources/language-scopes.json' },
         { from: 'resources/language-scopes.schema.json', to: 'resources/language-scopes.schema.json' },
-        { from: 'resources/themes.json', to: 'resources/themes.json' }
+        { from: 'resources/themes.json', to: 'resources/themes.json' },
+        { from: 'resources/validation-report-template.html', to: 'resources/validation-report-template.html' }
       ],
     }),
   ]

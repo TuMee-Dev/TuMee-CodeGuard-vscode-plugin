@@ -26,6 +26,7 @@ import type {
   Discrepancy,
   ValidationStatistics
 } from '@/types/validationTypes';
+import { processTemplate } from './templateLoader';
 
 let validationPanel: WebviewPanel | undefined;
 let errorDecorationType: TextEditorDecorationType;
@@ -167,230 +168,20 @@ function getWebviewContent(result: ValidationResult): string {
   const statusClass = result.status === ValidationStatus.Match ? 'success' : 'error';
   const statusIcon = result.status === ValidationStatus.Match ? '✅' : '❌';
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CodeGuard Validation Report</title>
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      font-size: var(--vscode-font-size);
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      padding: 20px;
-      line-height: 1.6;
-    }
-    
-    h1, h2, h3 {
-      font-weight: 600;
-      margin-top: 20px;
-      margin-bottom: 10px;
-    }
-    
-    .header {
-      border-bottom: 2px solid var(--vscode-panel-border);
-      padding-bottom: 20px;
-      margin-bottom: 20px;
-    }
-    
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 12px;
-      border-radius: 4px;
-      font-weight: 500;
-    }
-    
-    .status.success {
-      background-color: var(--vscode-testing-iconPassed);
-      color: var(--vscode-editor-background);
-    }
-    
-    .status.error {
-      background-color: var(--vscode-testing-iconFailed);
-      color: var(--vscode-editor-background);
-    }
-    
-    .statistics {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin: 20px 0;
-    }
-    
-    .stat-card {
-      background-color: var(--vscode-editor-inactiveSelectionBackground);
-      padding: 16px;
-      border-radius: 4px;
-      border: 1px solid var(--vscode-panel-border);
-    }
-    
-    .stat-value {
-      font-size: 24px;
-      font-weight: 600;
-      color: var(--vscode-textLink-foreground);
-    }
-    
-    .stat-label {
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
-      text-transform: uppercase;
-      margin-top: 4px;
-    }
-    
-    .discrepancy {
-      background-color: var(--vscode-editor-inactiveSelectionBackground);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 4px;
-      padding: 16px;
-      margin: 12px 0;
-    }
-    
-    .discrepancy.error {
-      border-left: 4px solid var(--vscode-editorError-foreground);
-    }
-    
-    .discrepancy.warning {
-      border-left: 4px solid var(--vscode-editorWarning-foreground);
-    }
-    
-    .discrepancy-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-    }
-    
-    .discrepancy-type {
-      font-weight: 600;
-      text-transform: capitalize;
-    }
-    
-    .line-link {
-      color: var(--vscode-textLink-foreground);
-      cursor: pointer;
-      text-decoration: none;
-      font-family: var(--vscode-editor-font-family);
-    }
-    
-    .line-link:hover {
-      text-decoration: underline;
-    }
-    
-    .guard-comparison {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 12px;
-    }
-    
-    .guard-list {
-      background-color: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 4px;
-      padding: 12px;
-    }
-    
-    .guard-list h4 {
-      margin: 0 0 8px 0;
-      font-size: 12px;
-      text-transform: uppercase;
-      color: var(--vscode-descriptionForeground);
-    }
-    
-    .guard-item {
-      font-family: var(--vscode-editor-font-family);
-      font-size: 12px;
-      padding: 4px 0;
-      color: var(--vscode-textPreformat-foreground);
-    }
-    
-    .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 20px;
-    }
-    
-    button {
-      background-color: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border: none;
-      padding: 6px 14px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    
-    button:hover {
-      background-color: var(--vscode-button-hoverBackground);
-    }
-    
-    .layer-viz-button {
-      background-color: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-    }
-    
-    .layer-viz-button:hover {
-      background-color: var(--vscode-button-secondaryHoverBackground);
-    }
-    
-    code {
-      font-family: var(--vscode-editor-font-family);
-      background-color: var(--vscode-textCodeBlock-background);
-      padding: 2px 4px;
-      border-radius: 3px;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>CodeGuard Validation Report</h1>
-    <p><strong>File:</strong> <code>${result.file_path}</code></p>
-    <p><strong>Status:</strong> <span class="status ${statusClass}">${statusIcon} ${result.status}</span></p>
-    <p><strong>Timestamp:</strong> ${new Date(result.timestamp).toLocaleString()}</p>
-  </div>
-  
-  ${result.statistics ? getStatisticsHtml(result.statistics) : ''}
-  
-  ${(result.discrepancies && result.discrepancies.length > 0) ? getDiscrepanciesHtml(result) : getSuccessHtml()}
-  
-  <div class="actions">
-    <button onclick="saveReport()">Save Report</button>
-    <button onclick="copyToClipboard()">Copy to Clipboard</button>
-  </div>
-  
-  <script>
-    const vscode = acquireVsCodeApi();
-    
-    function navigateToLine(line) {
-      vscode.postMessage({
-        command: 'navigateToLine',
-        file: '${result.file_path}',
-        line: line
-      });
-    }
-    
-    function showLayerVisualization(line, discrepancy) {
-      vscode.postMessage({
-        command: 'showLayerVisualization',
-        line: line,
-        discrepancy: discrepancy
-      });
-    }
-    
-    function saveReport() {
-      vscode.postMessage({ command: 'saveReport' });
-    }
-    
-    function copyToClipboard() {
-      vscode.postMessage({ command: 'copyToClipboard' });
-    }
-  </script>
-</body>
-</html>`;
+  const statisticsHtml = result.statistics ? getStatisticsHtml(result.statistics) : '';
+  const discrepanciesHtml = (result.discrepancies && result.discrepancies.length > 0)
+    ? getDiscrepanciesHtml(result)
+    : getSuccessHtml();
+
+  return processTemplate('validation-report-template.html', {
+    FILE_PATH: result.file_path,
+    STATUS_CLASS: statusClass,
+    STATUS_ICON: statusIcon,
+    STATUS: result.status,
+    TIMESTAMP: new Date(result.timestamp).toLocaleString(),
+    STATISTICS_HTML: statisticsHtml,
+    DISCREPANCIES_HTML: discrepanciesHtml
+  });
 }
 
 function getStatisticsHtml(stats: ValidationStatistics): string {
