@@ -64,10 +64,14 @@ window.addEventListener('message', event => {
       break;
     case 'themeDeleted':
       const themeSelect = document.getElementById('themeSelect');
-      if (themeSelect && themeSelect.value === message.deletedTheme) {
-        themeSelect.value = '';
+      if (themeSelect) {
+        // Set the dropdown to the next theme that was selected by the extension
+        if (message.nextTheme) {
+          themeSelect.value = message.nextTheme;
+        } else {
+          themeSelect.value = '';
+        }
         updateDeleteButton();
-        updateThemeStatus(false);
       }
       // Request updated theme list from extension
       vscode.postMessage({ command: 'requestThemeList' });
@@ -776,10 +780,52 @@ function addNewTheme() {
   const dialog = document.getElementById('themeDialog');
   const input = document.getElementById('themeNameInput');
   if (dialog && input) {
+    // Generate a smart default name
+    const defaultName = generateDefaultThemeName();
+    input.value = defaultName;
     dialog.classList.add('show');
-    input.value = '';
     input.focus();
+    input.select(); // Select the text so user can easily replace it
   }
+}
+
+function generateDefaultThemeName() {
+  const themeSelect = document.getElementById('themeSelect');
+  const currentTheme = themeSelect ? themeSelect.value : '';
+  
+  // Get all existing theme names from the dropdown
+  const existingNames = new Set();
+  if (themeSelect) {
+    const options = themeSelect.querySelectorAll('option');
+    options.forEach(option => {
+      if (option.value) existingNames.add(option.value);
+    });
+  }
+  
+  let baseName = '';
+  if (currentTheme) {
+    // If current theme name already ends with a number, extract the base
+    const numberMatch = currentTheme.match(/^(.+?) \d+$/);
+    
+    if (numberMatch) {
+      baseName = numberMatch[1];
+    } else {
+      baseName = currentTheme;
+    }
+  } else {
+    baseName = 'My Theme';
+  }
+  
+  // Find the first available number
+  let counter = 1;
+  let proposedName = `${baseName} ${counter}`;
+  
+  while (existingNames.has(proposedName)) {
+    counter++;
+    proposedName = `${baseName} ${counter}`;
+  }
+  
+  return proposedName;
 }
 window.addNewTheme = addNewTheme;
 

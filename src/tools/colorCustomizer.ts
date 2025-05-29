@@ -397,34 +397,29 @@ export class ColorCustomizerPanel {
       delete updatedThemes[name];
       await config.update('customThemes', updatedThemes, vscode.ConfigurationTarget.Global);
 
-      // Determine next theme to select
+      // Determine next theme to select (only custom themes can be deleted)
       let nextTheme = '';
       if (this._currentTheme === name) {
         const builtInThemes = Object.keys(COLOR_THEMES);
-        const customThemeNames = Object.keys(customThemes);
-        const wasCustomTheme = customThemeNames.includes(name);
+        const originalCustomThemes = Object.keys(customThemes);
+        const remainingCustomThemes = Object.keys(updatedThemes);
 
-        if (wasCustomTheme) {
-          // Deleted a custom theme - prioritize selecting another custom theme
-          const remainingCustomThemes = Object.keys(updatedThemes);
+        if (remainingCustomThemes.length > 0) {
+          // Still have custom themes - select the closest one by position
+          const deletedIndex = originalCustomThemes.indexOf(name);
+          const nextIndex = Math.min(deletedIndex, remainingCustomThemes.length - 1);
           
-          if (remainingCustomThemes.length > 0) {
-            // Find the closest custom theme by index
-            const deletedIndex = customThemeNames.indexOf(name);
-            const nextIndex = Math.min(deletedIndex, remainingCustomThemes.length - 1);
-            nextTheme = remainingCustomThemes[nextIndex];
+          // Get the theme that should be at this position after deletion
+          const targetTheme = originalCustomThemes.filter(t => t !== name)[nextIndex];
+          if (targetTheme && remainingCustomThemes.includes(targetTheme)) {
+            nextTheme = targetTheme;
           } else {
-            // No custom themes left, fall back to first built-in theme
-            nextTheme = builtInThemes[0] || 'light';
+            // Fallback to first remaining custom theme
+            nextTheme = remainingCustomThemes[0];
           }
         } else {
-          // Deleted a built-in theme (shouldn't happen, but handle it)
-          // Just select the first available theme
-          if (Object.keys(updatedThemes).length > 0) {
-            nextTheme = Object.keys(updatedThemes)[0];
-          } else {
-            nextTheme = builtInThemes[0] || 'light';
-          }
+          // No custom themes left, fall back to first built-in theme
+          nextTheme = builtInThemes[0] || 'light';
         }
 
         // Apply the next theme
