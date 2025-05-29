@@ -127,22 +127,20 @@ export const parseGuardTag = (line: string): {
     if (normalizedTarget === 'ai') {
       if (normalizedPermission === 'context') {
         aiIsContext = true;
-        // For context, we need to set a permission (will be inherited from current state)
-        // Set to undefined here - the processor will use the current permission
-        aiPermission = undefined;
+        // Context is a modifier, not a permission
+        // Don't set aiPermission - keep whatever was already set
       } else {
         aiPermission = normalizedPermission;
-        aiIsContext = false;
+        // Don't reset context flag - allow multiple tags on same line
       }
     } else if (normalizedTarget === 'human') {
       if (normalizedPermission === 'context') {
         humanIsContext = true;
-        // For context, we need to set a permission (will be inherited from current state)
-        // Set to undefined here - the processor will use the current permission
-        humanPermission = undefined;
+        // Context is a modifier, not a permission
+        // Don't set humanPermission - keep whatever was already set
       } else {
         humanPermission = normalizedPermission;
-        humanIsContext = false;
+        // Don't reset context flag - allow multiple tags on same line
       }
     }
   }
