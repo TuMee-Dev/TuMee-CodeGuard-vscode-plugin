@@ -260,7 +260,8 @@ function checkForChanges() {
             original.color !== current.color ||
             original.minimapColor !== current.minimapColor ||
             Math.abs((original.transparency || 0.2) - current.transparency) > 0.001 ||
-            Math.abs((original.borderOpacity || 1.0) - current.borderOpacity) > 0.001) {
+            Math.abs((original.borderOpacity || 1.0) - current.borderOpacity) > 0.001 ||
+            (original.highlightEntireLine || false) !== (current.highlightEntireLine || false)) {
           hasChanges = true;
           console.log(`Change detected in ${key}:`, original, current);
           break;
@@ -293,6 +294,7 @@ function updateLine(lineNum, aiPerm, humanPerm) {
   if (!line) return;
   
   const border = line.querySelector('.line-border');
+  const content = line.querySelector('.line-content');
   if (!border) return;
   
   const colors = getColors();
@@ -301,6 +303,7 @@ function updateLine(lineNum, aiPerm, humanPerm) {
   let borderColor = '';
   let opacity = 1.0;
   let borderOpacity = 1.0;
+  let highlightEntireLine = false;
   
   if (aiPerm && humanPerm) {
     const aiConfig = colors.permissions['ai' + capitalizeFirst(aiPerm)];
@@ -313,11 +316,13 @@ function updateLine(lineNum, aiPerm, humanPerm) {
       opacity = humanConfig.transparency;
       borderColor = humanConfig.minimapColor || humanConfig.color;
       borderOpacity = humanConfig.borderOpacity || 1.0;
+      highlightEntireLine = humanConfig.highlightEntireLine || false;
     } else if (!humanConfig.enabled) {
       bgColor = aiConfig.color;
       opacity = aiConfig.transparency;
       borderColor = aiConfig.minimapColor || aiConfig.color;
       borderOpacity = aiConfig.borderOpacity || 1.0;
+      highlightEntireLine = aiConfig.highlightEntireLine || false;
     } else {
       // Both enabled - apply mix pattern
       const mixPattern = colors.mixPattern || 'average';
@@ -353,6 +358,16 @@ function updateLine(lineNum, aiPerm, humanPerm) {
         borderColor = aiConfig.minimapColor || aiConfig.color;
         borderOpacity = aiConfig.borderOpacity || 1.0;
       }
+      
+      // Determine which highlightEntireLine setting to use based on mix pattern
+      if (mixPattern === 'humanPriority' || mixPattern === 'humanBorder') {
+        highlightEntireLine = humanConfig.highlightEntireLine || false;
+      } else if (mixPattern === 'aiPriority' || mixPattern === 'aiBorder') {
+        highlightEntireLine = aiConfig.highlightEntireLine || false;
+      } else {
+        // For 'average' pattern, use AI's setting as default
+        highlightEntireLine = aiConfig.highlightEntireLine || false;
+      }
     }
   } else if (aiPerm) {
     let configKey;
@@ -370,6 +385,7 @@ function updateLine(lineNum, aiPerm, humanPerm) {
       opacity = config.transparency;
       borderColor = config.minimapColor || config.color;
       borderOpacity = config.borderOpacity || 1.0;
+      highlightEntireLine = config.highlightEntireLine || false;
     }
   } else if (humanPerm) {
     const config = colors.permissions['human' + capitalizeFirst(humanPerm)];
@@ -378,16 +394,29 @@ function updateLine(lineNum, aiPerm, humanPerm) {
       opacity = config.transparency;
       borderColor = config.minimapColor || config.color;
       borderOpacity = config.borderOpacity || 1.0;
+      highlightEntireLine = config.highlightEntireLine || false;
     }
+  }
+  
+  // Clear any existing background colors
+  line.style.backgroundColor = '';
+  if (content) {
+    content.style.backgroundColor = '';
   }
   
   if (bgColor) {
     const rgb = hexToRgb(bgColor);
     if (rgb) {
-      line.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + opacity + ')';
+      const bgColorRgba = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + opacity + ')';
+      
+      if (highlightEntireLine) {
+        // Apply background to entire line
+        line.style.backgroundColor = bgColorRgba;
+      } else if (content) {
+        // Apply background only to content
+        content.style.backgroundColor = bgColorRgba;
+      }
     }
-  } else {
-    line.style.backgroundColor = '';
   }
   
   if (colors.borderBarEnabled && borderColor) {

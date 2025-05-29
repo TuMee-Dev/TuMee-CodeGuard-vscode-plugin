@@ -617,9 +617,14 @@ export class ColorCustomizerPanel {
           </div>
           <div class="color-row">
             <div style="width: 20px;"></div>
-            <div class="toggle-switch" style="margin-left: 10px;">
-              <label>Highlight Entire Line</label>
-              <input type="checkbox" id="${config.id}-highlightEntireLine" ${highlightEntireLine ? 'checked' : ''} onchange="updateHighlightEntireLine('${config.id}')">
+            <div class="color-control">
+              <div style="width: 30px;"></div>
+            </div>
+            <div class="slider-control">
+              <div class="toggle-switch" onclick="event.stopPropagation()" style="width: auto; min-width: 200px;">
+                <label style="white-space: nowrap;">Highlight Entire Line</label>
+                <input type="checkbox" id="${config.id}-highlightEntireLine" ${highlightEntireLine ? 'checked' : ''} onchange="updateHighlightEntireLine('${config.id}')" style="flex-shrink: 0;">
+              </div>
             </div>
           </div>
         </div>
