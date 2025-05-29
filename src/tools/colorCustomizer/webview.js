@@ -822,14 +822,12 @@ function deleteCurrentTheme() {
   
   const themeName = select.value;
   
-  // VSCode webview doesn't support confirm() - just delete directly
+  // VSCode webview doesn't support confirm() - send delete request
+  // Theme dropdown will be cleared only after successful deletion
   vscode.postMessage({
     command: 'deleteTheme',
     name: themeName
   });
-  
-  select.value = '';
-  updateDeleteButton();
 }
 window.deleteCurrentTheme = deleteCurrentTheme;
 

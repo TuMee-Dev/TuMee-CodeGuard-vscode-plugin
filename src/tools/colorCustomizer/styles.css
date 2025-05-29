@@ -424,6 +424,7 @@
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.3s;
+      z-index: 9999;
     }
     
     .overlay.show {

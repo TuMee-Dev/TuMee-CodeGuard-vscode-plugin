@@ -392,10 +392,6 @@ export class ColorCustomizerPanel {
       const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
       const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
 
-      // Get list of all themes before deletion
-      const allThemes = [...Object.keys(COLOR_THEMES), ...Object.keys(customThemes)];
-      const currentIndex = allThemes.indexOf(name);
-
       // Create a shallow copy to avoid proxy issues
       const updatedThemes = { ...customThemes };
       delete updatedThemes[name];
@@ -404,16 +400,34 @@ export class ColorCustomizerPanel {
       // Determine next theme to select
       let nextTheme = '';
       if (this._currentTheme === name) {
-        // Remove the deleted theme from the list
-        const remainingThemes = allThemes.filter(t => t !== name);
+        const builtInThemes = Object.keys(COLOR_THEMES);
+        const customThemeNames = Object.keys(customThemes);
+        const wasCustomTheme = customThemeNames.includes(name);
 
-        if (remainingThemes.length > 0) {
-          // Select the next theme in the list, or the previous one if we deleted the last theme
-          const nextIndex = Math.min(currentIndex, remainingThemes.length - 1);
-          nextTheme = remainingThemes[nextIndex];
+        if (wasCustomTheme) {
+          // Deleted a custom theme - prioritize selecting another custom theme
+          const remainingCustomThemes = Object.keys(updatedThemes);
+          
+          if (remainingCustomThemes.length > 0) {
+            // Find the closest custom theme by index
+            const deletedIndex = customThemeNames.indexOf(name);
+            const nextIndex = Math.min(deletedIndex, remainingCustomThemes.length - 1);
+            nextTheme = remainingCustomThemes[nextIndex];
+          } else {
+            // No custom themes left, fall back to first built-in theme
+            nextTheme = builtInThemes[0] || 'light';
+          }
+        } else {
+          // Deleted a built-in theme (shouldn't happen, but handle it)
+          // Just select the first available theme
+          if (Object.keys(updatedThemes).length > 0) {
+            nextTheme = Object.keys(updatedThemes)[0];
+          } else {
+            nextTheme = builtInThemes[0] || 'light';
+          }
         }
 
-        // Apply the next theme or clear if no themes left
+        // Apply the next theme
         if (nextTheme) {
           await this._applyTheme(nextTheme);
         } else {
