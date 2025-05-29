@@ -162,7 +162,7 @@ let extensionContext: vscode.ExtensionContext | null = null;
  */
 export async function initializeScopeResolver(context: vscode.ExtensionContext): Promise<void> {
   extensionContext = context;
-  await initializeTreeSitter(context);
+  // Don't initialize tree-sitter yet - it will be initialized on first use
 }
 
 /**
@@ -194,6 +194,9 @@ export async function resolveSemantic(
     }
 
     try {
+      // Initialize tree-sitter on first use
+      await initializeTreeSitter(extensionContext);
+      
       const treeSitterResult = await resolveSemanticWithTreeSitter(document, line, scope);
       if (!treeSitterResult) {
         // This is a bug - tree-sitter should always find scopes for supported languages

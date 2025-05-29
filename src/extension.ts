@@ -46,8 +46,8 @@ const decorationCache = new WeakMap<TextDocument, DecorationRanges>();
 async function initializeExtension(context: ExtensionContext): Promise<void> {
   disposables = [];
   
-  // Initialize tree-sitter for semantic scope resolution
-  await initializeScopeResolver(context);
+  // Initialize scope resolver context (but don't wait for tree-sitter)
+  initializeScopeResolver(context);
   
   // Run first-time setup if needed
   firstTimeRun(context);
