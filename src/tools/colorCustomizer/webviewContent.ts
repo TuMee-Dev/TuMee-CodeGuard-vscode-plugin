@@ -30,6 +30,18 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     const PERMISSION_TYPES = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
     const PERMISSION_FIELDS = ['enabled', 'color', 'minimapColor', 'transparency', 'borderOpacity', 'link'];
     
+    // Permission configuration for dynamic generation
+    const PERMISSION_CONFIG = [
+      { id: 'aiWrite', title: 'AI Write', category: 'AI Permissions' },
+      { id: 'aiRead', title: 'AI Read', category: 'AI Permissions' },
+      { id: 'aiNoAccess', title: 'AI No Access', category: 'AI Permissions' },
+      { id: 'humanWrite', title: 'Human Write', category: 'Human Permissions' },
+      { id: 'humanRead', title: 'Human Read', category: 'Human Permissions' },
+      { id: 'humanNoAccess', title: 'Human No Access', category: 'Human Permissions' },
+      { id: 'contextRead', title: 'Context Read', category: 'Context' },
+      { id: 'contextWrite', title: 'Context Write', category: 'Context' }
+    ];
+    
     // Helper functions for DOM manipulation
     function getPermissionElements(permission) {
       const elements = {};
@@ -77,11 +89,84 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       });
     }
     
+    // Generate permission section HTML dynamically
+    function generatePermissionSection(config) {
+      // Get colors from the current theme or use defaults
+      const defaultColors = {
+        aiWrite: '#FFA500', aiRead: '#808080', aiNoAccess: '#90EE90',
+        humanWrite: '#0000FF', humanRead: '#D3D3D3', humanNoAccess: '#FF0000',
+        contextRead: '#00CED1', contextWrite: '#1E90FF'
+      };
+      
+      const permission = currentColors?.permissions?.[config.id];
+      const color = permission?.color || defaultColors[config.id] || '#000000';
+      const enabled = permission?.enabled !== false;
+      const transparency = Math.round((permission?.transparency || 0.2) * 100);
+      const borderOpacity = Math.round((permission?.borderOpacity || 1.0) * 100);
+      
+      return \`
+        <div class="permission-section" onclick="focusPermission('\${config.id}')">
+          <div class="permission-header">
+            <div class="permission-title">\${config.title}</div>
+            <div class="toggle-switch">
+              <label>Enabled</label>
+              <input type="checkbox" id="\${config.id}-enabled" \${enabled ? 'checked' : ''} onchange="toggleEnabled('\${config.id}')">
+            </div>
+          </div>
+          <div class="permission-controls">
+            <span class="link-icon linked" id="\${config.id}-link" onclick="toggleColorLink(event, '\${config.id}')" title="Link/unlink colors"></span>
+            <div class="color-row">
+              <div style="width: 20px;"></div>
+              <div class="color-control">
+                <div class="color-preview" id="\${config.id}-minimapColor-preview" onclick="openColorPicker('\${config.id}-minimapColor')"></div>
+                <input type="color" id="\${config.id}-minimapColor" class="color-input" value="\${color}" onchange="updateMinimapColor('\${config.id}')" style="display: none;">
+                <label class="color-label">Minimap/Border</label>
+              </div>
+              <div class="slider-control">
+                <label class="color-label">Border Opacity</label>
+                <input type="range" id="\${config.id}-borderOpacity" class="slider" min="0" max="100" value="\${borderOpacity}" oninput="updateSlider(this)">
+                <span class="slider-value" id="\${config.id}-borderOpacity-value">\${borderOpacity}%</span>
+              </div>
+            </div>
+            <div class="color-row">
+              <div style="width: 20px;"></div>
+              <div class="color-control">
+                <div class="color-preview" id="\${config.id}-color-preview" onclick="openColorPicker('\${config.id}-color')"></div>
+                <input type="color" id="\${config.id}-color" class="color-input" value="\${color}" onchange="updateRowColor('\${config.id}')" style="display: none;">
+                <label class="color-label">Row</label>
+              </div>
+              <div class="slider-control">
+                <label class="color-label">Row Opacity</label>
+                <input type="range" id="\${config.id}-transparency" class="slider" min="0" max="100" value="\${transparency}" oninput="updateSlider(this)">
+                <span class="slider-value" id="\${config.id}-transparency-value">\${transparency}%</span>
+              </div>
+            </div>
+          </div>
+        </div>\`;
+    }
+    
+    // Generate all permission sections
+    function generateAllPermissionSections() {
+      return PERMISSION_CONFIG.map(config => generatePermissionSection(config)).join('');
+    }
+    
     // Initialize on load
     window.addEventListener('load', () => {
       PERMISSION_TYPES.forEach(perm => {
         colorLinks[perm] = true;
       });
+      
+      // Generate initial permission sections
+      const controlContent = document.querySelector('.control-content');
+      if (controlContent) {
+        controlContent.innerHTML = generateAllPermissionSections();
+        // Initialize color previews after a short delay
+        setTimeout(() => {
+          PERMISSION_TYPES.forEach(perm => {
+            updateColorPreview(perm);
+          });
+        }, 100);
+      }
       
       // Set up permission example click handlers
       setupPermissionExampleHandlers();
@@ -235,27 +320,22 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     }
     window.toggleColorLink = toggleColorLink;
     
-    function updateMinimapColor(permission) {
-      const minimapColor = getElementValue(permission + '-minimapColor');
+    // Unified color update function
+    function updateColor(permission, isRow) {
+      const sourceId = permission + (isRow ? '-color' : '-minimapColor');
+      const targetId = permission + (isRow ? '-minimapColor' : '-color');
+      const color = getElementValue(sourceId);
+      
       if (colorLinks[permission]) {
-        setElementValue(permission + '-color', minimapColor);
+        setElementValue(targetId, color);
       }
       updateColorPreview(permission);
       updatePreview();
       checkForChanges();
     }
-    window.updateMinimapColor = updateMinimapColor;
     
-    function updateRowColor(permission) {
-      const rowColor = getElementValue(permission + '-color');
-      if (colorLinks[permission]) {
-        setElementValue(permission + '-minimapColor', rowColor);
-      }
-      updateColorPreview(permission);
-      updatePreview();
-      checkForChanges();
-    }
-    window.updateRowColor = updateRowColor;
+    window.updateMinimapColor = (permission) => updateColor(permission, false);
+    window.updateRowColor = (permission) => updateColor(permission, true);
     
     function updateMixPattern(pattern) {
       if (!isLoadingTheme) {
@@ -428,67 +508,10 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       if (!border) return;
       
       const colors = getColors();
+      const result = getPermissionColorsForLine(colors, aiPerm, humanPerm);
       
-      let bgColor = '';
-      let borderColor = '';
-      let opacity = 1.0;
-      let borderOpacity = 1.0;
-      
-      // Check for context permissions first - they override everything else
-      if (aiPerm === 'context' || aiPerm === 'contextWrite') {
-        const configKey = aiPerm === 'context' ? 'contextRead' : 'contextWrite';
-        const config = colors.permissions[configKey];
-        if (config && config.enabled) {
-          bgColor = config.color;
-          opacity = config.transparency;
-          borderColor = config.minimapColor || config.color;
-          borderOpacity = config.borderOpacity ?? 1.0;
-        }
-      } else if (aiPerm && humanPerm) {
-        const aiConfig = colors.permissions['ai' + capitalizeFirst(aiPerm)];
-        const humanConfig = colors.permissions['human' + capitalizeFirst(humanPerm)];
-        
-        // Check if configs exist - this should not happen with valid permissions
-        if (!aiConfig || !humanConfig) {
-          console.warn('Missing config for permissions:', aiPerm, humanPerm, 'ai' + capitalizeFirst(aiPerm), 'human' + capitalizeFirst(humanPerm));
-          console.warn('Available permissions:', Object.keys(colors.permissions));
-          return;
-        }
-        
-        const result = calculatePermissionColors(aiConfig, humanConfig, colors.mixPattern);
-        bgColor = result.bgColor;
-        opacity = result.opacity;
-        borderColor = result.borderColor;
-        borderOpacity = result.borderOpacity;
-      } else if (aiPerm) {
-        let configKey;
-        if (aiPerm === 'context') {
-          configKey = 'contextRead';
-        } else if (aiPerm === 'contextWrite') {
-          configKey = 'contextWrite';
-        } else {
-          configKey = 'ai' + capitalizeFirst(aiPerm);
-        }
-        
-        const config = colors.permissions[configKey];
-        if (config && config.enabled) {
-          bgColor = config.color;
-          opacity = config.transparency;
-          borderColor = config.minimapColor || config.color;
-          borderOpacity = config.borderOpacity ?? 1.0;
-        }
-      } else if (humanPerm) {
-        const config = colors.permissions['human' + capitalizeFirst(humanPerm)];
-        if (config && config.enabled) {
-          bgColor = config.color;
-          opacity = config.transparency;
-          borderColor = config.minimapColor || config.color;
-          borderOpacity = config.borderOpacity ?? 1.0;
-        }
-      }
-      
-      setRgbaStyle(line, 'backgroundColor', bgColor, opacity);
-      setRgbaStyle(border, 'backgroundColor', (borderColor && borderOpacity > 0) ? borderColor : '', borderOpacity);
+      setRgbaStyle(line, 'backgroundColor', result.bgColor, result.opacity);
+      setRgbaStyle(border, 'backgroundColor', (result.borderColor && result.borderOpacity > 0) ? result.borderColor : '', result.borderOpacity);
     }
     
     function updateExample(id, type, perm) {
@@ -496,50 +519,10 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       if (!elem) return;
       
       const colors = getColors();
+      const result = getPermissionColors(colors, type, perm);
       
-      let bgColor = '';
-      let opacity = 1.0;
-      let borderColor = '';
-      let borderOpacity = 1.0;
-      
-      if (type === 'both') {
-        const aiConfig = colors.permissions['ai' + capitalizeFirst(perm.ai)];
-        const humanConfig = colors.permissions['human' + capitalizeFirst(perm.human)];
-        
-        // Check if configs exist
-        if (!aiConfig || !humanConfig) {
-          console.warn('Missing config in updateExample:', perm.ai, perm.human);
-          return;
-        }
-        
-        const result = calculatePermissionColors(aiConfig, humanConfig, colors.mixPattern);
-        bgColor = result.bgColor;
-        opacity = result.opacity;
-        borderColor = result.borderColor;
-        borderOpacity = result.borderOpacity;
-      } else {
-        let configKey;
-        if (perm === 'context') {
-          configKey = 'contextRead';
-        } else if (perm === 'contextWrite') {
-          configKey = 'contextWrite';
-        } else if (type === 'ai') {
-          configKey = 'ai' + capitalizeFirst(perm);
-        } else {
-          configKey = type + capitalizeFirst(perm);
-        }
-        
-        const config = colors.permissions[configKey];
-        if (config && config.enabled) {
-          bgColor = config.color;
-          opacity = config.transparency;
-          borderColor = config.minimapColor || config.color;
-          borderOpacity = config.borderOpacity ?? 1.0;
-        }
-      }
-      
-      setRgbaStyle(elem, 'backgroundColor', bgColor, opacity);
-      setBorderStyle(elem, borderColor, borderOpacity);
+      setRgbaStyle(elem, 'backgroundColor', result.bgColor, result.opacity);
+      setBorderStyle(elem, result.borderColor, result.borderOpacity);
       
       if (!elem.classList.contains('context-half')) {
         elem.style.padding = '8px 12px';
@@ -564,6 +547,53 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       const b = Math.round((rgb1.b + rgb2.b) / 2);
       
       return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    }
+    
+    // Unified function to get permission colors based on type and permissions
+    function getPermissionColors(colors, type, perm) {
+      let bgColor = '';
+      let opacity = 1.0;
+      let borderColor = '';
+      let borderOpacity = 1.0;
+      
+      if (type === 'both') {
+        const aiConfig = colors.permissions['ai' + capitalizeFirst(perm.ai)];
+        const humanConfig = colors.permissions['human' + capitalizeFirst(perm.human)];
+        
+        if (!aiConfig || !humanConfig) {
+          console.warn('Missing config:', perm.ai, perm.human);
+          return { bgColor, opacity, borderColor, borderOpacity };
+        }
+        
+        return calculatePermissionColors(aiConfig, humanConfig, colors.mixPattern);
+      } else {
+        let configKey = getConfigKey(type, perm);
+        const config = colors.permissions[configKey];
+        
+        if (config && config.enabled) {
+          bgColor = config.color;
+          opacity = config.transparency;
+          borderColor = config.minimapColor || config.color;
+          borderOpacity = config.borderOpacity ?? 1.0;
+        }
+      }
+      
+      return { bgColor, opacity, borderColor, borderOpacity };
+    }
+    
+    // Specialized version for lines with ai/human permissions
+    function getPermissionColorsForLine(colors, aiPerm, humanPerm) {
+      // Check for context permissions first
+      if (aiPerm === 'context' || aiPerm === 'contextWrite') {
+        return getPermissionColors(colors, 'ai', aiPerm);
+      } else if (aiPerm && humanPerm) {
+        return getPermissionColors(colors, 'both', { ai: aiPerm, human: humanPerm });
+      } else if (aiPerm) {
+        return getPermissionColors(colors, 'ai', aiPerm);
+      } else if (humanPerm) {
+        return getPermissionColors(colors, 'human', humanPerm);
+      }
+      return { bgColor: '', opacity: 1.0, borderColor: '', borderOpacity: 1.0 };
     }
     
     function calculatePermissionColors(aiConfig, humanConfig, mixPattern) {
@@ -699,6 +729,14 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       
       // We're about to update all colors from the extension
       isLoadingTheme = true;
+      currentColors = colors;
+      
+      // Generate or update permission sections
+      const controlContent = document.querySelector('.control-content');
+      if (controlContent && controlContent.innerHTML.trim() === '') {
+        // First time - generate the sections
+        controlContent.innerHTML = generateAllPermissionSections();
+      }
       
       Object.entries(colors.permissions).forEach(([key, config]) => {
         const elements = getPermissionElements(key);
@@ -891,24 +929,20 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       }
     }
     
-    function addNewTheme() {
+    // Theme dialog management
+    function toggleThemeDialog(show) {
       const dialog = document.getElementById('themeDialog');
       const input = document.getElementById('themeNameInput');
-      if (dialog && input) {
-        dialog.classList.add('show');
-        input.value = '';
-        input.focus();
-      }
-    }
-    window.addNewTheme = addNewTheme;
-    
-    function closeThemeDialog() {
-      const dialog = document.getElementById('themeDialog');
       if (dialog) {
-        dialog.classList.remove('show');
+        dialog.classList.toggle('show', show);
+        if (show && input) {
+          input.value = '';
+          input.focus();
+        }
       }
     }
-    window.closeThemeDialog = closeThemeDialog;
+    window.addNewTheme = () => toggleThemeDialog(true);
+    window.closeThemeDialog = () => toggleThemeDialog(false);
     
     function confirmNewTheme() {
       const input = document.getElementById('themeNameInput');
@@ -999,63 +1033,34 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     }
     window.updateThemeList = updateThemeList;
     
+    // Color management functions
     function saveColors() {
       const colors = getColors();
-      vscode.postMessage({
-        command: 'saveColors',
-        colors: colors
-      });
-      
-      // After saving, update the saved colors and reset change state
+      vscode.postMessage({ command: 'saveColors', colors });
       savedColors = JSON.parse(JSON.stringify(colors));
       hasChanges = false;
       updateButtonStates();
     }
-    window.saveColors = saveColors;
     
     function resetColors() {
-      if (!savedColors) return;
-      
-      // Restore the saved colors
-      updateAllColors(savedColors);
-      
-      // Clear any changes
-      hasChanges = false;
-      updateButtonStates();
+      if (savedColors) {
+        updateAllColors(savedColors);
+        hasChanges = false;
+        updateButtonStates();
+      }
     }
-    window.resetColors = resetColors;
     
-    function exportTheme() {
-      vscode.postMessage({ command: 'exportTheme' });
-    }
-    window.exportTheme = exportTheme;
-    
-    function importTheme() {
-      vscode.postMessage({ command: 'importTheme' });
-    }
-    window.importTheme = importTheme;
+    // Export functions to window
+    Object.assign(window, {
+      saveColors,
+      resetColors,
+      exportTheme: () => vscode.postMessage({ command: 'exportTheme' }),
+      importTheme: () => vscode.postMessage({ command: 'importTheme' })
+    });
     
     function focusPermission(permissionId) {
-      // Check if controls are enabled (not in read-only mode)
       const firstInput = document.querySelector('input[type="checkbox"]');
-      if (firstInput && firstInput.disabled) {
-        return; // Don't allow focus in read-only mode
-      }
-      
-      document.querySelectorAll('.permission-section').forEach(section => {
-        section.classList.remove('focused');
-      });
-      
-      // Find and focus the clicked section
-      const sections = document.querySelectorAll('.permission-section');
-      sections.forEach(section => {
-        const checkbox = section.querySelector('input[type="checkbox"]');
-        if (checkbox && checkbox.id === permissionId + '-enabled') {
-          section.classList.add('focused');
-        }
-      });
-      
-      // Navigate to the corresponding preview
+      if (firstInput && firstInput.disabled) return;
       navigateToPermission(permissionId);
     }
     window.focusPermission = focusPermission;
@@ -1069,140 +1074,108 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         'ex-humanRead': 'humanRead',
         'ex-humanNoAccess': 'humanNoAccess',
         'ex-contextRead': 'contextRead',
-        'ex-contextWrite': 'contextWrite'
+        'ex-contextWrite': 'contextWrite',
+        'ex-mixed1': 'aiWrite',
+        'ex-mixed2': 'aiRead'
       };
       
       Object.entries(exampleMap).forEach(([exampleId, permissionId]) => {
         const element = document.getElementById(exampleId);
         if (element) {
-          element.addEventListener('click', () => {
-            navigateToPermission(permissionId);
-          });
+          element.addEventListener('click', () => navigateToPermission(permissionId));
         }
       });
-      
-      // Handle mixed examples
-      const mixed1 = document.getElementById('ex-mixed1');
-      if (mixed1) {
-        mixed1.addEventListener('click', () => {
-          navigateToPermission('aiWrite');
-        });
-      }
-      
-      const mixed2 = document.getElementById('ex-mixed2');
-      if (mixed2) {
-        mixed2.addEventListener('click', () => {
-          navigateToPermission('aiRead');
-        });
-      }
     }
     
     function navigateToPermission(permissionId) {
-      // Find the permission section
+      const targetSection = findPermissionSection(permissionId);
+      if (!targetSection) return;
+      
+      // Highlight and scroll section
       const sections = document.querySelectorAll('.permission-section');
-      let targetSection = null;
+      sections.forEach(s => s.classList.remove('focused'));
+      targetSection.classList.add('focused');
+      targetSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
       
-      sections.forEach(section => {
-        const checkbox = section.querySelector('input[type="checkbox"]');
-        if (checkbox && checkbox.id === permissionId + '-enabled') {
-          targetSection = section;
-        }
-      });
-      
-      if (targetSection) {
-        // Scroll the permission section into view
-        targetSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // Highlight the section
-        sections.forEach(s => s.classList.remove('focused'));
-        targetSection.classList.add('focused');
-        
-        // Also scroll the corresponding preview block into view if possible
-        const previewIndex = findPreviewLineForPermission(permissionId);
-        if (previewIndex >= 0) {
-          setTimeout(() => {
-            // Find the entire guard block
-            const startLine = document.getElementById('line' + (previewIndex + 1));
-            if (!startLine) return;
-            
-            // Find the end of the guard block (look for @guard:end)
-            let endIndex = previewIndex;
-            for (let i = previewIndex + 1; i < PREVIEW_LINES.length; i++) {
-              if (PREVIEW_LINES[i].content.includes('@guard:end')) {
-                endIndex = i;
-                break;
-              }
-            }
-            
-            const endLine = document.getElementById('line' + (endIndex + 1));
-            if (!endLine) return;
-            
-            // The scrollable container is .editor-container
-            const editorContainer = document.querySelector('.editor-container');
-            if (!editorContainer) return;
-            
-            // Get the editor content element that contains the lines
-            const editorContent = document.querySelector('.editor-content');
-            if (!editorContent) return;
-            
-            // Calculate the block's position and height
-            let blockTop = 0;
-            let element = startLine;
-            while (element && element !== editorContent) {
-              blockTop += element.offsetTop;
-              element = element.offsetParent;
-            }
-            
-            let blockBottom = 0;
-            element = endLine;
-            while (element && element !== editorContent) {
-              blockBottom += element.offsetTop;
-              element = element.offsetParent;
-            }
-            blockBottom += endLine.offsetHeight;
-            
-            const blockHeight = blockBottom - blockTop;
-            const containerHeight = editorContainer.clientHeight;
-            
-            // If block fits in viewport, center it. Otherwise, show from top with some padding
-            let targetScroll;
-            if (blockHeight <= containerHeight - 40) {
-              // Center the block
-              targetScroll = blockTop - (containerHeight / 2) + (blockHeight / 2);
-            } else {
-              // Show from top with 20px padding
-              targetScroll = blockTop - 20;
-            }
-            
-            // Smooth scroll to the calculated position
-            editorContainer.scrollTo({
-              top: Math.max(0, targetScroll),
-              behavior: 'smooth'
-            });
-          }, 100); // Short delay to ensure DOM is ready
-        }
+      // Scroll preview if found
+      const previewIndex = findPreviewLineForPermission(permissionId);
+      if (previewIndex >= 0) {
+        setTimeout(() => scrollPreviewToLine(previewIndex), 100);
       }
     }
     
+    function findPermissionSection(permissionId) {
+      const sections = document.querySelectorAll('.permission-section');
+      for (const section of sections) {
+        const checkbox = section.querySelector('input[type="checkbox"]');
+        if (checkbox && checkbox.id === permissionId + '-enabled') {
+          return section;
+        }
+      }
+      return null;
+    }
+    
+    function scrollPreviewToLine(previewIndex) {
+      const startLine = document.getElementById('line' + (previewIndex + 1));
+      if (!startLine) return;
+      
+      // Find guard block end
+      let endIndex = previewIndex;
+      for (let i = previewIndex + 1; i < PREVIEW_LINES.length; i++) {
+        if (PREVIEW_LINES[i].content.includes('@guard:end')) {
+          endIndex = i;
+          break;
+        }
+      }
+      
+      const endLine = document.getElementById('line' + (endIndex + 1));
+      const editorContainer = document.querySelector('.editor-container');
+      const editorContent = document.querySelector('.editor-content');
+      
+      if (!endLine || !editorContainer || !editorContent) return;
+      
+      // Calculate scroll position
+      const blockTop = calculateOffset(startLine, editorContent);
+      const blockBottom = calculateOffset(endLine, editorContent) + endLine.offsetHeight;
+      const blockHeight = blockBottom - blockTop;
+      const containerHeight = editorContainer.clientHeight;
+      
+      const targetScroll = blockHeight <= containerHeight - 40
+        ? blockTop - (containerHeight / 2) + (blockHeight / 2)  // Center
+        : blockTop - 20;  // Top with padding
+      
+      editorContainer.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+    }
+    
+    function calculateOffset(element, container) {
+      let offset = 0;
+      while (element && element !== container) {
+        offset += element.offsetTop;
+        element = element.offsetParent;
+      }
+      return offset;
+    }
+    
     function findPreviewLineForPermission(permissionId) {
-      // Find the first guard comment line for this permission type
+      const searchMap = {
+        'aiWrite': 'ai:w', 'aiRead': 'ai:r', 'aiNoAccess': 'ai:n',
+        'humanWrite': 'human:w', 'humanRead': 'human:r', 'humanNoAccess': 'human:n',
+        'contextRead': 'context:r', 'contextWrite': 'context:w'
+      };
+      
+      const searchTerm = searchMap[permissionId];
+      if (!searchTerm) return -1;
+      
       for (let i = 0; i < PREVIEW_LINES.length; i++) {
-        const line = PREVIEW_LINES[i];
-        const content = line.content.toLowerCase();
-        
-        // Look for guard comments
-        if (content.includes('// @guard:')) {
-          if (permissionId === 'aiWrite' && content.includes('ai:w')) return i;
-          if (permissionId === 'aiRead' && content.includes('ai:r')) return i;
-          if (permissionId === 'aiNoAccess' && content.includes('ai:n')) return i;
-          if (permissionId === 'humanWrite' && content.includes('human:w')) return i;
-          if (permissionId === 'humanRead' && content.includes('human:r')) return i;
-          if (permissionId === 'humanNoAccess' && content.includes('human:n')) return i;
-          if (permissionId === 'contextRead' && content.includes('context:r')) return i;
-          if (permissionId === 'contextWrite' && content.includes('context:w')) return i;
+        const content = PREVIEW_LINES[i].content.toLowerCase();
+        if (content.includes('// @guard:') && content.includes(searchTerm)) {
+          return i;
         }
       }
       return -1;
     }
+    
+    // Export functions for use in HTML
+    window.generateAllPermissionSections = generateAllPermissionSections;
   `;
 }

@@ -290,17 +290,7 @@ export class ColorCustomizerPanel {
   private _isSystemTheme: boolean = false;
   private _isDeleting: boolean = false;
 
-  // Permission section configuration
-  private static readonly PERMISSION_SECTIONS = [
-    { id: 'aiWrite', title: 'AI Write', category: 'AI Permissions', defaultColor: '#FFA500', defaultEnabled: true },
-    { id: 'aiRead', title: 'AI Read', category: 'AI Permissions', defaultColor: '#808080', defaultEnabled: true },
-    { id: 'aiNoAccess', title: 'AI No Access', category: 'AI Permissions', defaultColor: '#90EE90', defaultEnabled: true },
-    { id: 'humanWrite', title: 'Human Write', category: 'Human Permissions', defaultColor: '#0000FF', defaultEnabled: false },
-    { id: 'humanRead', title: 'Human Read', category: 'Human Permissions', defaultColor: '#D3D3D3', defaultEnabled: true },
-    { id: 'humanNoAccess', title: 'Human No Access', category: 'Human Permissions', defaultColor: '#FF0000', defaultEnabled: true },
-    { id: 'contextRead', title: 'Context Read', category: 'Context', defaultColor: '#00CED1', defaultEnabled: true },
-    { id: 'contextWrite', title: 'Context Write', category: 'Context', defaultColor: '#1E90FF', defaultEnabled: true }
-  ];
+  // Permission section configuration moved to client-side
 
   // Preview code lines configuration
   private static readonly PREVIEW_LINES = [
@@ -792,47 +782,7 @@ export class ColorCustomizerPanel {
     }, 100);
   }
 
-  private _generatePermissionSection(section: typeof ColorCustomizerPanel.PERMISSION_SECTIONS[0]): string {
-    return `
-      <div class="permission-section" onclick="focusPermission('${section.id}')">
-        <div class="permission-header">
-          <div class="permission-title">${section.title}</div>
-          <div class="toggle-switch">
-            <label>Enabled</label>
-            <input type="checkbox" id="${section.id}-enabled" ${section.defaultEnabled ? 'checked' : ''} onchange="toggleEnabled('${section.id}')">
-          </div>
-        </div>
-        <div class="permission-controls">
-          <span class="link-icon linked" id="${section.id}-link" onclick="toggleColorLink(event, '${section.id}')" title="Link/unlink colors"></span>
-          <div class="color-row">
-            <div style="width: 20px;"></div>
-            <div class="color-control">
-              <div class="color-preview" id="${section.id}-minimapColor-preview" onclick="openColorPicker('${section.id}-minimapColor')"></div>
-              <input type="color" id="${section.id}-minimapColor" class="color-input" value="${section.defaultColor}" onchange="updateMinimapColor('${section.id}')" style="display: none;">
-              <label class="color-label">Minimap/Border</label>
-            </div>
-            <div class="slider-control">
-              <label class="color-label">Border Opacity</label>
-              <input type="range" id="${section.id}-borderOpacity" class="slider" min="0" max="100" value="100" oninput="updateSlider(this)">
-              <span class="slider-value" id="${section.id}-borderOpacity-value">100%</span>
-            </div>
-          </div>
-          <div class="color-row">
-            <div style="width: 20px;"></div>
-            <div class="color-control">
-              <div class="color-preview" id="${section.id}-color-preview" onclick="openColorPicker('${section.id}-color')"></div>
-              <input type="color" id="${section.id}-color" class="color-input" value="${section.defaultColor}" onchange="updateRowColor('${section.id}')" style="display: none;">
-              <label class="color-label">Row</label>
-            </div>
-            <div class="slider-control">
-              <label class="color-label">Row Opacity</label>
-              <input type="range" id="${section.id}-transparency" class="slider" min="0" max="100" value="100" oninput="updateSlider(this)">
-              <span class="slider-value" id="${section.id}-transparency-value">100%</span>
-            </div>
-          </div>
-        </div>
-      </div>`;
-  }
+  // Permission section generation moved to client-side JavaScript
 
   private _generateCodeLine(index: number, content: string): string {
     return `
@@ -858,7 +808,7 @@ export class ColorCustomizerPanel {
     const css = getWebviewStyles();
     const javascript = getWebviewJavaScript(ColorCustomizerPanel.PREVIEW_LINES);
 
-    const permissionSections = ColorCustomizerPanel.PERMISSION_SECTIONS.map(s => this._generatePermissionSection(s)).join('');
+    // Permission sections will be generated client-side using current theme colors
     const lineNumbers = Array.from({ length: 65 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
     const codeLines = ColorCustomizerPanel.PREVIEW_LINES.map((line, i) => this._generateCodeLine(i, line.content)).join('');
 
@@ -898,7 +848,7 @@ export class ColorCustomizerPanel {
                 </div>
                 
                 <div class="control-content">
-                    ${permissionSections}
+                    <!-- Permission sections will be generated dynamically by JavaScript -->
                 </div>
                 
                 <div class="control-footer">
