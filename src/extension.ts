@@ -2,7 +2,7 @@
 
 import type * as vscode from 'vscode';
 import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, type StatusBarItem, window, workspace, commands, ThemeColor, Position, Range, StatusBarAlignment } from 'vscode';
-import { registerFileDecorationProvider } from '@/tools/file-customization-provider';
+import { registerFileDecorationProvider, FileCustomizationProvider } from '@/tools/file-customization-provider';
 import { registerContextMenu } from '@/tools/register-context-menu';
 import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
 import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
@@ -12,18 +12,13 @@ import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTy
 import { errorHandler } from '@/utils/errorHandler';
 import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
-import { registerColorCustomizerCommand, DEFAULT_COLORS, COLOR_THEMES } from '@/tools/colorCustomizer';
-import { MixPattern } from '@/types/mixPatterns';
-import type { GuardColors } from '@/types/colorTypes';
-import { renderMixPattern, getMixedBorderColor } from '@/utils/mixPatternRenderer';
-import { hexToRgba } from '@/utils/colorUtils';
+import { registerColorCustomizerCommand } from '@/tools/colorCustomizer';
 import { disposeACLCache } from '@/utils/aclCache';
 import { performanceMonitor } from '@/utils/performanceMonitor';
 import { configValidator } from '@/utils/configValidator';
 import { DebugLogger } from '@/utils/debugLogger';
 import { backgroundProcessor } from '@/utils/backgroundProcessor';
 import { registerValidationCommands } from '@/utils/validationMode';
-import { getConfig, CONFIG_KEYS } from '@/utils/configurationManager';
 import { DecorationTypeFactory } from '@/utils/decorationTypeFactory';
 
 let disposables: Disposable[] = [];
@@ -43,12 +38,12 @@ const decorationCache = new WeakMap<TextDocument, DecorationRanges>();
 /**
  * Initialize the extension core components
  */
-async function initializeExtension(context: ExtensionContext): Promise<void> {
+function initializeExtension(context: ExtensionContext): void {
   disposables = [];
-  
+
   // Initialize scope resolver context (but don't wait for tree-sitter)
   initializeScopeResolver(context);
-  
+
   // Run first-time setup if needed
   firstTimeRun(context);
 }
@@ -56,7 +51,7 @@ async function initializeExtension(context: ExtensionContext): Promise<void> {
 /**
  * Register all extension commands
  */
-function registerCommands(context: ExtensionContext, provider: any): void {
+function registerCommands(context: ExtensionContext, provider: FileCustomizationProvider): void {
   // Register file and folder decoration provider
   const { disposable } = registerFileDecorationProvider(context);
   disposables.push(disposable);
@@ -246,26 +241,26 @@ function validateConfiguration(): void {
 
 export async function activate(context: ExtensionContext) {
   try {
-    await initializeExtension(context);
+    initializeExtension(context);
 
     const isEnabled = context.globalState.get('isEnabled');
     if (isEnabled !== false) {
       const { provider } = registerFileDecorationProvider(context);
-      
+
       registerCommands(context, provider);
-      
+
       // Create decorations for code regions
       initializeCodeDecorations(context);
-      
+
       // Create status bar item
       createStatusBarItem(context);
-      
+
       // Validate configuration on startup
       validateConfiguration();
-      
+
       // Set up event handlers
       setupEventHandlers(context);
-      
+
       // Initialize current editor
       initializeActiveEditor();
     }
@@ -280,7 +275,6 @@ export async function activate(context: ExtensionContext) {
     throw error;
   }
 }
-
 
 function initializeCodeDecorations(_context: ExtensionContext) {
   const factory = new DecorationTypeFactory();

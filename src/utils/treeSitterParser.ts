@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { Parser, Language, type Tree, type Node, type Point } from 'web-tree-sitter';
+import * as path from 'path';
+import * as fs from 'fs';
 
 // Tree-sitter parser instance
 let parser: Parser | null = null;
@@ -92,7 +94,7 @@ const LANGUAGE_ID_MAPPINGS: Record<string, string> = {
  */
 export async function initializeTreeSitter(context: vscode.ExtensionContext): Promise<void> {
   if (parserInitialized) return;
-  
+
   // If already initializing, wait for it to complete
   if (parserInitializing) {
     return parserInitializing;
@@ -112,7 +114,6 @@ export async function initializeTreeSitter(context: vscode.ExtensionContext): Pr
               return vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'web-tree-sitter', 'tree-sitter.wasm').toString();
             } else if (context.extensionPath) {
               // In CLI environment, use path.join
-              const path = require('path');
               return path.join(context.extensionPath, 'node_modules', 'web-tree-sitter', 'tree-sitter.wasm');
             }
           }
@@ -122,13 +123,12 @@ export async function initializeTreeSitter(context: vscode.ExtensionContext): Pr
       parser = new Parser();
       parserInitialized = true;
     } catch (error) {
-      console.error('Failed to initialize tree-sitter:', error);
       parser = null;
       parserInitializing = null; // Reset so it can be retried
       throw error;
     }
   })();
-  
+
   return parserInitializing;
 }
 
@@ -137,7 +137,7 @@ export async function initializeTreeSitter(context: vscode.ExtensionContext): Pr
  */
 async function getLanguageParser(context: vscode.ExtensionContext, languageId: string): Promise<Language | null> {
   if (!parser) {
-    console.log(`[TreeSitter] Parser not initialized yet, initializing for ${languageId}...`);
+    // Initialize parser on first use
     await initializeTreeSitter(context);
     if (!parser) return null;
   }
@@ -154,11 +154,8 @@ async function getLanguageParser(context: vscode.ExtensionContext, languageId: s
   // Get the WASM file name
   const wasmFile = LANGUAGE_WASM_FILES[language];
   if (!wasmFile) {
-    console.warn(`No tree-sitter parser available for language: ${language}`);
     return null;
   }
-  
-  console.log(`[TreeSitter] Loading parser for ${language}...`);
 
   try {
     // Try to load from the extension's resources
@@ -176,8 +173,6 @@ async function getLanguageParser(context: vscode.ExtensionContext, languageId: s
       }
     } else if (context.extensionPath) {
       // CLI environment
-      const path = require('path');
-      const fs = require('fs');
       const wasmPath = path.join(context.extensionPath, 'resources', 'tree-sitter-wasm', wasmFile);
       try {
         const wasmData = fs.readFileSync(wasmPath);
@@ -192,10 +187,8 @@ async function getLanguageParser(context: vscode.ExtensionContext, languageId: s
 
     const languageObj = await Language.load(new Uint8Array(wasmBytes));
     languageParsers.set(language, languageObj);
-    console.log(`[TreeSitter] Successfully loaded parser for ${language}`);
     return languageObj;
   } catch (error) {
-    console.error(`Failed to load tree-sitter language for ${language}:`, error);
     return null;
   }
 }
@@ -220,7 +213,6 @@ export async function parseDocument(
     const tree = parser.parse(document.getText());
     return tree;
   } catch (error) {
-    console.error('Failed to parse document with tree-sitter:', error);
     return null;
   }
 }
