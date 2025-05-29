@@ -2,8 +2,9 @@ import { promisify } from 'util';
 import { exec as execCallback } from 'child_process';
 import { Uri, workspace } from 'vscode';
 import type { ACLStatus } from '@/types';
-import { cleanPath, getExtensionWithOptionalName } from '.';
+import { cleanPath } from '.';
 import { GUARD_TAG_PATTERNS } from './regexCache';
+import { getConfig, CONFIG_KEYS } from './configurationManager';
 
 const exec = promisify(execCallback);
 
@@ -15,7 +16,7 @@ const CLI_CHECK_CACHE_TIME = 5000; // Cache CLI availability check for 5 seconds
  * Gets the configured path to the ACL CLI tool
  */
 export const getAclCliPath = (): string => {
-  return workspace.getConfiguration(getExtensionWithOptionalName()).get<string>('aclCliPath') || 'codeguard';
+  return getConfig(CONFIG_KEYS.ACL_CLI_PATH, 'codeguard');
 };
 
 /**

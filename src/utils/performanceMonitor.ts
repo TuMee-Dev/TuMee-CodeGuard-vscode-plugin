@@ -1,6 +1,6 @@
 import type { OutputChannel } from 'vscode';
-import { workspace, window } from 'vscode';
-import { getExtensionWithOptionalName } from './index';
+import { window } from 'vscode';
+import { getConfig, configManager, CONFIG_KEYS } from './configurationManager';
 
 interface PerformanceMetric {
   operation: string;
@@ -20,16 +20,14 @@ class PerformanceMonitor {
     this.updateConfiguration();
 
     // Listen for configuration changes
-    workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration(getExtensionWithOptionalName('enablePerformanceMonitoring'))) {
-        this.updateConfiguration();
-      }
-    });
+    configManager().onDidChangeConfiguration(
+      CONFIG_KEYS.ENABLE_PERFORMANCE_MONITORING,
+      () => this.updateConfiguration()
+    );
   }
 
   private updateConfiguration(): void {
-    const config = workspace.getConfiguration(getExtensionWithOptionalName());
-    this.enabled = config.get<boolean>('enablePerformanceMonitoring', false);
+    this.enabled = getConfig(CONFIG_KEYS.ENABLE_PERFORMANCE_MONITORING, false);
 
     if (this.enabled && !this.outputChannel) {
       this.outputChannel = window.createOutputChannel('TuMee Performance');

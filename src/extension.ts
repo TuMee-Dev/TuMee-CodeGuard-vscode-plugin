@@ -23,6 +23,7 @@ import { configValidator } from '@/utils/configValidator';
 import { DebugLogger } from '@/utils/debugLogger';
 import { backgroundProcessor } from '@/utils/backgroundProcessor';
 import { registerValidationCommands } from '@/utils/validationMode';
+import { getConfig, CONFIG_KEYS } from '@/utils/configurationManager';
 
 let disposables: Disposable[] = [];
 // Map of decoration types for all permission combinations
