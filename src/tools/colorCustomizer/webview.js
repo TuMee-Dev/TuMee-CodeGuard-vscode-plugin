@@ -10,6 +10,9 @@ window.addEventListener('load', () => {
     colorLinks[perm] = true;
   });
   
+  // Set up permission example click handlers
+  setupPermissionExampleHandlers();
+  
   const themeNameInput = document.getElementById('themeNameInput');
   if (themeNameInput) {
     themeNameInput.addEventListener('keydown', (e) => {
@@ -693,8 +696,120 @@ function initializeDisabledStates() {
   });
 }
 
+// Permission example navigation functions
+function setupPermissionExampleHandlers() {
+  const exampleMap = {
+    'ex-aiWrite': 'aiWrite',
+    'ex-aiRead': 'aiRead',
+    'ex-aiNoAccess': 'aiNoAccess',
+    'ex-humanWrite': 'humanWrite',
+    'ex-humanRead': 'humanRead',
+    'ex-humanNoAccess': 'humanNoAccess',
+    'ex-contextRead': 'contextRead',
+    'ex-contextWrite': 'contextWrite',
+    'ex-mixed1': 'aiWrite',
+    'ex-mixed2': 'aiRead'
+  };
+  
+  Object.entries(exampleMap).forEach(([exampleId, permissionId]) => {
+    const element = document.getElementById(exampleId);
+    if (element) {
+      element.addEventListener('click', () => navigateToPermission(permissionId));
+    }
+  });
+}
+
+function navigateToPermission(permissionId) {
+  const targetSection = findPermissionSection(permissionId);
+  if (!targetSection) return;
+  
+  // Highlight and scroll section
+  const sections = document.querySelectorAll('.permission-section');
+  sections.forEach(s => s.classList.remove('focused'));
+  targetSection.classList.add('focused');
+  targetSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  
+  // Scroll preview if found
+  const previewIndex = findPreviewLineForPermission(permissionId);
+  if (previewIndex >= 0) {
+    setTimeout(() => scrollPreviewToLine(previewIndex), 100);
+  }
+}
+
+function findPermissionSection(permissionId) {
+  const sections = document.querySelectorAll('.permission-section');
+  for (const section of sections) {
+    const checkbox = section.querySelector('input[type="checkbox"]');
+    if (checkbox && checkbox.id === permissionId + '-enabled') {
+      return section;
+    }
+  }
+  return null;
+}
+
+function scrollPreviewToLine(previewIndex) {
+  const startLine = document.getElementById('line' + (previewIndex + 1));
+  if (!startLine) return;
+  
+  // Find guard block end
+  let endIndex = previewIndex;
+  for (let i = previewIndex + 1; i < PREVIEW_LINES.length; i++) {
+    if (PREVIEW_LINES[i].content.includes('@guard:end')) {
+      endIndex = i;
+      break;
+    }
+  }
+  
+  const endLine = document.getElementById('line' + (endIndex + 1));
+  const editorContainer = document.querySelector('.editor-container');
+  const editorContent = document.querySelector('.editor-content');
+  
+  if (!endLine || !editorContainer || !editorContent) return;
+  
+  // Calculate scroll position
+  const blockTop = calculateOffset(startLine, editorContent);
+  const blockBottom = calculateOffset(endLine, editorContent) + endLine.offsetHeight;
+  const blockHeight = blockBottom - blockTop;
+  const containerHeight = editorContainer.clientHeight;
+  
+  const targetScroll = blockHeight <= containerHeight - 40
+    ? blockTop - (containerHeight / 2) + (blockHeight / 2)  // Center
+    : blockTop - 20;  // Top with padding
+  
+  editorContainer.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+}
+
+function calculateOffset(element, container) {
+  let offset = 0;
+  while (element && element !== container) {
+    offset += element.offsetTop;
+    element = element.offsetParent;
+  }
+  return offset;
+}
+
+function findPreviewLineForPermission(permissionId) {
+  const searchMap = {
+    'aiWrite': 'ai:w', 'aiRead': 'ai:r', 'aiNoAccess': 'ai:n',
+    'humanWrite': 'human:w', 'humanRead': 'human:r', 'humanNoAccess': 'human:n',
+    'contextRead': 'context:r', 'contextWrite': 'context:w'
+  };
+  
+  const searchTerm = searchMap[permissionId];
+  if (!searchTerm) return -1;
+  
+  for (let i = 0; i < PREVIEW_LINES.length; i++) {
+    const content = PREVIEW_LINES[i].content.toLowerCase();
+    if (content.includes('// @guard:') && content.includes(searchTerm)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 setTimeout(() => {
   initializeDisabledStates();
+  setupPermissionExampleHandlers(); // Add this to set up click handlers
   
   const permissions = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
   permissions.forEach(perm => updateColorPreview(perm));

@@ -732,6 +732,51 @@ export class ColorCustomizerPanel {
 
   // Permission section generation moved to client-side JavaScript
 
+  private _generatePermissionSection(config: { id: string; title: string; defaultColor: string; defaultEnabled: boolean; defaultTransparency: number; defaultBorderOpacity: number }): string {
+    const transparency = Math.round(config.defaultTransparency * 100);
+    const borderOpacity = Math.round(config.defaultBorderOpacity * 100);
+    
+    return `
+      <div class="permission-section" onclick="focusPermission('${config.id}')">
+        <div class="permission-header">
+          <div class="permission-title">${config.title}</div>
+          <div class="toggle-switch">
+            <label>Enabled</label>
+            <input type="checkbox" id="${config.id}-enabled" ${config.defaultEnabled ? 'checked' : ''} onchange="toggleEnabled('${config.id}')">
+          </div>
+        </div>
+        <div class="permission-controls">
+          <span class="link-icon linked" id="${config.id}-link" onclick="toggleColorLink(event, '${config.id}')" title="Link/unlink colors"></span>
+          <div class="color-row">
+            <div style="width: 20px;"></div>
+            <div class="color-control">
+              <div class="color-preview" id="${config.id}-minimapColor-preview" onclick="openColorPicker('${config.id}-minimapColor')"></div>
+              <input type="color" id="${config.id}-minimapColor" class="color-input" value="${config.defaultColor}" onchange="updateMinimapColor('${config.id}')" style="display: none;">
+              <label class="color-label">Minimap/Border</label>
+            </div>
+            <div class="slider-control">
+              <label class="color-label">Border Opacity</label>
+              <input type="range" id="${config.id}-borderOpacity" class="slider" min="0" max="100" value="${borderOpacity}" oninput="updateSlider(this)">
+              <span class="slider-value" id="${config.id}-borderOpacity-value">${borderOpacity}%</span>
+            </div>
+          </div>
+          <div class="color-row">
+            <div style="width: 20px;"></div>
+            <div class="color-control">
+              <div class="color-preview" id="${config.id}-color-preview" onclick="openColorPicker('${config.id}-color')"></div>
+              <input type="color" id="${config.id}-color" class="color-input" value="${config.defaultColor}" onchange="updateRowColor('${config.id}')" style="display: none;">
+              <label class="color-label">Row</label>
+            </div>
+            <div class="slider-control">
+              <label class="color-label">Row Opacity</label>
+              <input type="range" id="${config.id}-transparency" class="slider" min="0" max="100" value="${transparency}" oninput="updateSlider(this)">
+              <span class="slider-value" id="${config.id}-transparency-value">${transparency}%</span>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
   private _generateCodeLine(index: number, content: string): string {
     return `
       <div class="code-line" id="line${index + 1}">
@@ -757,7 +802,35 @@ export class ColorCustomizerPanel {
     const previewLines = loadPreviewLines();
     const javascript = getWebviewJavaScript(previewLines);
 
-    // Permission sections will be generated client-side using current theme colors
+    // Get the current theme colors for initial HTML generation
+    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+    const selectedTheme = config.get<string>('selectedTheme') || 'light';
+    const theme = COLOR_THEMES[selectedTheme] || COLOR_THEMES.light;
+    const colors = theme.colors;
+
+    // Generate permission sections with theme colors
+    const permissionSections = Object.entries(colors.permissions).map(([id, perm]) => {
+      const titles: Record<string, string> = {
+        aiWrite: 'AI Write',
+        aiRead: 'AI Read',
+        aiNoAccess: 'AI No Access',
+        humanWrite: 'Human Write',
+        humanRead: 'Human Read',
+        humanNoAccess: 'Human No Access',
+        contextRead: 'Context Read',
+        contextWrite: 'Context Write'
+      };
+      
+      return this._generatePermissionSection({
+        id,
+        title: titles[id] || id,
+        defaultColor: perm.color,
+        defaultEnabled: perm.enabled,
+        defaultTransparency: perm.transparency,
+        defaultBorderOpacity: perm.borderOpacity || 1.0
+      });
+    }).join('');
+
     const lineNumbers = Array.from({ length: 65 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
     const codeLines = previewLines.map((line, i) => this._generateCodeLine(i, line.content)).join('');
 
@@ -797,7 +870,7 @@ export class ColorCustomizerPanel {
                 </div>
                 
                 <div class="control-content">
-                    <!-- Permission sections will be generated dynamically by JavaScript -->
+                    ${permissionSections}
                 </div>
                 
                 <div class="control-footer">
