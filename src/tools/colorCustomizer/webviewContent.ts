@@ -438,18 +438,16 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     }
     
     function updateButtonStates() {
-      // Find buttons more specifically to avoid selecting dialog buttons
       const buttons = document.querySelectorAll('.control-footer .btn');
+      const buttonNames = ['Apply Colors', 'Reset'];
       
       buttons.forEach(button => {
-        if (button.textContent === 'Apply Colors') {
+        if (buttonNames.includes(button.textContent)) {
           button.disabled = !hasChanges;
-          button.style.opacity = hasChanges ? '1' : '0.5';
-          button.style.cursor = hasChanges ? 'pointer' : 'not-allowed';
-        } else if (button.textContent === 'Reset') {
-          button.disabled = !hasChanges;
-          button.style.opacity = hasChanges ? '1' : '0.5';
-          button.style.cursor = hasChanges ? 'pointer' : 'not-allowed';
+          Object.assign(button.style, {
+            opacity: hasChanges ? '1' : '0.5',
+            cursor: hasChanges ? 'pointer' : 'not-allowed'
+          });
         }
       });
     }
@@ -597,93 +595,44 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     }
     
     function calculatePermissionColors(aiConfig, humanConfig, mixPattern) {
-      let bgColor = '';
-      let opacity = 1.0;
-      let borderColor = '';
-      let borderOpacity = 1.0;
+      const getConfigColors = (config) => ({
+        bgColor: config.color,
+        opacity: config.transparency,
+        borderColor: config.minimapColor || config.color,
+        borderOpacity: config.borderOpacity ?? 1.0
+      });
       
       if (!aiConfig.enabled && !humanConfig.enabled) {
-        bgColor = '';
-      } else if (!aiConfig.enabled) {
-        bgColor = humanConfig.color;
-        opacity = humanConfig.transparency;
-        borderColor = humanConfig.minimapColor || humanConfig.color;
-        borderOpacity = humanConfig.borderOpacity ?? 1.0;
-      } else if (!humanConfig.enabled) {
-        bgColor = aiConfig.color;
-        opacity = aiConfig.transparency;
-        borderColor = aiConfig.minimapColor || aiConfig.color;
-        borderOpacity = aiConfig.borderOpacity ?? 1.0;
-      } else {
-        // Both are enabled - apply mix pattern
-        const pattern = mixPattern || 'average';
-        
-        if (pattern === 'transparentHuman') {
-          // AI Priority - use AI color
-          bgColor = aiConfig.color;
-          opacity = aiConfig.transparency;
-          borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity ?? 1.0;
-        } else if (pattern === 'humanPriority') {
-          // Human Priority - use human color
-          bgColor = humanConfig.color;
-          opacity = humanConfig.transparency;
-          borderColor = humanConfig.minimapColor || humanConfig.color;
-          borderOpacity = humanConfig.borderOpacity ?? 1.0;
-        } else if (pattern === 'aiPriority') {
-          // AI Priority - use AI color
-          bgColor = aiConfig.color;
-          opacity = aiConfig.transparency;
-          borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity ?? 1.0;
-        } else if (pattern === 'aiBorder') {
-          // Human background, AI left border
-          bgColor = humanConfig.color;
-          opacity = humanConfig.transparency;
-          borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity ?? 1.0;
-        } else if (pattern === 'humanBorder') {
-          // AI background, Human left border
-          bgColor = aiConfig.color;
-          opacity = aiConfig.transparency;
-          borderColor = humanConfig.minimapColor || humanConfig.color;
-          borderOpacity = humanConfig.borderOpacity ?? 1.0;
-        } else {
-          // Average blend (default)
-          bgColor = blendColors(aiConfig.color, humanConfig.color);
-          opacity = (aiConfig.transparency + humanConfig.transparency) / 2;
-          borderColor = aiConfig.minimapColor || aiConfig.color;
-          borderOpacity = aiConfig.borderOpacity ?? 1.0;
-        }
+        return { bgColor: '', opacity: 1.0, borderColor: '', borderOpacity: 1.0 };
       }
+      if (!aiConfig.enabled) return getConfigColors(humanConfig);
+      if (!humanConfig.enabled) return getConfigColors(aiConfig);
       
-      return { bgColor, opacity, borderColor, borderOpacity };
+      // Both enabled - apply mix pattern
+      const patterns = {
+        'transparentHuman': aiConfig,
+        'humanPriority': humanConfig,
+        'aiPriority': aiConfig,
+        'aiBorder': { ...humanConfig, minimapColor: aiConfig.minimapColor || aiConfig.color, borderOpacity: aiConfig.borderOpacity },
+        'humanBorder': { ...aiConfig, minimapColor: humanConfig.minimapColor || humanConfig.color, borderOpacity: humanConfig.borderOpacity },
+        'average': {
+          color: blendColors(aiConfig.color, humanConfig.color),
+          transparency: (aiConfig.transparency + humanConfig.transparency) / 2,
+          minimapColor: aiConfig.minimapColor || aiConfig.color,
+          borderOpacity: aiConfig.borderOpacity ?? 1.0
+        }
+      };
+      
+      const config = patterns[mixPattern || 'average'] || patterns['average'];
+      return getConfigColors(config);
     }
     
     // Helper functions for element access
-    function getElement(id) {
-      return document.getElementById(id);
-    }
-    
-    function getElementValue(id, defaultValue = '') {
-      const elem = getElement(id);
-      return elem ? elem.value : defaultValue;
-    }
-    
-    function setElementValue(id, value) {
-      const elem = getElement(id);
-      if (elem) elem.value = value;
-    }
-    
-    function isElementChecked(id, defaultValue = false) {
-      const elem = getElement(id);
-      return elem ? elem.checked : defaultValue;
-    }
-    
-    function setElementText(id, text) {
-      const elem = getElement(id);
-      if (elem) elem.textContent = text;
-    }
+    const getElement = id => document.getElementById(id);
+    const getElementValue = (id, defaultValue = '') => getElement(id)?.value || defaultValue;
+    const setElementValue = (id, value) => { const elem = getElement(id); if (elem) elem.value = value; };
+    const isElementChecked = (id, defaultValue = false) => getElement(id)?.checked || defaultValue;
+    const setElementText = (id, text) => { const elem = getElement(id); if (elem) elem.textContent = text; };
     
     function hexToRgb(hex) {
       if (!hex) return null;
@@ -795,10 +744,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     function applyPreset(presetName) {
       if (presetName) {
         isLoadingTheme = true;
-        vscode.postMessage({
-          command: 'applyTheme',
-          theme: presetName
-        });
+        vscode.postMessage({ command: 'applyTheme', theme: presetName });
         updateDeleteButton();
       }
     }
@@ -809,18 +755,9 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       const deleteBtn = document.getElementById('deleteThemeBtn');
       if (!select || !deleteBtn) return;
       
-      const selectedValue = select.value;
-      if (!selectedValue) {
-        deleteBtn.style.display = 'none';
-        return;
-      }
-      
-      const selectedOption = select.querySelector('option[value="' + selectedValue + '"]');
-      if (selectedOption && selectedOption.parentElement && selectedOption.parentElement.label === 'Custom Themes') {
-        deleteBtn.style.display = 'block';
-      } else {
-        deleteBtn.style.display = 'none';
-      }
+      const selectedOption = select.value && select.querySelector(\`option[value="\${select.value}"]\`);
+      const isCustomTheme = selectedOption?.parentElement?.label === 'Custom Themes';
+      deleteBtn.style.display = isCustomTheme ? 'block' : 'none';
     }
     
     function updateThemeStatus(isSystem) {
@@ -829,103 +766,73 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       
       const select = document.getElementById('themeSelect');
       if (!select || !select.value) {
-        // This shouldn't happen anymore since we always have a theme
         statusDiv.style.display = 'none';
         return;
       }
       
-      // Enable/disable all controls based on theme type
       setControlsEnabled(!isSystem);
-      
-      if (isSystem) {
-        statusDiv.innerHTML = '🔒 Built-in theme (read-only) - Create a new theme to customize';
-        statusDiv.style.display = 'block';
-      } else {
-        statusDiv.innerHTML = '✏️ Custom theme - You can modify all settings';
-        statusDiv.style.display = 'block';
-      }
+      statusDiv.innerHTML = isSystem 
+        ? '🔒 Built-in theme (read-only) - Create a new theme to customize'
+        : '✏️ Custom theme - You can modify all settings';
+      statusDiv.style.display = 'block';
     }
     
     function setControlsEnabled(enabled) {
-      // Enable/disable all input controls
-      const inputs = document.querySelectorAll('input[type="color"], input[type="range"], input[type="checkbox"]');
-      const colorPreviews = document.querySelectorAll('.color-preview');
-      const linkIcons = document.querySelectorAll('.link-icon');
-      const sliders = document.querySelectorAll('.slider');
+      // Define style rules for each selector
+      const styleRules = [
+        // Input controls
+        { selector: 'input[type="color"], input[type="range"], input[type="checkbox"]', 
+          apply: el => { el.disabled = !enabled; } },
+        { selector: 'input[type="checkbox"]', 
+          styles: { cursor: enabled ? 'pointer' : 'not-allowed' } },
+        // Sliders
+        { selector: '.slider', 
+          styles: {
+            cursor: enabled ? 'pointer' : 'not-allowed',
+            opacity: enabled ? '1' : '0.4',
+            background: enabled ? 'var(--vscode-scrollbarSlider-background)' : 'var(--vscode-input-background)'
+          }},
+        // Color previews
+        { selector: '.color-preview', 
+          styles: {
+            cursor: enabled ? 'pointer' : 'not-allowed',
+            opacity: enabled ? '1' : '0.5',
+            filter: enabled ? 'none' : 'grayscale(0.5)'
+          }},
+        // Link icons
+        { selector: '.link-icon', 
+          styles: {
+            cursor: enabled ? 'pointer' : 'not-allowed',
+            opacity: enabled ? '1' : '0.4',
+            pointerEvents: enabled ? 'auto' : 'none'
+          }},
+        // Permission sections
+        { selector: '.permission-section', 
+          styles: {
+            cursor: enabled ? 'pointer' : 'not-allowed',
+            background: 'var(--vscode-input-background)',
+            opacity: enabled ? '1' : '0.7',
+            borderColor: enabled ? 'transparent' : 'var(--vscode-input-border)'
+          }},
+        // Slider controls
+        { selector: '.slider-control', 
+          styles: { opacity: enabled ? '1' : '0.5' }}
+      ];
       
-      inputs.forEach(input => {
-        input.disabled = !enabled;
-        if (input.type === 'checkbox') {
-          input.style.cursor = enabled ? 'pointer' : 'not-allowed';
-        }
+      // Apply all style rules
+      styleRules.forEach(rule => {
+        const elements = document.querySelectorAll(rule.selector);
+        elements.forEach(el => {
+          if (rule.apply) rule.apply(el);
+          if (rule.styles) Object.assign(el.style, rule.styles);
+        });
       });
       
-      // Update sliders with visual feedback
-      sliders.forEach(slider => {
-        slider.style.cursor = enabled ? 'pointer' : 'not-allowed';
-        slider.style.opacity = enabled ? '1' : '0.4';
-        if (!enabled) {
-          slider.style.background = 'var(--vscode-input-background)';
-        } else {
-          slider.style.background = 'var(--vscode-scrollbarSlider-background)';
-        }
-      });
-      
-      // Update color preview interactivity
-      colorPreviews.forEach(preview => {
-        preview.style.cursor = enabled ? 'pointer' : 'not-allowed';
-        preview.style.opacity = enabled ? '1' : '0.5';
-        if (!enabled) {
-          preview.style.filter = 'grayscale(0.5)';
-        } else {
-          preview.style.filter = 'none';
-        }
-      });
-      
-      // Update link icons
-      linkIcons.forEach(icon => {
-        icon.style.cursor = enabled ? 'pointer' : 'not-allowed';
-        icon.style.opacity = enabled ? '1' : '0.4';
-        icon.style.pointerEvents = enabled ? 'auto' : 'none';
-      });
-      
-      // Remove this - Apply Colors state should only be controlled by hasChanges
-      // Don't enable/disable based on theme type
-      
-      // Update visual feedback for permission sections
-      const sections = document.querySelectorAll('.permission-section');
-      sections.forEach(section => {
-        section.style.cursor = enabled ? 'pointer' : 'not-allowed';
-        if (!enabled) {
-          section.style.background = 'var(--vscode-input-background)';
-          section.style.opacity = '0.7';
-          section.style.borderColor = 'var(--vscode-input-border)';
-        } else {
-          section.style.background = 'var(--vscode-input-background)';
-          section.style.opacity = '1';
-          section.style.borderColor = 'transparent';
-        }
-      });
-      
-      // Update slider controls and labels
-      const sliderControls = document.querySelectorAll('.slider-control');
-      sliderControls.forEach(control => {
-        if (!enabled) {
-          control.style.opacity = '0.5';
-        } else {
-          control.style.opacity = '1';
-        }
-      });
-      
-      // Make the entire control panel look disabled
+      // Control panel special handling
       const controlPanel = document.querySelector('.control-panel');
       if (controlPanel) {
         controlPanel.style.cursor = enabled ? 'auto' : 'not-allowed';
-        if (!enabled) {
-          controlPanel.classList.add('read-only');
-        } else {
-          controlPanel.classList.remove('read-only');
-        }
+        controlPanel.classList.toggle('read-only', !enabled);
       }
     }
     
@@ -946,18 +853,11 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     
     function confirmNewTheme() {
       const input = document.getElementById('themeNameInput');
-      const name = input ? input.value.trim() : '';
-      
+      const name = input?.value.trim();
       if (!name) return;
       
-      const colors = getColors();
-      vscode.postMessage({
-        command: 'saveAsNewTheme',
-        name: name,
-        colors: colors
-      });
-      
-      closeThemeDialog();
+      vscode.postMessage({ command: 'saveAsNewTheme', name, colors: getColors() });
+      toggleThemeDialog(false);
       
       setTimeout(() => {
         const select = document.getElementById('themeSelect');
@@ -967,23 +867,16 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         }
       }, 200);
     }
-    window.confirmNewTheme = confirmNewTheme;
     
     function deleteCurrentTheme() {
       const select = document.getElementById('themeSelect');
-      if (!select || !select.value) return;
-      
-      const themeName = select.value;
-      
-      // Send delete request to extension which will handle confirmation
-      vscode.postMessage({
-        command: 'deleteTheme',
-        name: themeName
-      });
-      
-      // Don't clear the dropdown here - wait for the response
-      // The extension will tell us what to do based on whether the user confirmed
+      const themeName = select?.value;
+      if (themeName) {
+        vscode.postMessage({ command: 'deleteTheme', name: themeName });
+      }
     }
+    
+    window.confirmNewTheme = confirmNewTheme;
     window.deleteCurrentTheme = deleteCurrentTheme;
     
     function updateThemeList(builtIn, custom, preserveSelection = true) {

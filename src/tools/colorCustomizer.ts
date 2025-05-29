@@ -279,21 +279,8 @@ function mergeWithDefaults(colors: Partial<GuardColors> | undefined): GuardColor
   return merged;
 }
 
-export class ColorCustomizerPanel {
-  public static currentPanel: ColorCustomizerPanel | undefined;
-  public static readonly viewType = 'guardTagColorCustomizer';
-
-  private readonly _panel: vscode.WebviewPanel;
-  private readonly _extensionUri: vscode.Uri;
-  private _disposables: vscode.Disposable[] = [];
-  private _currentTheme: string = '';
-  private _isSystemTheme: boolean = false;
-  private _isDeleting: boolean = false;
-
-  // Permission section configuration moved to client-side
-
-  // Preview code lines configuration
-  private static readonly PREVIEW_LINES = [
+// Preview code lines configuration - moved to top level for better organization
+const PREVIEW_LINES = [
     { content: '// Mixed Permission Example - Shows current mix pattern', ai: null, human: null },
     { content: '// @guard:ai:r,human:r', ai: 'read', human: 'read' },
     { content: 'const sharedData = await loadSharedConfiguration();', ai: 'read', human: 'read' },
@@ -360,6 +347,17 @@ export class ColorCustomizerPanel {
     { content: '// @guard:end', ai: 'contextWrite', human: null },
     { content: '', ai: null, human: null }
   ];
+
+export class ColorCustomizerPanel {
+  public static currentPanel: ColorCustomizerPanel | undefined;
+  public static readonly viewType = 'guardTagColorCustomizer';
+
+  private readonly _panel: vscode.WebviewPanel;
+  private readonly _extensionUri: vscode.Uri;
+  private _disposables: vscode.Disposable[] = [];
+  private _currentTheme: string = '';
+  private _isSystemTheme: boolean = false;
+  private _isDeleting: boolean = false;
 
   public static createOrShow(extensionUri: vscode.Uri) {
     const column = vscode.window.activeTextEditor
@@ -806,11 +804,11 @@ export class ColorCustomizerPanel {
   private _getHtmlForWebview(_webview: vscode.Webview) {
     // Use external module for CSS and JavaScript
     const css = getWebviewStyles();
-    const javascript = getWebviewJavaScript(ColorCustomizerPanel.PREVIEW_LINES);
+    const javascript = getWebviewJavaScript(PREVIEW_LINES);
 
     // Permission sections will be generated client-side using current theme colors
     const lineNumbers = Array.from({ length: 65 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
-    const codeLines = ColorCustomizerPanel.PREVIEW_LINES.map((line, i) => this._generateCodeLine(i, line.content)).join('');
+    const codeLines = PREVIEW_LINES.map((line, i) => this._generateCodeLine(i, line.content)).join('');
 
     return `<!DOCTYPE html>
     <html lang="en">
