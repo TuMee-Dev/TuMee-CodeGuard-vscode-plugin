@@ -1,183 +1,281 @@
-# TuMee VSCode Plugin - Refactoring Recommendations
+# Refactoring Recommendations for TuMee VSCode Plugin
 
-## Overview
-This document identifies key refactoring opportunities in the TuMee VSCode plugin codebase based on code analysis performed on 2025-01-29.
+## Executive Summary
+Date: 2025-01-30
 
-## 1. Large Files (>500 lines) That Need Decomposition
+The TuMee VSCode plugin codebase has accumulated significant technical debt with files exceeding 800+ lines, extensive code duplication, and tightly coupled modules. This document provides a prioritized list of refactoring opportunities ranked by potential lines saved, code professionalism improvement, and implementation risk.
 
-### Files requiring immediate attention:
-1. **`src/utils/guardProcessorCore.ts`** (870 lines)
-   - Contains core guard processing logic
-   - Mix of parsing, stack management, and scope resolution
-   - Should be split into: parser module, stack manager, and scope resolver
+## Priority 1: Quick Wins (High Impact, Low Risk)
+**Estimated Total Savings: 600-700 lines**
 
-2. **`src/utils/scopeResolver.ts`** (868 lines)
-   - Handles both tree-sitter and regex-based scope resolution
-   - Should separate tree-sitter logic from regex fallback logic
-   - Extract scope caching into separate module
+### 1.1 Extract Hardcoded Constants to Configuration (50-100 lines, Risk: Very Low)
+**Current Issues:**
+- Magic numbers scattered across 15+ files
+- Hardcoded limits: `MAX_FILE_SIZE = 1000000`, `CACHE_TTL = 5 * 60 * 1000`
+- Inline color values and styling constants
 
-3. **`src/tools/colorCustomizer.ts`** (800 lines)
-   - Manages color configuration, themes, and webview
-   - Should extract: theme management, color calculations, webview handling
-
-4. **`src/extension.ts`** (708 lines)
-   - Main extension file with mixed responsibilities
-   - Should extract: command registration, decoration management, event handling
-
-5. **`src/utils/validationMode.ts`** (579 lines)
-   - Validation logic mixed with UI concerns
-   - Should separate validation engine from report generation
-
-6. **`src/tools/colorCustomizer/ColorCustomizerWebview.ts`** (509 lines)
-   - Webview management with embedded HTML/JS generation
-   - Should externalize HTML templates and message handling
-
-## 2. Duplicate Code Patterns
-
-### Configuration Access Pattern
-Found 14+ instances of:
+**Action Items:**
 ```typescript
-const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+// Create src/constants/index.ts
+export const LIMITS = {
+  MAX_FILE_SIZE: 1000000,
+  CHUNK_SIZE: 1000,
+  DEBOUNCE_DELAY: 300,
+  CACHE_TTL_MINUTES: 5
+};
+
+export const DEFAULTS = {
+  PERMISSION_STATE: 'aiRead_humanWrite',
+  PREVIEW_LINES: 10,
+  MAX_RETRIES: 3
+};
 ```
 
-**Recommendation**: Create a centralized configuration service that caches values and provides typed access.
+### 1.2 Consolidate Configuration Access (100-150 lines, Risk: Low)
+**Current Issues:**
+- 14+ instances of `vscode.workspace.getConfiguration('tumee-vscode-plugin')`
+- Duplicate validation and default value handling
 
-### Error Handling Pattern
-Found 19 files with similar try-catch patterns:
+**Action Items:**
 ```typescript
-try {
-  // operation
-} catch (error) {
-  console.error(`Error in X: ${error instanceof Error ? error.message : String(error)}`);
-  return null/false;
+// Create src/services/ConfigurationService.ts
+export class ConfigurationService {
+  private static instance: ConfigurationService;
+  private config: vscode.WorkspaceConfiguration;
+  
+  get<T>(key: string, defaultValue: T): T {
+    return this.config.get(key, defaultValue);
+  }
 }
 ```
 
-**Recommendation**: Create error handling utilities with consistent logging and recovery strategies.
+### 1.3 Extract Duplicate Error Handling (150-200 lines, Risk: Low)
+**Current Issues:**
+- 19 files with identical try-catch patterns
+- Repetitive error logging and user notification code
 
-### Permission State Mapping
-Multiple files contain hardcoded permission mappings:
+**Action Items:**
 ```typescript
-if (aiPerm === 'r' && humanPerm === 'r') return 'aiRead_humanRead';
-if (aiPerm === 'r' && humanPerm === 'w') return 'aiRead_humanWrite';
-// ... many more conditions
-```
-
-**Recommendation**: Replace with a lookup table or state machine pattern.
-
-## 3. Complex Functions to Break Down
-
-### `updateCodeDecorationsImpl()` in extension.ts
-- 100+ lines handling multiple concerns
-- Should be split into: parsing, permission calculation, decoration application
-
-### `processGuardTags()` in guardProcessorCore.ts
-- Complex stack-based processing with multiple nested conditions
-- Extract: stack operations, scope resolution, permission merging
-
-### `resolveSemantic()` in scopeResolver.ts
-- Handles both tree-sitter and regex fallback in one function
-- Should use strategy pattern for different resolution methods
-
-## 4. Hardcoded Constants to Externalize
-
-### Magic Numbers
-- `MAX_FILE_SIZE = 1024 * 1024` (multiple locations)
-- `CACHE_TTL = 5 * 60 * 1000` (5 minutes)
-- `DEBOUNCE_DELAY = 300`
-- `CHUNK_SIZE = 1000`
-- `PROGRESS_THRESHOLD = 10000`
-
-### Color Values
-- Default colors embedded in code
-- Border styles and opacities
-- Mix pattern definitions
-
-### Regex Patterns
-- Guard tag patterns duplicated across files
-- Comment detection patterns
-- Scope resolution patterns
-
-**Recommendation**: Create a `constants.ts` file with categorized exports.
-
-## 5. Tightly Coupled Modules
-
-### Tree-sitter and Scope Resolution
-- `treeSitterParser.ts` and `scopeResolver.ts` have circular dependencies
-- Both modules initialize each other
-- **Recommendation**: Create a facade pattern to manage initialization
-
-### Guard Processing Chain
-- `guardProcessor.ts` → `guardProcessorCore.ts` → `scopeResolver.ts` → `treeSitterParser.ts`
-- Tight coupling makes testing difficult
-- **Recommendation**: Use dependency injection and interfaces
-
-### Decoration System
-- `decorationTypeFactory.ts` depends on configuration, color utils, and mix patterns
-- Direct VSCode API usage throughout
-- **Recommendation**: Abstract VSCode APIs behind interfaces
-
-## 6. Data/Configuration to Extract
-
-### Theme Configurations
-Currently loaded from JSON but with embedded logic:
-```typescript
-export function getDefaultColorConfig(): GuardColors {
-  // 50+ lines of configuration
+// Create src/utils/errorWrapper.ts
+export async function withErrorHandling<T>(
+  operation: () => Promise<T>,
+  context: string
+): Promise<T | undefined> {
+  try {
+    return await operation();
+  } catch (error) {
+    ErrorHandler.handle(error, context);
+    return undefined;
+  }
 }
 ```
 
-**Recommendation**: Move all default configurations to JSON files.
+### 1.4 Extract Theme and Style Definitions (200-250 lines, Risk: Very Low)
+**Current Issues:**
+- 50+ lines of hardcoded theme configurations in colorCustomizer.ts
+- Inline style definitions scattered across multiple files
 
-### Language Scope Mappings
-Hardcoded mappings between tree-sitter nodes and semantic scopes.
-**Recommendation**: Externalize to language-specific configuration files.
+**Action Items:**
+- Move remaining inline themes to `themes.json`
+- Create `styles.json` for decoration styles
+- Extract preview line configurations to `preview-lines.json` ✅ (Already done)
 
-### Validation Rules
-Validation logic embedded in code with hardcoded limits.
-**Recommendation**: Create a validation schema file with rules and limits.
+### 1.5 Centralize Permission State Logic (100-150 lines, Risk: Low)
+**Current Issues:**
+- Duplicate if-else chains for permission combinations in 5+ files
+- Inconsistent permission state validation
 
-## 7. Specific Refactoring Actions
+**Action Items:**
+```typescript
+// Create src/models/PermissionState.ts
+export class PermissionState {
+  static readonly STATES = {
+    AI_READ_HUMAN_WRITE: 'aiRead_humanWrite',
+    AI_WRITE_HUMAN_WRITE: 'aiWrite_humanWrite',
+    // ... etc
+  };
+  
+  static isValid(state: string): boolean {
+    return Object.values(this.STATES).includes(state);
+  }
+  
+  static getDecoration(state: string): vscode.TextEditorDecorationType {
+    // Centralized decoration mapping
+  }
+}
+```
 
-### Priority 1 (High Impact, Low Risk)
-1. Extract configuration service
-2. Create constants file for magic numbers
-3. Externalize theme and color configurations
-4. Create error handling utilities
+## Priority 2: Medium Complexity Refactoring (Moderate Impact, Medium Risk)
+**Estimated Total Savings: 400-500 lines**
 
-### Priority 2 (Medium Impact, Medium Risk)
-1. Split large files into focused modules
-2. Extract permission state machine
-3. Create abstractions for VSCode APIs
-4. Implement dependency injection for guard processing
+### 2.1 Decompose guardProcessorCore.ts (200-250 lines, Risk: Medium)
+**Current Issues:**
+- 870 lines with deep nesting (6+ levels)
+- `parseGuardTagsCore` function exceeds 500 lines
+- Mixed responsibilities: parsing, state management, scope resolution
 
-### Priority 3 (High Impact, Higher Risk)
-1. Redesign scope resolution with strategy pattern
-2. Separate validation engine from UI
-3. Create plugin architecture for language support
-4. Implement proper caching layer with invalidation
+**Action Items:**
+```typescript
+// Split into:
+// - src/guards/GuardParser.ts (parsing logic)
+// - src/guards/GuardStackManager.ts (stack operations)
+// - src/guards/PermissionStateManager.ts (state tracking)
+// - src/guards/ScopeResolver.ts (scope-specific logic)
+```
 
-## 8. Code Smells Identified
+### 2.2 Simplify extension.ts Activation (150-200 lines, Risk: Medium)
+**Current Issues:**
+- 708 lines with mixed initialization concerns
+- Repetitive command registration pattern
+- Configuration change handlers duplicated
 
-1. **Long parameter lists**: Functions with 5+ parameters
-2. **Deep nesting**: Some functions have 4+ levels of nesting
-3. **Mixed concerns**: Business logic mixed with UI logic
-4. **Weak typing**: Heavy use of `any` and string literals
-5. **Global state**: WeakMaps and module-level variables for caching
+**Action Items:**
+```typescript
+// Create src/initialization/
+// - CommandRegistry.ts
+// - ProviderRegistry.ts
+// - ConfigurationWatcher.ts
 
-## 9. Testing Improvements Needed
+// commands.json
+{
+  "commands": [
+    {
+      "id": "tumee-vscode-plugin.showPerformanceReport",
+      "handler": "performanceReportHandler",
+      "title": "Show Performance Report"
+    }
+  ]
+}
+```
 
-1. **Unit test coverage**: Large files have minimal unit tests
-2. **Integration tests**: Complex interactions not well tested
-3. **Mocking**: Direct VSCode API usage makes testing difficult
-4. **Test data**: Hardcoded test strings throughout test files
+### 2.3 Extract Validation Strategies (100-150 lines, Risk: Medium)
+**Current Issues:**
+- validationMode.ts has 579 lines of mixed logic
+- Large switch statements for validation modes
+- VSCode API calls mixed with business logic
+
+**Action Items:**
+```typescript
+// Create src/validation/
+// - ValidationStrategy.ts (interface)
+// - StrictValidationStrategy.ts
+// - WarningValidationStrategy.ts
+// - ValidationEngine.ts (VSCode-agnostic)
+```
+
+## Priority 3: Architectural Improvements (High Impact, Higher Risk)
+**Estimated Total Savings: 300-400 lines + Better Architecture**
+
+### 3.1 Implement Dependency Injection (Impact: High, Risk: High)
+**Current Issues:**
+- Tight coupling between modules
+- Difficult to unit test
+- VSCode API dependencies throughout
+
+**Action Items:**
+```typescript
+// Create src/container/DIContainer.ts
+// Use inversify or similar DI framework
+// Register services, factories, and providers
+```
+
+### 3.2 Create Core Logic Package (Impact: High, Risk: Medium-High)
+**Current Issues:**
+- Business logic mixed with VSCode specifics
+- Cannot share logic with CLI tools
+- Poor testability
+
+**Action Items:**
+```
+src/
+  core/           # VSCode-independent logic
+    guards/
+    validation/
+    permissions/
+  vscode/         # VSCode-specific adapters
+    providers/
+    commands/
+    ui/
+```
+
+### 3.3 Implement Event-Driven Architecture (Impact: Medium, Risk: High)
+**Current Issues:**
+- Direct coupling between components
+- Difficult to extend functionality
+- Complex dependency chains
+
+**Action Items:**
+```typescript
+// Create src/events/EventBus.ts
+export class EventBus {
+  emit(event: string, data: any): void;
+  on(event: string, handler: Function): void;
+}
+```
+
+## Code Duplication Analysis
+
+### Most Duplicated Patterns:
+1. **Configuration access**: 14+ instances
+2. **Try-catch blocks**: 19+ similar patterns
+3. **Permission state mapping**: 5+ duplicate implementations
+4. **Decoration creation**: 8+ similar creation patterns
+5. **File reading with size checks**: 6+ duplicate implementations
+
+### Recommended Utilities:
+```typescript
+// src/utils/common.ts
+export const readFileWithSizeLimit = async (uri: vscode.Uri): Promise<string | null>
+export const createDecoration = (options: DecorationOptions): vscode.TextEditorDecorationType
+export const getPermissionDisplay = (state: string): string
+```
+
+## Metrics for Success
+
+### Quantitative:
+- **Line Reduction**: Target 1,500-2,000 lines (20-25% reduction)
+- **File Size**: No file should exceed 500 lines
+- **Function Length**: No function should exceed 50 lines
+- **Cyclomatic Complexity**: Keep below 10 for all functions
+
+### Qualitative:
+- **Testability**: 80%+ code coverage achievable
+- **Modularity**: Clear separation of concerns
+- **Maintainability**: New developers can understand module purpose in <5 minutes
+- **Extensibility**: Adding new features requires minimal changes to existing code
+
+## Implementation Timeline
+
+### Phase 1 (Week 1-2): Quick Wins
+- Extract constants and configurations
+- Consolidate error handling
+- Centralize permission logic
+
+### Phase 2 (Week 3-4): Medium Refactoring
+- Decompose large files
+- Implement service classes
+- Extract validation strategies
+
+### Phase 3 (Week 5-6): Architecture
+- Implement DI container
+- Create core package
+- Set up event bus
+
+## Risk Mitigation
+
+1. **Test Coverage**: Ensure 100% test coverage before refactoring
+2. **Incremental Changes**: Small, reviewable PRs
+3. **Feature Flags**: Use flags to toggle between old/new implementations
+4. **Performance Monitoring**: Track performance metrics before/after
+5. **Rollback Plan**: Tag stable releases before major changes
+
+## Completed Refactorings ✅
+
+1. **webviewContent.ts** - Reduced from 1074 → 26 lines
+2. **scopeResolver.ts** - Reduced from 1016 → 868 lines (externalized language scopes)
+3. **colorCustomizer.ts** - Reduced from 967 → 800 lines (externalized themes)
+4. **validationReportView.ts** - Reduced from 648 → 439 lines (externalized template)
 
 ## Conclusion
 
-The codebase would benefit most from:
-1. **Modularization**: Breaking down large files into focused modules
-2. **Configuration extraction**: Moving data out of code
-3. **Abstraction**: Creating interfaces for external dependencies
-4. **Standardization**: Consistent patterns for common operations
-
-These refactoring efforts would improve maintainability, testability, and make the codebase more accessible to new contributors.
+The codebase has significant opportunities for improvement. By following this prioritized list, we can reduce code by 20-25%, improve testability, and make the codebase more professional and maintainable. Start with Priority 1 items for immediate wins with minimal risk.
