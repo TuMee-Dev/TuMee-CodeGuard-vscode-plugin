@@ -746,6 +746,8 @@ function updateDeleteButton() {
   const selectedOption = select.querySelector('option[value="' + selectedValue + '"]');
   if (selectedOption && selectedOption.parentElement && selectedOption.parentElement.label === 'Custom Themes') {
     deleteBtn.style.display = 'block';
+    // Ensure the click handler is attached
+    deleteBtn.onclick = deleteCurrentTheme;
   } else {
     deleteBtn.style.display = 'none';
   }

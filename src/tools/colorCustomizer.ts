@@ -524,9 +524,8 @@ export class ColorCustomizerPanel {
     this._panel.title = 'Guard Tag Color Customizer';
     this._panel.webview.html = this._getHtmlForWebview(webview);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       this._sendThemeList();
-      this._sendCurrentColors();
 
       const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
       let selectedTheme = config.get<string>('selectedTheme');
@@ -534,21 +533,14 @@ export class ColorCustomizerPanel {
       // If no theme is selected, default to 'light'
       if (!selectedTheme) {
         selectedTheme = 'light';
-        // Save the default theme selection
-        void config.update('selectedTheme', selectedTheme, vscode.ConfigurationTarget.Global);
       }
 
-      this._currentTheme = selectedTheme;
-      this._isSystemTheme = !!COLOR_THEMES[selectedTheme];
+      // Apply the theme to ensure colors and dropdown are in sync
+      await this._applyTheme(selectedTheme);
 
       void this._panel.webview.postMessage({
         command: 'setSelectedTheme',
         theme: selectedTheme
-      });
-
-      void this._panel.webview.postMessage({
-        command: 'setThemeType',
-        isSystem: this._isSystemTheme
       });
 
       // Restore default permissions from user preferences
@@ -696,7 +688,7 @@ export class ColorCustomizerPanel {
                                 <option value="humanPriority">Human Priority</option>
                             </select>
                             <button class="btn-icon" onclick="addNewTheme()" title="Add new theme">➕</button>
-                            <button class="btn-icon" id="deleteThemeBtn" title="Delete theme" style="display: none;">🗑️</button>
+                            <button class="btn-icon" id="deleteThemeBtn" onclick="deleteCurrentTheme()" title="Delete theme" style="display: none;">🗑️</button>
                         </div>
                         <div id="themeStatus" class="theme-status" style="display: none; margin-top: 8px; font-size: 12px; color: var(--vscode-descriptionForeground);"></div>
                     </div>
