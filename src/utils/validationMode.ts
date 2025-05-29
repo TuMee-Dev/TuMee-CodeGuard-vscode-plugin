@@ -110,38 +110,51 @@ function getPluginVersion(): string {
   return '1.0.0';
 }
 
-function convertGuardTagToParsedGuard(tag: GuardTag, raw: string): ParsedGuard {
+function convertGuardTagToParsedGuards(tag: GuardTag): ParsedGuard[] {
   // Map our internal GuardTag to the validation ParsedGuard format
-  let permission: 'read-only' | 'write' | 'none';
+  // Since we now support separate AI and human permissions, we may need to create multiple ParsedGuard objects
+  const guards: ParsedGuard[] = [];
 
-  switch (tag.permission) {
-    case 'r':
-      permission = 'read-only';
-      break;
-    case 'w':
-      permission = 'write';
-      break;
-    case 'n':
-      permission = 'none';
-      break;
-    case 'context':
-      permission = 'read-only'; // Treat context as read-only
-      break;
-    default:
-      permission = 'read-only';
+  function mapPermission(perm: string): 'read-only' | 'write' | 'none' {
+    switch (perm) {
+      case 'r':
+        return 'read-only';
+      case 'w':
+        return 'write';
+      case 'n':
+        return 'none';
+      case 'context':
+        return 'read-only'; // Treat context as read-only
+      default:
+        return 'read-only';
+    }
   }
 
-  // Determine target
-  const target: 'ai' | 'human' | 'all' = tag.target as 'ai' | 'human';
+  if (tag.aiPermission) {
+    const raw = `@guard:ai${tag.identifier ? `:${tag.identifier}` : ''}:${tag.aiPermission}${tag.scope ? `.${tag.scope}` : ''}`;
+    guards.push({
+      raw: raw,
+      target: 'ai',
+      identifiers: tag.identifier ? [tag.identifier] : ['*'],
+      permission: mapPermission(tag.aiPermission),
+      scope: (tag.scope || 'file') as 'file' | 'function' | 'class' | 'block' | 'section',
+      scope_modifiers: []
+    });
+  }
 
-  return {
-    raw: raw,
-    target: target,
-    identifiers: tag.identifier ? [tag.identifier] : ['*'],
-    permission,
-    scope: (tag.scope || 'file') as 'file' | 'function' | 'class' | 'block' | 'section',
-    scope_modifiers: []
-  };
+  if (tag.humanPermission) {
+    const raw = `@guard:human${tag.identifier ? `:${tag.identifier}` : ''}:${tag.humanPermission}${tag.scope ? `.${tag.scope}` : ''}`;
+    guards.push({
+      raw: raw,
+      target: 'human',
+      identifiers: tag.identifier ? [tag.identifier] : ['*'],
+      permission: mapPermission(tag.humanPermission),
+      scope: (tag.scope || 'file') as 'file' | 'function' | 'class' | 'block' | 'section',
+      scope_modifiers: []
+    });
+  }
+
+  return guards;
 }
 
 async function buildValidationPackage(
@@ -154,12 +167,13 @@ async function buildValidationPackage(
   const fileHash = await getFileHash(filePath);
 
   // Convert GuardTags to GuardRegions
-  const guardRegions: GuardRegion[] = guardTags.map((tag, index) => {
-    // Build the raw guard tag string from components
-    const raw = `@guard:${tag.target}${tag.identifier ? `:${  tag.identifier}` : ''}:${tag.permission}${tag.scope ? `.${  tag.scope}` : ''}`;
+  const guardRegions: GuardRegion[] = [];
+  let regionIndex = 0;
 
-    // Calculate region boundaries
-    // Use scopeStart/scopeEnd if available (from implicit scope resolution)
+  for (const tag of guardTags) {
+    const parsedGuards = convertGuardTagToParsedGuards(tag);
+
+    // Calculate region boundaries (same for all guards from this tag)
     const startLine = tag.scopeStart || tag.lineNumber;
     const endLine = tag.scopeEnd || (tag.lineNumber + (tag.lineCount || 1) - 1) || totalLines;
 
@@ -168,17 +182,20 @@ async function buildValidationPackage(
     const contentHash = crypto.createHash('sha256').update(regionContent).digest('hex');
     const contentPreview = `${contentLines[0]?.substring(0, 50)  }...` || '';
 
-    return {
-      index,
-      guard: raw,
-      parsed_guard: convertGuardTagToParsedGuard(tag, raw),
-      declaration_line: tag.lineNumber,
-      start_line: startLine,
-      end_line: endLine,
-      content_hash: contentHash,
-      content_preview: contentPreview
-    };
-  });
+    // Create a GuardRegion for each parsed guard
+    for (const parsedGuard of parsedGuards) {
+      guardRegions.push({
+        index: regionIndex++,
+        guard: parsedGuard.raw,
+        parsed_guard: parsedGuard,
+        declaration_line: tag.lineNumber,
+        start_line: startLine,
+        end_line: endLine,
+        content_hash: contentHash,
+        content_preview: contentPreview
+      });
+    }
+  }
 
   // Compute line coverage
   const lineCoverage = computeLineCoverage(guardRegions, totalLines);

@@ -4,18 +4,19 @@ import type { Range } from 'vscode';
 
 export interface GuardTag {
   lineNumber: number;
-  target: 'ai' | 'human' | 'all';  // 'all' for combined tags
   identifier?: string;
-  permission: 'r' | 'w' | 'n' | 'context' | 'combined';  // 'combined' for tags with both AI and human permissions
   scope?: string;
   lineCount?: number;
   addScopes?: string[];
   removeScopes?: string[];
   scopeStart?: number;
   scopeEnd?: number;
-  // For combined tags, store the actual permissions
+  // Store the actual permissions for each target
   aiPermission?: 'r' | 'w' | 'n' | 'context';
   humanPermission?: 'r' | 'w' | 'n' | 'context';
+  // Track if permissions are context-based
+  aiIsContext?: boolean;
+  humanIsContext?: boolean;
 }
 
 export interface LinePermission {
@@ -34,14 +35,16 @@ export interface LinePermission {
 }
 
 export interface ParsedGuardTag {
-  target: string;
   identifier?: string;
-  permission: string;
   scope?: string;
   lineCount?: number;
   addScopes?: string[];
   removeScopes?: string[];
   type: string;
+  aiPermission?: string;
+  humanPermission?: string;
+  aiIsContext?: boolean;
+  humanIsContext?: boolean;
 }
 
 export interface DecorationRanges {

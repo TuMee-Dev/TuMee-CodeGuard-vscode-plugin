@@ -144,7 +144,7 @@ async function getLanguageParser(context: vscode.ExtensionContext, languageId: s
   try {
     // Try to load from the extension's resources
     let wasmBytes: ArrayBuffer;
-    
+
     if (context.extensionUri) {
       // VSCode environment
       const wasmPath = vscode.Uri.joinPath(context.extensionUri, 'resources', 'tree-sitter-wasm', wasmFile);

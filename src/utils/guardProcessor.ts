@@ -5,15 +5,17 @@
 
 import * as vscode from 'vscode';
 import type { GuardTag, LinePermission } from '../types/guardTypes';
-import { 
-  parseGuardTagsCore, 
-  getLinePermissionsCore, 
-  clearScopeCache as clearScopeCacheCore,
-  markLinesModified as markLinesModifiedCore,
+import type {
   IDocument,
   ITextLine,
   IConfiguration,
-  SemanticResolver,
+  SemanticResolver
+} from './guardProcessorCore';
+import {
+  parseGuardTagsCore,
+  getLinePermissionsCore,
+  clearScopeCache as clearScopeCacheCore,
+  markLinesModified as markLinesModifiedCore,
   parseGuardTag,
   isLineAComment,
   getDefaultPermissions
@@ -73,8 +75,8 @@ const semanticResolverAdapter: SemanticResolver = async (
   // We need to convert back to a VSCode document for the resolver
   // This is a bit hacky but necessary since resolveSemantic expects a VSCode document
   // In the future, resolveSemantic should also be refactored to use IDocument
-  const vscodeDoc = (document as any).doc || document;
-  return resolveSemantic(vscodeDoc as vscode.TextDocument, line, scope, addScopes, removeScopes);
+  const vscodeDoc = ('doc' in document && document.doc ? document.doc : document) as vscode.TextDocument;
+  return resolveSemantic(vscodeDoc, line, scope, addScopes, removeScopes);
 };
 
 /**

@@ -61,28 +61,34 @@ export const JAVASCRIPT_LINE_COUNT_REGEX = GUARD_TAG_PATTERNS.JAVASCRIPT_LINE_CO
  * If multiple tags exist, they are merged into a single combined state
  */
 export const parseGuardTag = (line: string): {
-  target: string,
   identifier?: string,
-  permission: string,
   scope?: string,
   lineCount?: number,
   addScopes?: string[],
   removeScopes?: string[],
   type: string,
   aiPermission?: string,
-  humanPermission?: string
+  humanPermission?: string,
+  aiIsContext?: boolean,
+  humanIsContext?: boolean
 } | null => {
   // Track found permissions for each target
-  let aiTag: any = null;
-  let humanTag: any = null;
-  let otherTag: any = null;
+  let aiPermission: string | undefined;
+  let humanPermission: string | undefined;
+  let aiIsContext = false;
+  let humanIsContext = false;
+  let identifier: string | undefined;
+  let scope: string | undefined;
+  let lineCount: number | undefined;
+  const addScopes: string[] = [];
+  const removeScopes: string[] = [];
 
   // Use global flag to find all matches in the line
   const newFormatRegex = new RegExp(GUARD_TAG_PATTERNS.PARSE_GUARD_TAG.source, 'g');
   let match;
-  
+
   while ((match = newFormatRegex.exec(line)) !== null) {
-    const [, target, identifier, permission, scopeOrCount, addScopesStr, removeScopesStr] = match;
+    const [, target, id, permission, scopeOrCount, addScopesStr, removeScopesStr] = match;
 
     // Check if scope is numeric (line count) or semantic
     const isLineCount = scopeOrCount && GUARD_TAG_PATTERNS.NUMERIC_SCOPE.test(scopeOrCount);
@@ -96,48 +102,51 @@ export const parseGuardTag = (line: string): {
     else if (normalizedPermission === 'write') normalizedPermission = 'w';
     else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
 
-    const tag = {
-      target: normalizedTarget,
-      identifier: identifier || undefined,
-      permission: normalizedPermission,
-      scope: isLineCount ? undefined : scopeOrCount,
-      lineCount: isLineCount ? parseInt(scopeOrCount, 10) : undefined,
-      addScopes: addScopesStr ? addScopesStr.split('+').filter(s => s) : undefined,
-      removeScopes: removeScopesStr ? removeScopesStr.split('-').filter(s => s) : undefined,
-      type: 'new-format'
-    };
+    // Set identifier (use first found)
+    if (id && !identifier) {
+      identifier = id;
+    }
 
-    // Store tag by target
+    // Set scope/lineCount (use first found)
+    if (isLineCount && !lineCount) {
+      lineCount = parseInt(scopeOrCount, 10);
+    } else if (!isLineCount && scopeOrCount && !scope) {
+      scope = scopeOrCount;
+    }
+
+    // Merge add/remove scopes
+    if (addScopesStr) {
+      addScopes.push(...addScopesStr.split('+').filter(s => s));
+    }
+    if (removeScopesStr) {
+      removeScopes.push(...removeScopesStr.split('-').filter(s => s));
+    }
+
+    // Store permission by target
     if (normalizedTarget === 'ai') {
-      aiTag = tag;
+      aiPermission = normalizedPermission;
+      aiIsContext = normalizedPermission === 'context';
     } else if (normalizedTarget === 'human') {
-      humanTag = tag;
-    } else {
-      otherTag = tag;
+      humanPermission = normalizedPermission;
+      humanIsContext = normalizedPermission === 'context';
     }
   }
 
-  // If we found multiple tags for different targets, merge them
-  if (aiTag && humanTag) {
-    // Create a combined tag with both permissions
+  // If we found any permissions from new format tags, return them
+  if (aiPermission || humanPermission) {
     return {
-      target: 'all', // Special target indicating both AI and human
-      identifier: aiTag.identifier || humanTag.identifier,
-      permission: 'combined', // Special permission type
-      aiPermission: aiTag.permission,
-      humanPermission: humanTag.permission,
-      scope: aiTag.scope || humanTag.scope,
-      lineCount: aiTag.lineCount || humanTag.lineCount,
-      addScopes: [...(aiTag.addScopes || []), ...(humanTag.addScopes || [])].filter((v, i, a) => a.indexOf(v) === i),
-      removeScopes: [...(aiTag.removeScopes || []), ...(humanTag.removeScopes || [])].filter((v, i, a) => a.indexOf(v) === i),
-      type: 'combined'
+      identifier,
+      scope,
+      lineCount,
+      addScopes: addScopes.length > 0 ? [...new Set(addScopes)] : undefined,
+      removeScopes: removeScopes.length > 0 ? [...new Set(removeScopes)] : undefined,
+      type: 'new-format',
+      aiPermission,
+      humanPermission,
+      aiIsContext,
+      humanIsContext
     };
   }
-
-  // Return single tag if found
-  if (aiTag) return aiTag;
-  if (humanTag) return humanTag;
-  if (otherTag) return otherTag;
 
   // Try legacy formats if no new format tags found
   const legacyMatch = line.match(GUARD_TAG_PATTERNS.PARSE_LEGACY_GUARD_TAG);
@@ -149,10 +158,10 @@ export const parseGuardTag = (line: string): {
     else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
 
     return {
-      target: 'ai',
-      permission: normalizedPermission,
       lineCount: legacyMatch[2] ? parseInt(legacyMatch[2], 10) : undefined,
-      type: 'legacy'
+      type: 'legacy',
+      aiPermission: normalizedPermission,
+      aiIsContext: normalizedPermission === 'context'
     };
   }
 
@@ -165,10 +174,10 @@ export const parseGuardTag = (line: string): {
     else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
 
     return {
-      target: 'ai',
-      permission: normalizedPermission,
       lineCount: parseInt(pythonMatch[2], 10),
-      type: 'python'
+      type: 'python',
+      aiPermission: normalizedPermission,
+      aiIsContext: normalizedPermission === 'context'
     };
   }
 
@@ -181,10 +190,10 @@ export const parseGuardTag = (line: string): {
     else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
 
     return {
-      target: 'ai',
-      permission: normalizedPermission,
       lineCount: parseInt(jsMatch[2], 10),
-      type: 'javascript'
+      type: 'javascript',
+      aiPermission: normalizedPermission,
+      aiIsContext: normalizedPermission === 'context'
     };
   }
 

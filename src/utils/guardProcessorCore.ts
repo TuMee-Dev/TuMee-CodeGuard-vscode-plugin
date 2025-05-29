@@ -325,7 +325,6 @@ export async function parseGuardTagsCore(
           break;
         }
       }
-      
 
       // Only parse guard tags from comment lines
       if (!isLineAComment(line, document.languageId)) {
@@ -336,26 +335,26 @@ export async function parseGuardTagsCore(
 
       if (tagInfo) {
         // lineNumber is already 1-based from the loop
-        
+
         // Create ONE guard tag - no differentiation between single/combined
         const guardTag: GuardTag = {
           lineNumber: lineNumber,
-          target: tagInfo.target as 'ai' | 'human' | 'all',
           identifier: tagInfo.identifier,
-          permission: tagInfo.permission as 'r' | 'w' | 'n' | 'context' | 'combined',
-          scope: tagInfo.scope || (!tagInfo.lineCount && tagInfo.permission !== 'context' ? 'block' : undefined),
+          scope: tagInfo.scope || (!tagInfo.lineCount && (tagInfo.aiPermission !== 'context' && tagInfo.humanPermission !== 'context') ? 'block' : undefined),
           lineCount: tagInfo.lineCount,
           addScopes: tagInfo.addScopes,
           removeScopes: tagInfo.removeScopes,
           aiPermission: tagInfo.aiPermission as 'r' | 'w' | 'n' | 'context' | undefined,
-          humanPermission: tagInfo.humanPermission as 'r' | 'w' | 'n' | 'context' | undefined
+          humanPermission: tagInfo.humanPermission as 'r' | 'w' | 'n' | 'context' | undefined,
+          aiIsContext: tagInfo.aiIsContext,
+          humanIsContext: tagInfo.humanIsContext
         };
 
         const effectiveScope = guardTag.scope;
 
         // Handle semantic scope resolution
         if (effectiveScope && !guardTag.lineCount) {
-            // Special handling for 'file' scope
+          // Special handling for 'file' scope
           if (effectiveScope === 'file') {
             guardTag.scopeStart = lineNumber;
             guardTag.scopeEnd = totalLines;
@@ -369,22 +368,20 @@ export async function parseGuardTagsCore(
                 tagInfo.addScopes,
                 tagInfo.removeScopes
               );
-              
 
               // Check if tree-sitter returned a meaningful block
               // For guards in comments with block scope, we should use tree-sitter's block
               // UNLESS it extends to end-of-file (suggesting no real block was found)
               const isGuardInComment = isLineAComment(lines[lineNumber - 1], document.languageId);
-              let isMeaningfulBlock = scopeBoundary && 
+              let isMeaningfulBlock = scopeBoundary &&
                 (scopeBoundary.startLine !== lineNumber || scopeBoundary.endLine !== totalLines);
-              
+
               // For guards in comments with block scope, only use tree-sitter if it found a reasonable block
               // (not extending to end of file)
               if (isGuardInComment && effectiveScope === 'block' && scopeBoundary && scopeBoundary.endLine === totalLines) {
                 isMeaningfulBlock = false;
               }
-              
-              
+
               if (isMeaningfulBlock && scopeBoundary) {
                 guardTag.scopeStart = scopeBoundary.startLine;
                 guardTag.scopeEnd = scopeBoundary.endLine;
@@ -407,7 +404,7 @@ export async function parseGuardTagsCore(
                       }
                     }
                   }
-                  
+
                   // Trim trailing whitespace
                   let effectiveEndLine = nextGuardLine;
                   for (let i = nextGuardLine; i > lineNumber; i--) {
@@ -417,7 +414,7 @@ export async function parseGuardTagsCore(
                       break;
                     }
                   }
-                  
+
                   guardTag.scopeEnd = effectiveEndLine;
                   if (debugEnabled) {
                     console.warn(`[GuardProcessor] No ${effectiveScope} found for guard at line ${lineNumber}, extending to line ${effectiveEndLine} (trimmed from ${nextGuardLine})`);
@@ -459,7 +456,7 @@ export async function parseGuardTagsCore(
           // Don't overwrite the resolved boundaries!
           startLine = guardTag.scopeStart;
           endLine = guardTag.scopeEnd;
-        } else if (guardTag.permission === 'context') {
+        } else if (guardTag.aiPermission === 'context' || guardTag.humanPermission === 'context') {
           // Context guards without explicit scope extend until the next guard
           guardTag.scopeStart = lineNumber;
           // Find the next guard tag
@@ -495,7 +492,7 @@ export async function parseGuardTagsCore(
         // IMPORTANT: Check that we're inheriting from a valid scope
         let currentPermissions: { [target: string]: string } = { ai: 'r', human: 'w' };  // Default permissions
         let currentContext: { ai: boolean; human: boolean } = { ai: false, human: false };  // Default no context
-        
+
         // Find the appropriate permissions to inherit
         for (let i = guardStack.length - 1; i >= 0; i--) {
           const stackEntry = guardStack[i];
@@ -519,7 +516,7 @@ export async function parseGuardTagsCore(
             currentContext.ai = true;
           }
         }
-        
+
         // Check if humanPermission is set (could be from a combined tag or single human tag)
         if (guardTag.humanPermission) {
           if (guardTag.humanPermission !== 'context') {
@@ -529,23 +526,13 @@ export async function parseGuardTagsCore(
             currentContext.human = true;
           }
         }
-        
-        // Handle tags that don't have aiPermission or humanPermission set
-        // (legacy single target tags)
-        if (!guardTag.aiPermission && !guardTag.humanPermission) {
-          if (guardTag.permission === 'context') {
-            if (guardTag.target === 'ai' || guardTag.target === 'human') {
-              currentContext[guardTag.target] = true;
-            }
-          } else if (guardTag.target === 'ai' || guardTag.target === 'human') {
-            currentPermissions[guardTag.target] = guardTag.permission;
-            currentContext[guardTag.target] = false;
-          }
-        }
+
+        // Note: Legacy tags are now handled by parseGuardTag directly,
+        // which sets aiPermission for legacy AI-only tags
 
         // For context guards, trim the endLine to exclude trailing whitespace
         let effectiveEndLine = endLine;
-        if (guardTag.permission === 'context' && effectiveScope !== 'file') {
+        if ((guardTag.aiPermission === 'context' || guardTag.humanPermission === 'context') && effectiveScope !== 'file') {
           // Find the last line with content within the scope
           let lastContentLine = startLine; // Default to start if all lines are empty
           // Work backwards from the end to find the last non-empty line
@@ -557,11 +544,11 @@ export async function parseGuardTagsCore(
             }
           }
           effectiveEndLine = lastContentLine;
-          
+
           // Update the guard tag's scope to reflect the trimmed end
           guardTag.scopeEnd = effectiveEndLine;
           endLine = effectiveEndLine;
-          
+
           if (debugEnabled && logger) {
             logger.log(`[GuardProcessor] Context guard scope trimmed from ${endLine} to ${effectiveEndLine} (last content line)`);
           }
@@ -575,21 +562,24 @@ export async function parseGuardTagsCore(
           isLineLimited: isLineLimited,
           sourceGuard: guardTag
         };
-        
+
         if (debugEnabled && logger) {
-          logger.log(`[GuardProcessor] Creating guard stack entry at line ${lineNumber}: ${guardTag.target}:${guardTag.permission}, startLine=${startLine}, endLine=${effectiveEndLine}, inherited permissions: ${JSON.stringify(currentPermissions)}`);
+          const permissions = [];
+          if (guardTag.aiPermission) permissions.push(`ai:${guardTag.aiPermission}`);
+          if (guardTag.humanPermission) permissions.push(`human:${guardTag.humanPermission}`);
+          logger.log(`[GuardProcessor] Creating guard stack entry at line ${lineNumber}: ${permissions.join(', ')}, startLine=${startLine}, endLine=${effectiveEndLine}, inherited permissions: ${JSON.stringify(currentPermissions)}`);
         }
 
-        if (debugEnabled && guardTag.permission === 'context' && logger) {
+        if (debugEnabled && (guardTag.aiPermission === 'context' || guardTag.humanPermission === 'context') && logger) {
           logger.log(`[GuardProcessor] Pushing context guard to stack: ${JSON.stringify({
-            target: guardTag.target,
+            aiPermission: guardTag.aiPermission,
+            humanPermission: guardTag.humanPermission,
             startLine: stackEntry.startLine,
             endLine: stackEntry.endLine,
             scope: guardTag.scope
           })}`);
         }
 
-        
         guardStack.push(stackEntry);
         guardTags.push(guardTag);
       }
@@ -601,22 +591,29 @@ export async function parseGuardTagsCore(
     // ONLY do this for guards that extend to end-of-file (totalLines)
     for (let i = 0; i < guardTags.length; i++) {
       const currentTag = guardTags[i];
-      
+
       // Only process block-scoped guards that extend to end-of-file
       if (currentTag.scope === 'block' && !currentTag.lineCount && currentTag.scopeEnd === totalLines) {
         // Look for the next guard that changes the same target
         for (let j = i + 1; j < guardTags.length; j++) {
           const nextTag = guardTags[j];
-          
-          // Check if the next guard changes the same target (and isn't a context guard)
-          if (nextTag.target === currentTag.target && nextTag.permission !== 'context') {
+
+          // Check if the next guard changes any of the same targets (and isn't a context guard)
+          const currentAffectsAI = currentTag.aiPermission !== undefined;
+          const currentAffectsHuman = currentTag.humanPermission !== undefined;
+          const nextAffectsAI = nextTag.aiPermission !== undefined && nextTag.aiPermission !== 'context';
+          const nextAffectsHuman = nextTag.humanPermission !== undefined && nextTag.humanPermission !== 'context';
+
+          const affectsSameTarget = (currentAffectsAI && nextAffectsAI) || (currentAffectsHuman && nextAffectsHuman);
+
+          if (affectsSameTarget) {
             // Update the current guard to end one line before the next guard
             const newEndLine = nextTag.lineNumber - 1;
-            
+
             // Only update if it would shorten the scope
-            if (newEndLine < currentTag.scopeEnd!) {
+            if (newEndLine < currentTag.scopeEnd) {
               currentTag.scopeEnd = newEndLine;
-              
+
               // Also trim trailing whitespace
               let lastContentLine = currentTag.scopeStart || currentTag.lineNumber;
               for (let line = newEndLine; line >= (currentTag.scopeStart || currentTag.lineNumber); line--) {
@@ -627,7 +624,7 @@ export async function parseGuardTagsCore(
                 }
               }
               currentTag.scopeEnd = lastContentLine;
-              
+
               // Also update the associated guard stack entry if it exists
               for (let k = 0; k < guardStack.length; k++) {
                 if (guardStack[k].sourceGuard === currentTag) {
@@ -635,9 +632,15 @@ export async function parseGuardTagsCore(
                   break;
                 }
               }
-              
+
               if (debugEnabled && logger) {
-                logger.log(`[GuardProcessor] Updated block scope end for ${currentTag.target}:${currentTag.permission} at line ${currentTag.lineNumber} to end at line ${currentTag.scopeEnd} (before next ${nextTag.target} guard at line ${nextTag.lineNumber})`);
+                const currentPerms = [];
+                if (currentTag.aiPermission) currentPerms.push(`ai:${currentTag.aiPermission}`);
+                if (currentTag.humanPermission) currentPerms.push(`human:${currentTag.humanPermission}`);
+                const nextPerms = [];
+                if (nextTag.aiPermission) nextPerms.push(`ai:${nextTag.aiPermission}`);
+                if (nextTag.humanPermission) nextPerms.push(`human:${nextTag.humanPermission}`);
+                logger.log(`[GuardProcessor] Updated block scope end for ${currentPerms.join(', ')} at line ${currentTag.lineNumber} to end at line ${currentTag.scopeEnd} (before next ${nextPerms.join(', ')} guard at line ${nextTag.lineNumber})`);
               }
             }
             break; // Found the next guard for this target
@@ -709,16 +712,16 @@ function processGuardStack(
         // not from a block that might have ended
         let currentPermissions = { ...defaultPermissions };
         let currentContext: { ai: boolean; human: boolean } = { ai: false, human: false };
-        
+
         // Find the appropriate permissions to inherit
         // Walk backwards through the stack to find the active guard for this line
         for (let i = guardStack.length - 1; i >= 0; i--) {
           const stackEntry = guardStack[i];
           if (line >= stackEntry.startLine && line <= stackEntry.endLine) {
             currentPermissions = { ...stackEntry.permissions };
-            currentContext = { 
+            currentContext = {
               ai: stackEntry.isContext.ai || false,
-              human: stackEntry.isContext.human || false 
+              human: stackEntry.isContext.human || false
             };
             break;
           }
@@ -734,7 +737,7 @@ function processGuardStack(
             currentContext.ai = true;
           }
         }
-        
+
         // Check if humanPermission is set
         if (tag.humanPermission) {
           if (tag.humanPermission !== 'context') {
@@ -744,18 +747,8 @@ function processGuardStack(
             currentContext.human = true;
           }
         }
-        
-        // Handle tags that don't have aiPermission or humanPermission set
-        if (!tag.aiPermission && !tag.humanPermission) {
-          if (tag.permission === 'context') {
-            if (tag.target === 'ai' || tag.target === 'human') {
-              currentContext[tag.target] = true;
-            }
-          } else if (tag.target === 'ai' || tag.target === 'human') {
-            currentPermissions[tag.target] = tag.permission;
-            currentContext[tag.target] = false;
-          }
-        }
+
+        // Note: Legacy tags are now handled by parseGuardTag directly
 
         const entry: GuardStackEntry = {
           permissions: currentPermissions,
@@ -765,16 +758,18 @@ function processGuardStack(
           isLineLimited: !!tag.lineCount,
           sourceGuard: tag
         };
-        
+
         // DEBUG: Log context guard scope
-        if (tag.permission === 'context' && debugEnabled && logger) {
+        if ((tag.aiPermission === 'context' || tag.humanPermission === 'context') && debugEnabled && logger) {
           logger.log(`[GuardProcessor] Context guard scope: startLine=${entry.startLine}, endLine=${entry.endLine}, scopeStart=${tag.scopeStart}, scopeEnd=${tag.scopeEnd}`);
         }
 
         if (debugEnabled && logger) {
+          const permissions = [];
+          if (tag.aiPermission) permissions.push(`ai:${tag.aiPermission}`);
+          if (tag.humanPermission) permissions.push(`human:${tag.humanPermission}`);
           logger.log(`[GuardProcessor] Pushing guard to stack at line ${line}: ${JSON.stringify({
-            permission: tag.permission,
-            target: tag.target,
+            permissions: permissions.join(', '),
             startLine: entry.startLine,
             endLine: entry.endLine,
             scopeStart: tag.scopeStart,
@@ -800,8 +795,7 @@ function processGuardStack(
       if (line >= top.startLine && line <= top.endLine) {
         // Start with the top permissions
         let effectivePermissions = top.permissions;
-        let effectiveIsContext = top.isContext;
-        
+        const effectiveIsContext = top.isContext;
 
         // Handle context guards first
         if ((top.isContext.ai || top.isContext.human)) {

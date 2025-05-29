@@ -240,7 +240,7 @@ async function resolveSemanticWithTreeSitter(
     for (let searchLine = line + 1; searchLine < document.lineCount; searchLine++) {
       const searchNode = findNodeAtPosition(tree, searchLine);
       if (searchNode) {
-        
+
         // For block scope, we need to handle differently
         // Dictionary/list/set nodes might be children of assignments
         let targetNode: Node | null = null;
@@ -305,7 +305,6 @@ async function resolveSemanticWithTreeSitter(
             };
           }
 
-          
           return {
             startLine: line + 1, // Start from the guard line (1-based)
             endLine: bounds.endLine,
