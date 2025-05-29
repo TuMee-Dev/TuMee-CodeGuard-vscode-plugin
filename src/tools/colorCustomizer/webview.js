@@ -228,21 +228,28 @@ function checkForChanges() {
   
   // Compare against original colors - need to normalize the format
   let hasChanges = false;
-  if (originalColors && originalColors.permissions) {
+  if (originalColors) {
+    // Check mix pattern first
+    if (originalColors.mixPattern !== freshColors.mixPattern) {
+      hasChanges = true;
+    }
+    
     // Compare each permission's colors
-    for (const [key, original] of Object.entries(originalColors.permissions)) {
-      const current = freshColors.permissions[key];
-      if (!current) continue;
-      
-      // Check if any values differ
-      if (original.enabled !== current.enabled ||
-          original.color !== current.color ||
-          original.minimapColor !== current.minimapColor ||
-          Math.abs((original.transparency || 0.2) - current.transparency) > 0.001 ||
-          Math.abs((original.borderOpacity || 1.0) - current.borderOpacity) > 0.001) {
-        hasChanges = true;
-        console.log(`Change detected in ${key}:`, original, current);
-        break;
+    if (!hasChanges && originalColors.permissions) {
+      for (const [key, original] of Object.entries(originalColors.permissions)) {
+        const current = freshColors.permissions[key];
+        if (!current) continue;
+        
+        // Check if any values differ
+        if (original.enabled !== current.enabled ||
+            original.color !== current.color ||
+            original.minimapColor !== current.minimapColor ||
+            Math.abs((original.transparency || 0.2) - current.transparency) > 0.001 ||
+            Math.abs((original.borderOpacity || 1.0) - current.borderOpacity) > 0.001) {
+          hasChanges = true;
+          console.log(`Change detected in ${key}:`, original, current);
+          break;
+        }
       }
     }
   }
@@ -297,10 +304,40 @@ function updateLine(lineNum, aiPerm, humanPerm) {
       borderColor = aiConfig.minimapColor || aiConfig.color;
       borderOpacity = aiConfig.borderOpacity || 1.0;
     } else {
-      bgColor = aiConfig.color;
-      opacity = aiConfig.transparency;
-      borderColor = aiConfig.minimapColor || aiConfig.color;
-      borderOpacity = aiConfig.borderOpacity || 1.0;
+      // Both enabled - apply mix pattern
+      const mixPattern = colors.mixPattern || 'average';
+      const mixResult = applyMixPattern(mixPattern, {
+        aiColor: aiConfig.color,
+        humanColor: humanConfig.color,
+        aiOpacity: aiConfig.transparency,
+        humanOpacity: humanConfig.transparency
+      });
+      
+      if (mixResult.backgroundColor) {
+        const rgba = parseRgba(mixResult.backgroundColor);
+        if (rgba) {
+          bgColor = rgbaToHex(rgba.r, rgba.g, rgba.b);
+          opacity = rgba.a;
+        }
+      }
+      if (mixResult.borderColor) {
+        const rgba = parseRgba(mixResult.borderColor);
+        if (rgba) {
+          borderColor = rgbaToHex(rgba.r, rgba.g, rgba.b);
+          // Use correct transparency based on mix pattern
+          if (mixPattern === 'humanBorder') {
+            borderOpacity = humanConfig.borderOpacity || 1.0;
+          } else if (mixPattern === 'aiBorder') {
+            borderOpacity = aiConfig.borderOpacity || 1.0;
+          } else {
+            borderOpacity = rgba.a;
+          }
+        }
+      } else {
+        // Use AI minimap for regular border
+        borderColor = aiConfig.minimapColor || aiConfig.color;
+        borderOpacity = aiConfig.borderOpacity || 1.0;
+      }
     }
   } else if (aiPerm) {
     let configKey;
@@ -376,10 +413,36 @@ function updateExample(id, type, perm) {
       borderColor = aiConfig.minimapColor || aiConfig.color;
       borderOpacity = aiConfig.borderOpacity || 1.0;
     } else {
-      bgColor = aiConfig.color;
-      opacity = aiConfig.transparency;
-      borderColor = aiConfig.minimapColor || aiConfig.color;
-      borderOpacity = aiConfig.borderOpacity || 1.0;
+      // Both enabled - apply mix pattern
+      const mixPattern = colors.mixPattern || 'average';
+      const mixResult = applyMixPattern(mixPattern, {
+        aiColor: aiConfig.color,
+        humanColor: humanConfig.color,
+        aiOpacity: aiConfig.transparency,
+        humanOpacity: humanConfig.transparency
+      });
+      
+      if (mixResult.backgroundColor) {
+        const rgba = parseRgba(mixResult.backgroundColor);
+        if (rgba) {
+          bgColor = rgbaToHex(rgba.r, rgba.g, rgba.b);
+          opacity = rgba.a;
+        }
+      }
+      if (mixResult.borderColor) {
+        const rgba = parseRgba(mixResult.borderColor);
+        if (rgba) {
+          borderColor = rgbaToHex(rgba.r, rgba.g, rgba.b);
+          // Use correct transparency based on mix pattern
+          if (mixPattern === 'humanBorder') {
+            borderOpacity = humanConfig.borderOpacity || 1.0;
+          } else if (mixPattern === 'aiBorder') {
+            borderOpacity = aiConfig.borderOpacity || 1.0;
+          } else {
+            borderOpacity = rgba.a;
+          }
+        }
+      }
     }
   } else {
     let configKey;
@@ -404,10 +467,18 @@ function updateExample(id, type, perm) {
   
   if (bgColor) {
     const rgb = hexToRgb(bgColor);
-    const borderRgb = hexToRgb(borderColor);
-    if (rgb && borderRgb) {
+    if (rgb) {
       elem.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + opacity + ')';
-      elem.style.borderLeft = '3px solid rgba(' + borderRgb.r + ', ' + borderRgb.g + ', ' + borderRgb.b + ', ' + borderOpacity + ')';
+    }
+    
+    // Apply border from mix pattern or regular border
+    if (borderColor) {
+      const borderRgb = hexToRgb(borderColor);
+      if (borderRgb) {
+        elem.style.borderLeft = '3px solid rgba(' + borderRgb.r + ', ' + borderRgb.g + ', ' + borderRgb.b + ', ' + borderOpacity + ')';
+      }
+    } else {
+      elem.style.borderLeft = '';
     }
   } else {
     elem.style.backgroundColor = '';
@@ -462,9 +533,13 @@ function getColors() {
     };
   });
   
+  const mixPatternSelect = document.getElementById('mixPatternSelect');
+  const mixPattern = mixPatternSelect ? mixPatternSelect.value : 'average';
+  
   return {
     permissions: permissions,
-    borderBarEnabled: true
+    borderBarEnabled: true,
+    mixPattern: mixPattern
   };
 }
 
@@ -524,6 +599,14 @@ function updateAllColors(colors) {
     updateColorPreview(key);
   });
   
+  // Set mix pattern from loaded colors
+  if (colors.mixPattern) {
+    const mixPatternSelect = document.getElementById('mixPatternSelect');
+    if (mixPatternSelect) {
+      mixPatternSelect.value = colors.mixPattern;
+    }
+  }
+  
   updatePreview();
   
   // Set currentColors to match what's in the UI after all updates
@@ -547,6 +630,91 @@ function applyPreset(presetName) {
   }
 }
 window.applyPreset = applyPreset;
+
+function updateMixPattern(pattern) {
+  updatePreview();
+}
+window.updateMixPattern = updateMixPattern;
+
+function blendColors(hex1, hex2) {
+  const r1 = parseInt(hex1.slice(1, 3), 16);
+  const g1 = parseInt(hex1.slice(3, 5), 16);
+  const b1 = parseInt(hex1.slice(5, 7), 16);
+
+  const r2 = parseInt(hex2.slice(1, 3), 16);
+  const g2 = parseInt(hex2.slice(3, 5), 16);
+  const b2 = parseInt(hex2.slice(5, 7), 16);
+
+  const r = Math.round((r1 + r2) / 2);
+  const g = Math.round((g1 + g2) / 2);
+  const b = Math.round((b1 + b2) / 2);
+
+  return rgbaToHex(r, g, b);
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function parseRgba(rgba) {
+  const match = rgba.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+  if (match) {
+    return {
+      r: parseInt(match[1]),
+      g: parseInt(match[2]),
+      b: parseInt(match[3]),
+      a: parseFloat(match[4])
+    };
+  }
+  return null;
+}
+
+function rgbaToHex(r, g, b) {
+  return "#" + [r, g, b].map(x => {
+    const hex = x.toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  }).join("");
+}
+
+function applyMixPattern(pattern, config) {
+  switch (pattern) {
+    case 'average':
+      return {
+        backgroundColor: hexToRgba(
+          blendColors(config.aiColor, config.humanColor),
+          (config.aiOpacity + config.humanOpacity) / 2
+        )
+      };
+    case 'humanPriority':
+      return {
+        backgroundColor: hexToRgba(config.humanColor, config.humanOpacity)
+      };
+    case 'aiPriority':
+      return {
+        backgroundColor: hexToRgba(config.aiColor, config.aiOpacity)
+      };
+    case 'aiBorder':
+      return {
+        backgroundColor: hexToRgba(config.humanColor, config.humanOpacity),
+        borderColor: hexToRgba(config.aiColor, config.aiOpacity)
+      };
+    case 'humanBorder':
+      return {
+        backgroundColor: hexToRgba(config.aiColor, config.aiOpacity),
+        borderColor: hexToRgba(config.humanColor, config.humanOpacity)
+      };
+    default:
+      return {
+        backgroundColor: hexToRgba(
+          blendColors(config.aiColor, config.humanColor),
+          (config.aiOpacity + config.humanOpacity) / 2
+        )
+      };
+  }
+}
 
 function updateDeleteButton() {
   const select = document.getElementById('themeSelect');
