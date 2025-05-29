@@ -22,7 +22,6 @@ export interface MixPatternResult {
   fallbackToSolid?: boolean;
 }
 
-
 /**
  * Blends two hex colors
  */

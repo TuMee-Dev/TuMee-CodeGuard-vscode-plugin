@@ -3,7 +3,7 @@
  * This module wraps the pure guard processing core with VSCode-specific interfaces
  */
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import type { GuardTag, LinePermission } from '../types/guardTypes';
 import type {
   IDocument,
@@ -23,6 +23,7 @@ import { isLineAComment } from './commentDetector';
 import { resolveSemantic } from './scopeResolver';
 import { logError, validateDocument } from './errorHandler';
 import { DebugLogger } from './debugLogger';
+import { configManager } from './configurationManager';
 
 /**
  * Adapter to convert vscode.TextDocument to IDocument
@@ -117,8 +118,8 @@ export async function parseGuardTags(
   }
 
   const docAdapter = new DocumentAdapter(document);
-  const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-  const configAdapter = new ConfigurationAdapter(config);
+  const cm = configManager();
+  const configAdapter = new ConfigurationAdapter(cm.getRawConfiguration());
 
   try {
     return await parseGuardTagsCore(
@@ -153,8 +154,8 @@ export function getLinePermissions(
   guardTags: GuardTag[]
 ): Map<number, LinePermission> {
   const docAdapter = new DocumentAdapter(document);
-  const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-  const configAdapter = new ConfigurationAdapter(config);
+  const cm = configManager();
+  const configAdapter = new ConfigurationAdapter(cm.getRawConfiguration());
 
   return getLinePermissionsCore(
     docAdapter,

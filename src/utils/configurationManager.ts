@@ -3,7 +3,8 @@
  * Provides a singleton interface to VS Code configuration
  */
 
-import { workspace, ConfigurationChangeEvent, Disposable, EventEmitter } from 'vscode';
+import type { ConfigurationChangeEvent, Disposable } from 'vscode';
+import { workspace, EventEmitter } from 'vscode';
 import { getExtensionWithOptionalName } from '.';
 
 /**
@@ -14,7 +15,11 @@ export const CONFIG_KEYS = {
   CURRENT_THEME: 'currentTheme',
   CUSTOM_THEMES: 'customThemes',
   CODE_DECORATION_OPACITY: 'codeDecorationOpacity',
-  
+  GUARD_COLORS_COMPLETE: 'guardColorsComplete',
+  SELECTED_THEME: 'selectedTheme',
+  DEFAULT_AI_WRITE: 'defaultAiWrite',
+  DEFAULT_HUMAN_WRITE: 'defaultHumanWrite',
+
   // Performance settings
   ENABLE_DEBUG_LOGGING: 'enableDebugLogging',
   ENABLE_PERFORMANCE_MONITORING: 'enablePerformanceMonitoring',
@@ -22,13 +27,13 @@ export const CONFIG_KEYS = {
   MAX_FILE_SIZE: 'maxFileSize',
   ENABLE_CHUNKED_PROCESSING: 'enableChunkedProcessing',
   CHUNK_SIZE: 'chunkSize',
-  
+
   // ACL settings
   ACL_CLI_PATH: 'aclCliPath',
-  
+
   // File customization
   ITEMS: 'items',
-  
+
   // Guard processing
   ENABLE_VALIDATION_MODE: 'enableValidationMode',
   VALIDATION_ON_SAVE: 'validationOnSave',
@@ -44,6 +49,10 @@ interface ConfigurationTypes {
   [CONFIG_KEYS.CURRENT_THEME]: string;
   [CONFIG_KEYS.CUSTOM_THEMES]: Record<string, any>;
   [CONFIG_KEYS.CODE_DECORATION_OPACITY]: number;
+  [CONFIG_KEYS.GUARD_COLORS_COMPLETE]: any;
+  [CONFIG_KEYS.SELECTED_THEME]: string;
+  [CONFIG_KEYS.DEFAULT_AI_WRITE]: boolean;
+  [CONFIG_KEYS.DEFAULT_HUMAN_WRITE]: boolean;
   [CONFIG_KEYS.ENABLE_DEBUG_LOGGING]: boolean;
   [CONFIG_KEYS.ENABLE_PERFORMANCE_MONITORING]: boolean;
   [CONFIG_KEYS.DECORATION_UPDATE_DELAY]: number;
@@ -65,16 +74,16 @@ class ConfigurationManager {
   private namespace: string;
   private disposables: Disposable[] = [];
   private changeEmitter = new EventEmitter<ConfigKey>();
-  
+
   private constructor() {
     this.namespace = getExtensionWithOptionalName();
-    
+
     // Listen for configuration changes
     this.disposables.push(
       workspace.onDidChangeConfiguration(this.handleConfigurationChange.bind(this))
     );
   }
-  
+
   /**
    * Get the singleton instance
    */
@@ -84,29 +93,40 @@ class ConfigurationManager {
     }
     return ConfigurationManager.instance;
   }
-  
+
   /**
    * Get a configuration value with type safety
    */
   get<K extends ConfigKey>(key: K): ConfigurationTypes[K];
   get<K extends ConfigKey>(key: K, defaultValue: ConfigurationTypes[K]): ConfigurationTypes[K];
-  get<K extends ConfigKey>(key: K, defaultValue?: ConfigurationTypes[K]): ConfigurationTypes[K] | undefined {
+  get<T = any>(key: string, defaultValue?: T): T;
+  get<T = any>(key: string | ConfigKey, defaultValue?: T): T | undefined {
     const config = workspace.getConfiguration(this.namespace);
-    return config.get<ConfigurationTypes[K]>(key, defaultValue!);
+    return config.get<T>(key, defaultValue!);
   }
-  
+
   /**
    * Update a configuration value
    */
   async update<K extends ConfigKey>(
-    key: K, 
-    value: ConfigurationTypes[K], 
+    key: K,
+    value: ConfigurationTypes[K],
+    global?: boolean
+  ): Promise<void>;
+  async update<T = any>(
+    key: string,
+    value: T,
+    global?: boolean
+  ): Promise<void>;
+  async update<T = any>(
+    key: string | ConfigKey,
+    value: T,
     global: boolean = true
   ): Promise<void> {
     const config = workspace.getConfiguration(this.namespace);
     await config.update(key, value, global);
   }
-  
+
   /**
    * Check if a configuration has a value
    */
@@ -114,7 +134,7 @@ class ConfigurationManager {
     const config = workspace.getConfiguration(this.namespace);
     return config.has(key);
   }
-  
+
   /**
    * Get the underlying VS Code configuration object
    * Use sparingly - prefer typed methods above
@@ -122,7 +142,7 @@ class ConfigurationManager {
   getRawConfiguration() {
     return workspace.getConfiguration(this.namespace);
   }
-  
+
   /**
    * Get configuration for a different namespace
    * Useful for accessing theme-specific configs
@@ -130,12 +150,12 @@ class ConfigurationManager {
   getConfiguration(namespace: string) {
     return workspace.getConfiguration(namespace);
   }
-  
+
   /**
    * Subscribe to configuration changes for specific keys
    */
   onDidChangeConfiguration(
-    key: ConfigKey, 
+    key: ConfigKey,
     listener: (e: ConfigurationChangeEvent) => void
   ): Disposable {
     const disposable = this.changeEmitter.event((changedKey) => {
@@ -147,11 +167,11 @@ class ConfigurationManager {
         } as ConfigurationChangeEvent);
       }
     });
-    
+
     this.disposables.push(disposable);
     return disposable;
   }
-  
+
   /**
    * Handle configuration changes
    */
@@ -163,7 +183,7 @@ class ConfigurationManager {
       }
     }
   }
-  
+
   /**
    * Dispose of resources
    */
@@ -183,7 +203,7 @@ export const configManager = () => ConfigurationManager.getInstance();
  * Convenience functions for common operations
  */
 export const getConfig = <K extends ConfigKey>(key: K, defaultValue?: ConfigurationTypes[K]) => {
-  return configManager().get(key, defaultValue!);
+  return configManager().get(key, defaultValue);
 };
 
 export const updateConfig = async <K extends ConfigKey>(key: K, value: ConfigurationTypes[K]) => {

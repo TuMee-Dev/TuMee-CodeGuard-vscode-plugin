@@ -1,11 +1,11 @@
 import type { Event, ExtensionContext, FileDecorationProvider, Uri } from 'vscode';
-import { EventEmitter, FileDecoration, ThemeColor, extensions, window, workspace } from 'vscode';
+import { EventEmitter, FileDecoration, ThemeColor, extensions, window, workspace, commands } from 'vscode';
 import type { Change, ExtensionItem, GitAPIState, GitRepository } from '@/types';
 import { cleanPath, getExtensionWithOptionalName } from '@/utils';
 import { isCliAvailable, getAclCliPath } from '@/utils/acl';
 import { getACLCache } from '@/utils/aclCache';
-import { commands } from 'vscode';
 import { errorHandler } from '@/utils/errorHandler';
+import { configManager, CONFIG_KEYS } from '@/utils/configurationManager';
 
 const GIT_EXTENSION_ID = 'vscode.git';
 const GIT_API_VERSION = 1;
@@ -87,8 +87,8 @@ export class FileCustomizationProvider implements FileDecorationProvider {
 
     workspace.onDidChangeConfiguration((e) => {
       if (
-        e.affectsConfiguration(getExtensionWithOptionalName('items')) ||
-        e.affectsConfiguration(getExtensionWithOptionalName('colorChangedFiles'))
+        e.affectsConfiguration(`${getExtensionWithOptionalName()}.items`) ||
+        e.affectsConfiguration(`${getExtensionWithOptionalName()}.colorChangedFiles`)
       ) {
         this.fireOnChange();
       }
@@ -174,11 +174,9 @@ export class FileCustomizationProvider implements FileDecorationProvider {
   }
 
   public async getDecorationValue(uri: Uri): Promise<{ color?: ThemeColor; badge?: string; tooltip?: string } | null> {
-    const items =
-      workspace.getConfiguration(getExtensionWithOptionalName()).get<Array<ExtensionItem>>('items') || [];
-    const ignoreChangedFiles = workspace
-      .getConfiguration(getExtensionWithOptionalName())
-      .get<boolean>('colorChangedFiles');
+    const cm = configManager();
+    const items = cm.get(CONFIG_KEYS.ITEMS, [] as Array<ExtensionItem>);
+    const ignoreChangedFiles = cm.get('colorChangedFiles', false);
 
     const isUriChanged = this.isUriChanged(uri, ignoreChangedFiles);
     const projectPath = cleanPath(uri.fsPath);

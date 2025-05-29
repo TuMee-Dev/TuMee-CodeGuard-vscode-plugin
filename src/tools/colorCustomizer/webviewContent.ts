@@ -21,7 +21,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
   // Read the webview JavaScript from external file
   const jsPath = path.join(__dirname, 'tools', 'colorCustomizer', 'webview.js');
   const jsContent = fs.readFileSync(jsPath, 'utf8');
-  
+
   // Replace the PREVIEW_LINES placeholder with actual data
   return jsContent.replace('__PREVIEW_LINES_PLACEHOLDER__', JSON.stringify(previewLines));
 }

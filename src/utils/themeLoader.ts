@@ -4,7 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { GuardColors, PermissionColorConfig } from '../tools/colorCustomizer';
+import type { GuardColors, PermissionColorConfig } from '../tools/colorCustomizer';
 import { MixPattern } from '../types/mixPatterns';
 
 export interface ThemeConfig {
@@ -38,17 +38,17 @@ export function loadThemeConfiguration(): ThemesConfiguration {
     // In production, __dirname is dist/utils, so we need to go up one level
     // In development, it might be src/utils
     let themesPath = path.join(__dirname, '..', 'resources', 'themes.json');
-    
+
     // If not found in the expected location, try the dist location
     if (!fs.existsSync(themesPath)) {
       themesPath = path.join(__dirname, '..', '..', 'dist', 'resources', 'themes.json');
     }
-    
+
     // If still not found, try relative to process.cwd() for CLI usage
     if (!fs.existsSync(themesPath)) {
       themesPath = path.join(process.cwd(), 'dist', 'resources', 'themes.json');
     }
-    
+
     const themesData = fs.readFileSync(themesPath, 'utf8');
     cachedThemes = JSON.parse(themesData) as ThemesConfiguration;
     return cachedThemes;
@@ -67,7 +67,7 @@ export function loadThemeConfiguration(): ThemesConfiguration {
  */
 function convertThemeToGuardColors(themeId: string, theme: ThemeConfig, defaultMixPattern: string): { name: string; colors: GuardColors } {
   const permissions: Record<string, PermissionColorConfig> = {};
-  
+
   // Convert each permission
   for (const [permId, config] of Object.entries(theme.permissions)) {
     permissions[permId] = {

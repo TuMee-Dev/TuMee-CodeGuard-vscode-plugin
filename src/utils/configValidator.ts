@@ -1,7 +1,8 @@
 import type { ConfigurationChangeEvent } from 'vscode';
-import { workspace, window } from 'vscode';
+import { window } from 'vscode';
 import { getExtensionWithOptionalName } from './index';
 import { errorHandler } from './errorHandler';
+import { configManager } from './configurationManager';
 
 interface ValidationResult {
   valid: boolean;
@@ -208,10 +209,10 @@ export class ConfigValidator {
 
     this.lastValidationTime = now;
     const result: ValidationResult = { valid: true, errors: [], warnings: [] };
-    const config = workspace.getConfiguration(getExtensionWithOptionalName());
+    const cm = configManager();
 
     for (const [key, rules] of Object.entries(CONFIG_RULES)) {
-      const value = config.get(key);
+      const value = cm.get(key as any);
 
       // Check if required
       if (rules.required && (value === undefined || value === null)) {
@@ -300,31 +301,31 @@ export class ConfigValidator {
    * Auto-fix common configuration issues
    */
   async autoFixConfiguration(): Promise<void> {
-    const config = workspace.getConfiguration(getExtensionWithOptionalName());
+    const cm = configManager();
     let changed = false;
 
     // Fix opacity values out of range
-    const opacity = config.get<number>('codeDecorationOpacity');
+    const opacity = cm.get('codeDecorationOpacity' as any, 0.1) as number;
     if (opacity !== undefined && (opacity < 0 || opacity > 1)) {
-      await config.update('codeDecorationOpacity', Math.max(0, Math.min(1, opacity)), true);
+      await cm.update('codeDecorationOpacity' as any, Math.max(0, Math.min(1, opacity)));
       changed = true;
     }
 
     // Fix guard colors opacity
-    const guardColors = config.get<Record<string, unknown>>('guardColors');
+    const guardColors = cm.get('guardColors' as any) as Record<string, unknown> | undefined;
     if (guardColors && guardColors.opacity !== undefined) {
       const opacity = guardColors.opacity as number;
       if (opacity < 0 || opacity > 1) {
         guardColors.opacity = Math.max(0, Math.min(1, opacity));
-        await config.update('guardColors', guardColors, true);
+        await cm.update('guardColors' as any, guardColors);
         changed = true;
       }
     }
 
     // Fix numeric values out of range
-    const decorationDelay = config.get<number>('decorationUpdateDelay');
+    const decorationDelay = cm.get('decorationUpdateDelay' as any, 300) as number;
     if (decorationDelay !== undefined && (decorationDelay < 100 || decorationDelay > 1000)) {
-      await config.update('decorationUpdateDelay', Math.max(100, Math.min(1000, decorationDelay)), true);
+      await cm.update('decorationUpdateDelay' as any, Math.max(100, Math.min(1000, decorationDelay)));
       changed = true;
     }
 

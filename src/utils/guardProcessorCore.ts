@@ -109,7 +109,6 @@ function removeInterruptedContextGuards(guardStack: GuardStackEntry[]): void {
   }
 }
 
-
 /**
  * Clear the scope cache for a document
  */

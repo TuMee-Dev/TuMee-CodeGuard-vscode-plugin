@@ -2,10 +2,11 @@
 
 import type * as vscode from 'vscode';
 import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, type StatusBarItem, window, workspace, commands, ThemeColor, Position, Range, StatusBarAlignment } from 'vscode';
-import { registerFileDecorationProvider, FileCustomizationProvider } from '@/tools/file-customization-provider';
+import type { FileCustomizationProvider } from '@/tools/file-customization-provider';
+import { registerFileDecorationProvider } from '@/tools/file-customization-provider';
 import { registerContextMenu } from '@/tools/register-context-menu';
 import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
-import { firstTimeRun, getExtensionWithOptionalName } from '@/utils';
+import { firstTimeRun } from '@/utils';
 import { parseGuardTags, getLinePermissions, markLinesModified, getDefaultPermissions } from '@/utils/guardProcessor';
 import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
 import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTypes';
@@ -20,6 +21,7 @@ import { DebugLogger } from '@/utils/debugLogger';
 import { backgroundProcessor } from '@/utils/backgroundProcessor';
 import { registerValidationCommands } from '@/utils/validationMode';
 import { DecorationTypeFactory } from '@/utils/decorationTypeFactory';
+import { configManager, CONFIG_KEYS } from '@/utils/configurationManager';
 
 let disposables: Disposable[] = [];
 // Map of decoration types for all permission combinations
@@ -279,11 +281,11 @@ export async function activate(context: ExtensionContext) {
 function initializeCodeDecorations(_context: ExtensionContext) {
   const factory = new DecorationTypeFactory();
   const newDecorationTypes = factory.createDecorationTypes();
-  
+
   // Clear existing decorations
   decorationTypes.forEach(decoration => decoration.dispose());
   decorationTypes.clear();
-  
+
   // Copy the new decoration types
   newDecorationTypes.forEach((decoration, key) => {
     decorationTypes.set(key, decoration);
@@ -302,8 +304,8 @@ function triggerUpdateDecorations(document: TextDocument) {
   }
 
   // Get debounce delay from configuration
-  const config = workspace.getConfiguration(getExtensionWithOptionalName());
-  const delay = config.get<number>('decorationUpdateDelay', 300);
+  const cm = configManager();
+  const delay = cm.get(CONFIG_KEYS.DECORATION_UPDATE_DELAY, 300);
 
   // Debounce the update
   decorationUpdateTimer = setTimeout(() => {
@@ -339,8 +341,8 @@ async function updateCodeDecorations(document: TextDocument): Promise<void> {
   if (!text) return;
 
   // Performance optimization - skip large files over threshold
-  const config = workspace.getConfiguration(getExtensionWithOptionalName());
-  const maxFileSize = config.get<number>('maxFileSize', 1000000);
+  const cm = configManager();
+  const maxFileSize = cm.get(CONFIG_KEYS.MAX_FILE_SIZE, 1000000);
 
   if (text.length > maxFileSize) {
     console.warn(`File too large for decoration (${text.length} bytes, max: ${maxFileSize}). Skipping.`);
@@ -489,8 +491,8 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     const defaults = getDefaultPermissions();
 
     // Get debug flag
-    const config = workspace.getConfiguration('tumee-vscode-plugin');
-    const debugEnabled = config.get<boolean>('enableDebugLogging', false);
+    const cm = configManager();
+    const debugEnabled = cm.get(CONFIG_KEYS.ENABLE_DEBUG_LOGGING, false);
 
     // Decorate each line - just use what guardProcessor calculated
     for (let i = 0; i < document.lineCount; i++) {

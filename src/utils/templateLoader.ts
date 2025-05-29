@@ -4,6 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { withErrorRethrow } from './errorWrapper';
 
 export interface TemplateReplacements {
   [key: string]: string | number | boolean;
@@ -14,34 +15,35 @@ const templateCache: Map<string, string> = new Map();
 /**
  * Load an HTML template from file
  */
-export function loadTemplate(templateName: string): string {
+export async function loadTemplate(templateName: string): Promise<string> {
   const cacheKey = templateName;
 
   if (templateCache.has(cacheKey)) {
     return templateCache.get(cacheKey) || '';
   }
 
-  try {
-    // Try multiple paths to find the template
-    let templatePath = path.join(__dirname, '..', 'resources', templateName);
+  return withErrorRethrow(
+    async () => {
+      // Try multiple paths to find the template
+      let templatePath = path.join(__dirname, '..', 'resources', templateName);
 
-    // If not found in the expected location, try the dist location
-    if (!fs.existsSync(templatePath)) {
-      templatePath = path.join(__dirname, '..', '..', 'dist', 'resources', templateName);
-    }
+      // If not found in the expected location, try the dist location
+      if (!fs.existsSync(templatePath)) {
+        templatePath = path.join(__dirname, '..', '..', 'dist', 'resources', templateName);
+      }
 
-    // If still not found, try relative to process.cwd()
-    if (!fs.existsSync(templatePath)) {
-      templatePath = path.join(process.cwd(), 'dist', 'resources', templateName);
-    }
+      // If still not found, try relative to process.cwd()
+      if (!fs.existsSync(templatePath)) {
+        templatePath = path.join(process.cwd(), 'dist', 'resources', templateName);
+      }
 
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    templateCache.set(cacheKey, templateContent);
-    return templateContent;
-  } catch (error) {
-    console.error(`Failed to load template ${templateName}:`, error);
-    throw new Error(`Template ${templateName} not found`);
-  }
+      const templateContent = fs.readFileSync(templatePath, 'utf8');
+      templateCache.set(cacheKey, templateContent);
+      return templateContent;
+    },
+    `Failed to load template ${templateName}`,
+    `Template ${templateName} not found`
+  );
 }
 
 /**
@@ -65,11 +67,11 @@ export function replaceTemplatePlaceholders(
 /**
  * Load and process a template with replacements
  */
-export function processTemplate(
+export async function processTemplate(
   templateName: string,
   replacements: TemplateReplacements
-): string {
-  const template = loadTemplate(templateName);
+): Promise<string> {
+  const template = await loadTemplate(templateName);
   return replaceTemplatePlaceholders(template, replacements);
 }
 

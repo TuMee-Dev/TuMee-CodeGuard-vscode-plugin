@@ -2,14 +2,15 @@
  * Factory for creating VSCode decoration types based on guard permissions
  */
 
-import { window, workspace, TextEditorDecorationType, ThemeColor } from 'vscode';
-import { getExtensionWithOptionalName } from '.';
+import type { TextEditorDecorationType } from 'vscode';
+import { window, ThemeColor } from 'vscode';
 import { DEFAULT_COLORS, COLOR_THEMES } from '../tools/colorCustomizer';
 import { MixPattern } from '../types/mixPatterns';
 import type { GuardColors } from '../types/colorTypes';
 import { renderMixPattern, getMixedBorderColor } from './mixPatternRenderer';
 import { hexToRgba } from './colorUtils';
 import { DebugLogger } from './debugLogger';
+import { configManager, CONFIG_KEYS } from './configurationManager';
 
 interface PermissionColorInfo {
   color: string;
@@ -40,8 +41,8 @@ export class DecorationTypeFactory {
     this.decorationTypes.clear();
 
     const guardColorsComplete = this.loadThemeConfiguration();
-    const config = workspace.getConfiguration(getExtensionWithOptionalName());
-    const opacity = config.get<number>('codeDecorationOpacity') || 0.1;
+    const cm = configManager();
+    const opacity = cm.get(CONFIG_KEYS.CODE_DECORATION_OPACITY, 0.1);
 
     const {
       colors,
@@ -73,25 +74,25 @@ export class DecorationTypeFactory {
    * Load theme configuration from VSCode settings
    */
   private loadThemeConfiguration(): GuardColors {
-    const config = workspace.getConfiguration(getExtensionWithOptionalName());
-    const selectedTheme = config.get<string>('selectedTheme');
-    
+    const cm = configManager();
+    const selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, '');
+
     if (selectedTheme) {
       // Check if it's a built-in theme
       const builtInTheme = COLOR_THEMES[selectedTheme];
       if (builtInTheme) {
         return builtInTheme.colors;
       }
-      
+
       // Check custom themes
-      const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+      const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
       if (customThemes[selectedTheme]) {
         return customThemes[selectedTheme];
       }
     }
-    
+
     // Fallback to guardColorsComplete or DEFAULT_COLORS
-    return config.get<GuardColors>('guardColorsComplete') || DEFAULT_COLORS;
+    return cm.get<GuardColors>(CONFIG_KEYS.GUARD_COLORS_COMPLETE) || DEFAULT_COLORS;
   }
 
   /**
@@ -207,7 +208,6 @@ export class DecorationTypeFactory {
       read: colors.contextRead
     };
 
-
     let baseColor: string = '#000000'; // Default fallback color
     let effectiveOpacity = opacity;
 
@@ -287,10 +287,10 @@ export class DecorationTypeFactory {
   ): void {
     const colorInfo = this.getPermissionColor(key, colors, opacity);
     const { color } = colorInfo;
-    
+
     // Get effective opacity - need to look up by permission type, not full key
     let effectiveOpacity = colorInfo.opacity;
-    
+
     // For context types, look up transparency by contextRead/contextWrite
     if (key.includes('Context')) {
       if (key.includes('WriteContext')) {
@@ -305,7 +305,7 @@ export class DecorationTypeFactory {
 
     // Check if this permission is enabled
     const isPermissionEnabled = permissionEnabledStates[key] !== false;
-    
+
     // Skip creating decoration if permission is disabled (unless it's the default state)
     if (!isPermissionEnabled && key !== 'aiRead_humanWrite') {
       return;
@@ -321,7 +321,7 @@ export class DecorationTypeFactory {
     const parts = key.split('_');
     const aiPart = parts[0].replace('Context', '');
     const humanPart = parts[1];
-    
+
     const aiKey = aiPart;
     const humanKey = humanPart;
     const isMixed = colors[aiKey] && colors[humanKey];

@@ -66,10 +66,10 @@ function initializeDecorationTypes(): void {
   }
 }
 
-export function showValidationReport(
+export async function showValidationReport(
   context: ExtensionContext,
   result: ValidationResult
-): void {
+): Promise<void> {
   // Create debug channel if needed
   if (!debugChannel) {
     debugChannel = window.createOutputChannel('TuMee Debug');
@@ -103,7 +103,7 @@ export function showValidationReport(
   if (validationPanel) {
     // Panel exists, just reveal and update
     validationPanel.reveal(ViewColumn.Two, false);
-    validationPanel.webview.html = getWebviewContent(result);
+    validationPanel.webview.html = await getWebviewContent(result);
   } else {
     // Create new panel
     validationPanel = window.createWebviewPanel(
@@ -122,7 +122,7 @@ export function showValidationReport(
     });
 
     // Set content FIRST
-    const html = getWebviewContent(result);
+    const html = await getWebviewContent(result);
 
     // WORKAROUND: Delay setting HTML content to ensure panel is ready
     // This fixes the first-time display issue
@@ -164,7 +164,7 @@ export function showValidationReport(
   highlightMismatchedRegions(result.discrepancies, result.file_path);
 }
 
-function getWebviewContent(result: ValidationResult): string {
+async function getWebviewContent(result: ValidationResult): Promise<string> {
   const statusClass = result.status === ValidationStatus.Match ? 'success' : 'error';
   const statusIcon = result.status === ValidationStatus.Match ? '✅' : '❌';
 

@@ -1,12 +1,12 @@
-import { workspace } from 'vscode';
+import { configManager, CONFIG_KEYS } from './configurationManager';
 
 /**
  * Debug logger that only logs when debug logging is enabled
  */
 export class DebugLogger {
   private static isEnabled(): boolean {
-    const config = workspace.getConfiguration('tumee-vscode-plugin');
-    return config.get<boolean>('enableDebugLogging', false);
+    const cm = configManager();
+    return cm.get(CONFIG_KEYS.ENABLE_DEBUG_LOGGING, false);
   }
 
   static log(...args: unknown[]): void {

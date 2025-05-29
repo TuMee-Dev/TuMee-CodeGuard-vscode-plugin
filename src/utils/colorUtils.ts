@@ -23,10 +23,10 @@ export function hexToRgba(hex: string, alpha: number): string {
  * @returns Hex color string
  */
 export function rgbToHex(r: number, g: number, b: number): string {
-  return '#' + [r, g, b].map(x => {
+  return `#${  [r, g, b].map(x => {
     const hex = x.toString(16);
-    return hex.length === 1 ? '0' + hex : hex;
-  }).join('');
+    return hex.length === 1 ? `0${  hex}` : hex;
+  }).join('')}`;
 }
 
 /**
@@ -52,7 +52,7 @@ export function parseColor(color: string): { r: number, g: number, b: number } |
       };
     }
   }
-  
+
   // Handle rgb/rgba colors
   const rgbMatch = color.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
   if (rgbMatch) {
@@ -62,7 +62,7 @@ export function parseColor(color: string): { r: number, g: number, b: number } |
       b: parseInt(rgbMatch[3], 10)
     };
   }
-  
+
   return null;
 }
 
@@ -74,7 +74,7 @@ export function parseColor(color: string): { r: number, g: number, b: number } |
 export function getColorBrightness(color: string): number {
   const rgb = parseColor(color);
   if (!rgb) return 128; // Default to medium brightness
-  
+
   // YIQ formula for perceived brightness
   return (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
 }

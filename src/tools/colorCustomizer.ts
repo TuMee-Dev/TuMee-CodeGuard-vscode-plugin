@@ -2,8 +2,10 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getWebviewStyles, getWebviewJavaScript } from './colorCustomizer/webviewContent';
-import { MixPattern, DEFAULT_MIX_PATTERN } from '../types/mixPatterns';
+import type { MixPattern } from '../types/mixPatterns';
+import { DEFAULT_MIX_PATTERN } from '../types/mixPatterns';
 import { getColorThemes } from '../utils/themeLoader';
+import { configManager, CONFIG_KEYS } from '../utils/configurationManager';
 
 export interface PermissionColorConfig {
   enabled: boolean;                // Whether to use own color or other's
@@ -219,7 +221,7 @@ export class ColorCustomizerPanel {
   }
 
   private async _saveColors(colors: GuardColors, fromTheme: boolean = false) {
-    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+    const cm = configManager();
 
     // If we're editing a system theme, prompt to create a new theme
     if (this._isSystemTheme && !fromTheme) {
@@ -230,7 +232,7 @@ export class ColorCustomizerPanel {
           if (!value || value.trim().length === 0) {
             return 'Theme name cannot be empty';
           }
-          const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+          const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
           if (customThemes[value]) {
             return 'A theme with this name already exists';
           }
@@ -242,7 +244,7 @@ export class ColorCustomizerPanel {
         await this._saveAsNewTheme(themeName, colors);
         this._currentTheme = themeName;
         this._isSystemTheme = false;
-        await config.update('selectedTheme', themeName, vscode.ConfigurationTarget.Global);
+        await cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
 
         // Update the dropdown in the webview
         void this._panel.webview.postMessage({
@@ -255,27 +257,27 @@ export class ColorCustomizerPanel {
 
     // If we have a current custom theme and not applying from theme selector
     if (this._currentTheme && !this._isSystemTheme && !fromTheme) {
-      const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+      const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
       if (customThemes[this._currentTheme]) {
         customThemes[this._currentTheme] = colors;
-        await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
+        await cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
 
         // If this is the currently selected theme, update guardColorsComplete too
-        const selectedTheme = config.get<string>('selectedTheme');
+        const selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, '');
         if (selectedTheme === this._currentTheme) {
-          await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
+          await cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
         }
 
         void vscode.window.showInformationMessage(`Theme '${this._currentTheme}' updated successfully!`);
       }
       // Don't send colors back - webview already has current values
     } else if (!fromTheme) {
-      await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
-      await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+      await cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
+      await cm.update(CONFIG_KEYS.SELECTED_THEME, '');
       void vscode.window.showInformationMessage('Guard tag colors saved successfully!');
     } else {
       // This is fromTheme = true case, update the config
-      await config.update('guardColorsComplete', colors, vscode.ConfigurationTarget.Global);
+      await cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
       // Send the new theme colors to update the UI
       void this._panel.webview.postMessage({
         command: 'updateColors',
@@ -285,15 +287,15 @@ export class ColorCustomizerPanel {
   }
 
   private _sendCurrentColors() {
-    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    const savedColors = config.get<GuardColors>('guardColorsComplete');
+    const cm = configManager();
+    const savedColors = cm.get<GuardColors>(CONFIG_KEYS.GUARD_COLORS_COMPLETE);
     let colors: GuardColors;
 
     if (savedColors) {
       colors = mergeWithDefaults(savedColors);
     } else {
       // No saved colors, check if we have a selected theme
-      const selectedTheme = config.get<string>('selectedTheme') || 'light';
+      const selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, 'light');
       const theme = COLOR_THEMES[selectedTheme];
       if (theme) {
         colors = mergeWithDefaults(theme.colors);
@@ -313,8 +315,8 @@ export class ColorCustomizerPanel {
     this._isSystemTheme = !!theme;
 
     if (!theme) {
-      const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-      const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+      const cm = configManager();
+      const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
       if (customThemes[themeName]) {
         theme = { name: themeName, colors: customThemes[themeName] };
         this._isSystemTheme = false;
@@ -325,10 +327,10 @@ export class ColorCustomizerPanel {
       this._currentTheme = themeName;
 
       // Update colors without showing notification
-      const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
+      const cm = configManager();
       const mergedColors = mergeWithDefaults(theme.colors);
-      await config.update('guardColorsComplete', mergedColors, vscode.ConfigurationTarget.Global);
-      await config.update('selectedTheme', themeName, vscode.ConfigurationTarget.Global);
+      await cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
+      await cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
 
       void this._panel.webview.postMessage({
         command: 'updateColors',
@@ -344,11 +346,11 @@ export class ColorCustomizerPanel {
   }
 
   private async _saveAsNewTheme(name: string, colors: GuardColors) {
-    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+    const cm = configManager();
+    const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
     customThemes[name] = colors;
-    await config.update('customThemes', customThemes, vscode.ConfigurationTarget.Global);
-    await config.update('selectedTheme', name, vscode.ConfigurationTarget.Global);
+    await cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
+    await cm.update(CONFIG_KEYS.SELECTED_THEME, name);
 
     this._currentTheme = name;
     this._isSystemTheme = false;
@@ -389,13 +391,13 @@ export class ColorCustomizerPanel {
         return;
       }
 
-      const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-      const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+      const cm = configManager();
+      const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
 
       // Create a shallow copy to avoid proxy issues
       const updatedThemes = { ...customThemes };
       delete updatedThemes[name];
-      await config.update('customThemes', updatedThemes, vscode.ConfigurationTarget.Global);
+      await cm.update(CONFIG_KEYS.CUSTOM_THEMES, updatedThemes);
 
       // Determine next theme to select (only custom themes can be deleted)
       let nextTheme = '';
@@ -408,7 +410,7 @@ export class ColorCustomizerPanel {
           // Still have custom themes - select the closest one by position
           const deletedIndex = originalCustomThemes.indexOf(name);
           const nextIndex = Math.min(deletedIndex, remainingCustomThemes.length - 1);
-          
+
           // Get the theme that should be at this position after deletion
           const targetTheme = originalCustomThemes.filter(t => t !== name)[nextIndex];
           if (targetTheme && remainingCustomThemes.includes(targetTheme)) {
@@ -428,7 +430,7 @@ export class ColorCustomizerPanel {
         } else {
           this._currentTheme = '';
           this._isSystemTheme = false;
-          await config.update('selectedTheme', '', vscode.ConfigurationTarget.Global);
+          await cm.update(CONFIG_KEYS.SELECTED_THEME, '');
         }
       }
 
@@ -451,9 +453,9 @@ export class ColorCustomizerPanel {
   }
 
   private async _saveDefaultPermissions(defaultAiWrite: boolean, defaultHumanWrite: boolean) {
-    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    await config.update('defaultAiWrite', defaultAiWrite, vscode.ConfigurationTarget.Global);
-    await config.update('defaultHumanWrite', defaultHumanWrite, vscode.ConfigurationTarget.Global);
+    const cm = configManager();
+    await cm.update(CONFIG_KEYS.DEFAULT_AI_WRITE, defaultAiWrite);
+    await cm.update(CONFIG_KEYS.DEFAULT_HUMAN_WRITE, defaultHumanWrite);
   }
 
   private async _exportTheme() {
@@ -515,8 +517,8 @@ export class ColorCustomizerPanel {
   }
 
   private _sendThemeList() {
-    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    const customThemes = config.get<Record<string, GuardColors>>('customThemes', {});
+    const cm = configManager();
+    const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
 
     const builtInThemes = Object.keys(COLOR_THEMES);
     const customThemeNames = Object.keys(customThemes);
@@ -536,8 +538,8 @@ export class ColorCustomizerPanel {
     setTimeout(async () => {
       this._sendThemeList();
 
-      const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-      let selectedTheme = config.get<string>('selectedTheme');
+      const cm = configManager();
+      let selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, '');
 
       // If no theme is selected, default to 'light'
       if (!selectedTheme) {
@@ -553,8 +555,8 @@ export class ColorCustomizerPanel {
       });
 
       // Restore default permissions from user preferences
-      const defaultAiWrite = config.get<boolean>('defaultAiWrite', false);
-      const defaultHumanWrite = config.get<boolean>('defaultHumanWrite', true);
+      const defaultAiWrite = cm.get(CONFIG_KEYS.DEFAULT_AI_WRITE, false);
+      const defaultHumanWrite = cm.get(CONFIG_KEYS.DEFAULT_HUMAN_WRITE, true);
 
       void this._panel.webview.postMessage({
         command: 'restoreDefaultPermissions',
@@ -569,7 +571,7 @@ export class ColorCustomizerPanel {
   private _generatePermissionSection(config: { id: string; title: string; defaultColor: string; defaultEnabled: boolean; defaultTransparency: number; defaultBorderOpacity: number }): string {
     const transparency = Math.round(config.defaultTransparency * 100);
     const borderOpacity = Math.round(config.defaultBorderOpacity * 100);
-    
+
     return `
       <div class="permission-section" onclick="focusPermission('${config.id}')">
         <div class="permission-header">
@@ -637,8 +639,8 @@ export class ColorCustomizerPanel {
     const javascript = getWebviewJavaScript(previewLines);
 
     // Get the current theme colors for initial HTML generation
-    const config = vscode.workspace.getConfiguration('tumee-vscode-plugin');
-    const selectedTheme = config.get<string>('selectedTheme') || 'light';
+    const cm = configManager();
+    const selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, 'light');
     const theme = COLOR_THEMES[selectedTheme] || COLOR_THEMES.light;
     const colors = theme.colors;
 
@@ -654,7 +656,7 @@ export class ColorCustomizerPanel {
         contextRead: 'Context Read',
         contextWrite: 'Context Write'
       };
-      
+
       return this._generatePermissionSection({
         id,
         title: titles[id] || id,

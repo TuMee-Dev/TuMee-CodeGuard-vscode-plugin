@@ -30,7 +30,7 @@ const LANGUAGE_COMMENTS: Record<string, LanguageCommentConfig> = {
   kotlin: { lineComments: ['//'], blockCommentStart: ['/*'], blockCommentContinue: ['*'] },
   scala: { lineComments: ['//'], blockCommentStart: ['/*'], blockCommentContinue: ['*'] },
   php: { lineComments: ['//', '#'], blockCommentStart: ['/*'], blockCommentContinue: ['*'] },
-  
+
   // Shell-style languages
   python: { lineComments: ['#'] },
   ruby: { lineComments: ['#'] },
@@ -39,44 +39,44 @@ const LANGUAGE_COMMENTS: Record<string, LanguageCommentConfig> = {
   yaml: { lineComments: ['#'] },
   r: { lineComments: ['#'] },
   elixir: { lineComments: ['#'] },
-  
+
   // XML-style languages
   html: { lineComments: [], blockCommentStart: ['<!--'] },
   xml: { lineComments: [], blockCommentStart: ['<!--'] },
   svg: { lineComments: [], blockCommentStart: ['<!--'] },
-  
+
   // CSS-style languages
   css: { lineComments: ['//'], blockCommentStart: ['/*'], blockCommentContinue: ['*'] },
   scss: { lineComments: ['//'], blockCommentStart: ['/*'], blockCommentContinue: ['*'] },
   less: { lineComments: ['//'], blockCommentStart: ['/*'], blockCommentContinue: ['*'] },
-  
+
   // SQL
   sql: { lineComments: ['--'], blockCommentStart: ['/*'], blockCommentContinue: ['*'] },
-  
+
   // Lua
   lua: { lineComments: ['--'] },
-  
+
   // Haskell
   haskell: { lineComments: ['--'], blockCommentStart: ['{-'] },
-  
+
   // PowerShell
   powershell: { lineComments: ['#'], blockCommentStart: ['<#'] },
-  
+
   // Visual Basic
   vb: { lineComments: ["'", 'rem '] },
   vbscript: { lineComments: ["'", 'rem '] },
-  
+
   // Lisp-style languages
   clojure: { lineComments: [';'] },
   lisp: { lineComments: [';'] },
   scheme: { lineComments: [';'] },
-  
+
   // Erlang
   erlang: { lineComments: ['%'] },
-  
+
   // Fortran
   fortran: { lineComments: ['c', 'C', '!'] },
-  
+
   // Pascal/Delphi
   pascal: { lineComments: ['//'], blockCommentStart: ['{', '(*'] },
   delphi: { lineComments: ['//'], blockCommentStart: ['{', '(*'] }
