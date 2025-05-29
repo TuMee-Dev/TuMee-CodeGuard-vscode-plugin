@@ -16,6 +16,7 @@ import { registerColorCustomizerCommand, DEFAULT_COLORS, COLOR_THEMES } from '@/
 import { MixPattern } from '@/types/mixPatterns';
 import type { GuardColors } from '@/types/colorTypes';
 import { renderMixPattern, getMixedBorderColor } from '@/utils/mixPatternRenderer';
+import { hexToRgba } from '@/utils/colorUtils';
 import { disposeACLCache } from '@/utils/aclCache';
 import { performanceMonitor } from '@/utils/performanceMonitor';
 import { configValidator } from '@/utils/configValidator';
@@ -327,22 +328,6 @@ function initializeCodeDecorations(_context: ExtensionContext) {
 
   const opacity = config.get<number>('codeDecorationOpacity') || 0.1;
 
-  // Helper function to convert hex to rgba
-  const hexToRgba = (hex: string | undefined, alpha: number): string => {
-    if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) {
-      // Return transparent if no valid hex color provided
-      return 'rgba(0, 0, 0, 0)';
-    }
-    try {
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    } catch (error) {
-      DebugLogger.error('Invalid hex color:', hex);
-      return 'rgba(0, 0, 0, 0)';
-    }
-  };
 
   // Clear existing decorations
   decorationTypes.forEach(decoration => decoration.dispose());
@@ -583,12 +568,12 @@ function initializeCodeDecorations(_context: ExtensionContext) {
     if (borderBarEnabled && borderOpacity > 0 && isPermissionEnabled) {
       decorationOptions.borderWidth = '0 0 0 3px';
       decorationOptions.borderStyle = 'solid';
-      decorationOptions.borderColor = hexToRgba(minimapColor, borderOpacity);
+      decorationOptions.borderColor = minimapColor ? hexToRgba(minimapColor, borderOpacity) : 'rgba(0, 0, 0, 0)';
     }
 
     // Only add overview ruler if border opacity > 0 AND permission is enabled
     if (borderOpacity > 0 && isPermissionEnabled) {
-      decorationOptions.overviewRulerColor = hexToRgba(minimapColor, borderOpacity);
+      decorationOptions.overviewRulerColor = minimapColor ? hexToRgba(minimapColor, borderOpacity) : 'rgba(0, 0, 0, 0)';
       decorationOptions.overviewRulerLane = 2;
     } else {
       // Remove overview ruler properties if opacity is 0 or permission is disabled
@@ -647,7 +632,7 @@ function initializeCodeDecorations(_context: ExtensionContext) {
         }
       } else {
         // Single color decoration
-        decorationOptions.backgroundColor = hexToRgba(color, effectiveOpacity);
+        decorationOptions.backgroundColor = color ? hexToRgba(color, effectiveOpacity) : 'rgba(0, 0, 0, 0)';
       }
     }
 

@@ -1,4 +1,5 @@
 import { MixPattern } from '../types/mixPatterns';
+import { hexToRgba, rgbToHex } from './colorUtils';
 
 export interface ColorConfig {
   aiColor: string;
@@ -21,18 +22,6 @@ export interface MixPatternResult {
   fallbackToSolid?: boolean;
 }
 
-/**
- * Converts hex color to rgba
- */
-function hexToRgba(hex: string, alpha: number): string {
-  if (!hex || !hex.startsWith('#')) return `rgba(0, 0, 0, ${alpha})`;
-
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 /**
  * Blends two hex colors
@@ -50,7 +39,7 @@ function blendColors(hex1: string, hex2: string): string {
   const g = Math.round((g1 + g2) / 2);
   const b = Math.round((b1 + b2) / 2);
 
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  return rgbToHex(r, g, b);
 }
 
 /**

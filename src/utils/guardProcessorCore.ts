@@ -4,8 +4,10 @@
  */
 
 import type { GuardTag, LinePermission, ScopeBoundary } from '../types/guardTypes';
+import { DEFAULT_PERMISSIONS } from '../types/guardTypes';
 import { parseGuardTag } from './acl';
 import { GuardProcessingError, ErrorSeverity } from './errorHandler';
+import { isLineAComment } from './commentDetector';
 
 /**
  * Document interface that matches what we need from vscode.TextDocument
@@ -107,76 +109,6 @@ function removeInterruptedContextGuards(guardStack: GuardStackEntry[]): void {
   }
 }
 
-/**
- * Check if a line is a comment based on language
- */
-function isLineAComment(line: string, languageId: string): boolean {
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-
-  switch (languageId) {
-    case 'javascript':
-    case 'typescript':
-    case 'javascriptreact':
-    case 'typescriptreact':
-    case 'java':
-    case 'c':
-    case 'cpp':
-    case 'csharp':
-    case 'go':
-    case 'rust':
-    case 'swift':
-    case 'kotlin':
-    case 'scala':
-    case 'php':
-      return trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*');
-    case 'python':
-    case 'ruby':
-    case 'perl':
-    case 'shellscript':
-    case 'yaml':
-      return trimmed.startsWith('#');
-    case 'html':
-    case 'xml':
-    case 'svg':
-      return !!trimmed.match(/^<!--/);
-    case 'css':
-    case 'scss':
-    case 'less':
-      return trimmed.startsWith('/*') || trimmed.startsWith('//');
-    case 'sql':
-      return trimmed.startsWith('--') || trimmed.startsWith('/*');
-    case 'lua':
-      return trimmed.startsWith('--');
-    case 'haskell':
-      return trimmed.startsWith('--') || trimmed.startsWith('{-');
-    case 'r':
-      return trimmed.startsWith('#');
-    case 'powershell':
-      return trimmed.startsWith('#') || trimmed.startsWith('<#');
-    case 'vb':
-    case 'vbscript':
-      return trimmed.startsWith("'") || !!trimmed.match(/^rem\s/i);
-    case 'elixir':
-      return trimmed.startsWith('#');
-    case 'clojure':
-      return trimmed.startsWith(';');
-    case 'lisp':
-    case 'scheme':
-      return trimmed.startsWith(';');
-    case 'erlang':
-      return trimmed.startsWith('%');
-    case 'fortran':
-      return !!trimmed.match(/^[cC!]/);
-    case 'pascal':
-    case 'delphi':
-      return trimmed.startsWith('//') || trimmed.startsWith('{') || trimmed.startsWith('(*');
-    default:
-      // Default to common comment patterns
-      return trimmed.startsWith('#') || trimmed.startsWith('//') ||
-             trimmed.startsWith('/*') || trimmed.startsWith('*');
-  }
-}
 
 /**
  * Clear the scope cache for a document
@@ -490,7 +422,7 @@ export async function parseGuardTagsCore(
         // Push to stack with current permissions
         // Get current permissions and context state from top of stack or use defaults
         // IMPORTANT: Check that we're inheriting from a valid scope
-        let currentPermissions: { [target: string]: string } = { ai: 'r', human: 'w' };  // Default permissions
+        let currentPermissions: { [target: string]: string } = { ...DEFAULT_PERMISSIONS };  // Default permissions
         let currentContext: { ai: boolean; human: boolean } = { ai: false, human: false };  // Default no context
 
         // Find the appropriate permissions to inherit
@@ -673,7 +605,7 @@ function processGuardStack(
   guardTags: GuardTag[],
   totalLines: number,
   getLineText: (lineNumber: number) => string,
-  defaultPermissions: { [target: string]: string } = { ai: 'r', human: 'w' },
+  defaultPermissions: { [target: string]: string } = { ...DEFAULT_PERMISSIONS },
   debugEnabled: boolean = false,
   logger?: { log: (message: string) => void }
 ): Map<number, ProcessedLinePermission> {
@@ -889,7 +821,7 @@ function processGuardStack(
  * Get default permissions (will be configurable via ACL tool in future)
  */
 export function getDefaultPermissions(): { [target: string]: string } {
-  return { ai: 'r', human: 'w' };
+  return { ...DEFAULT_PERMISSIONS };
 }
 
 /**
@@ -937,4 +869,3 @@ export function getLinePermissionsCore(
 
 // Export utility functions
 export { parseGuardTag } from './acl';
-export { isLineAComment };
