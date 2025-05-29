@@ -535,6 +535,7 @@ function getColors() {
     const colorElem = document.getElementById(perm + '-color');
     const transElem = document.getElementById(perm + '-transparency');
     const minimapElem = document.getElementById(perm + '-minimapColor');
+    const highlightEntireLineElem = document.getElementById(perm + '-highlightEntireLine');
     
     const color = colorElem ? colorElem.value : '#000000';
     const minimapColor = minimapElem ? minimapElem.value : '#000000';
@@ -544,7 +545,8 @@ function getColors() {
       color: color,
       transparency: transElem ? (transElem.value / 100) : 0.2,
       borderOpacity: borderOpacityElem ? (borderOpacityElem.value / 100) : 1.0,
-      minimapColor: minimapColor
+      minimapColor: minimapColor,
+      highlightEntireLine: highlightEntireLineElem ? highlightEntireLineElem.checked : false
     };
   });
   
@@ -608,6 +610,11 @@ function updateAllColors(colors) {
         borderValueElem.textContent = borderPercent + '%';
       }
     }
+    
+    const highlightEntireLineInput = document.getElementById(key + '-highlightEntireLine');
+    if (highlightEntireLineInput && config.highlightEntireLine !== undefined) {
+      highlightEntireLineInput.checked = config.highlightEntireLine;
+    }
   });
   
   Object.keys(colors.permissions).forEach(key => {
@@ -650,6 +657,11 @@ function updateMixPattern(pattern) {
   updatePreview();
 }
 window.updateMixPattern = updateMixPattern;
+
+function updateHighlightEntireLine(permission) {
+  updatePreview();
+}
+window.updateHighlightEntireLine = updateHighlightEntireLine;
 
 function updateDefaultPermissions() {
   updatePreview();

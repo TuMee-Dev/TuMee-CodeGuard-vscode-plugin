@@ -13,6 +13,7 @@ export interface PermissionColorConfig {
   transparency: number;            // Transparency level (0-1)
   borderOpacity?: number;          // Optional border opacity (0-1)
   minimapColor?: string;           // Optional custom minimap color
+  highlightEntireLine?: boolean;   // Highlight entire line (true) or just text (false)
 }
 
 export interface GuardColors {
@@ -30,6 +31,9 @@ export interface GuardColors {
 
   // Global border bar toggle only
   borderBarEnabled: boolean;       // Enable border bar
+
+  // Highlight entire line including whitespace (vs text only)
+  highlightEntireLine?: boolean;   // Default false for backward compatibility
 
   // Mix pattern for when both AI and human permissions are non-default
   mixPattern?: MixPattern;
@@ -70,6 +74,7 @@ export const DEFAULT_COLORS: GuardColors = {
     contextWrite: { enabled: true, color: '#1E90FF', transparency: 0.15 }
   },
   borderBarEnabled: true,
+  highlightEntireLine: false,  // Default to false for backward compatibility
   mixPattern: DEFAULT_MIX_PATTERN
 };
 
@@ -568,9 +573,10 @@ export class ColorCustomizerPanel {
 
   // Permission section generation moved to client-side JavaScript
 
-  private _generatePermissionSection(config: { id: string; title: string; defaultColor: string; defaultEnabled: boolean; defaultTransparency: number; defaultBorderOpacity: number }): string {
+  private _generatePermissionSection(config: { id: string; title: string; defaultColor: string; defaultEnabled: boolean; defaultTransparency: number; defaultBorderOpacity: number; defaultHighlightEntireLine?: boolean }): string {
     const transparency = Math.round(config.defaultTransparency * 100);
     const borderOpacity = Math.round(config.defaultBorderOpacity * 100);
+    const highlightEntireLine = config.defaultHighlightEntireLine ?? false;
 
     return `
       <div class="permission-section" onclick="focusPermission('${config.id}')">
@@ -607,6 +613,13 @@ export class ColorCustomizerPanel {
               <label class="color-label">Row Opacity</label>
               <input type="range" id="${config.id}-transparency" class="slider" min="0" max="100" value="${transparency}" oninput="updateSlider(this)">
               <span class="slider-value" id="${config.id}-transparency-value">${transparency}%</span>
+            </div>
+          </div>
+          <div class="color-row">
+            <div style="width: 20px;"></div>
+            <div class="toggle-switch" style="margin-left: 10px;">
+              <label>Highlight Entire Line</label>
+              <input type="checkbox" id="${config.id}-highlightEntireLine" ${highlightEntireLine ? 'checked' : ''} onchange="updateHighlightEntireLine('${config.id}')">
             </div>
           </div>
         </div>
@@ -663,7 +676,8 @@ export class ColorCustomizerPanel {
         defaultColor: perm.color,
         defaultEnabled: perm.enabled,
         defaultTransparency: perm.transparency,
-        defaultBorderOpacity: perm.borderOpacity || 1.0
+        defaultBorderOpacity: perm.borderOpacity || 1.0,
+        defaultHighlightEntireLine: perm.highlightEntireLine
       });
     }).join('');
 

@@ -49,10 +49,12 @@ export class DecorationTypeFactory {
       permissionTransparencies,
       permissionBorderOpacities,
       permissionMinimapColors,
-      permissionEnabledStates
+      permissionEnabledStates,
+      permissionHighlightEntireLine
     } = this.processColorConfiguration(guardColorsComplete, opacity);
 
     const borderBarEnabled = guardColorsComplete?.borderBarEnabled !== false;
+    const highlightEntireLine = guardColorsComplete?.highlightEntireLine ?? false;
     const mixPattern = guardColorsComplete?.mixPattern || DEFAULT_COLORS.mixPattern || MixPattern.AVERAGE;
 
     // Create decoration types for all permission combinations
@@ -63,7 +65,9 @@ export class DecorationTypeFactory {
       permissionBorderOpacities,
       permissionMinimapColors,
       permissionEnabledStates,
+      permissionHighlightEntireLine,
       borderBarEnabled,
+      highlightEntireLine,
       mixPattern
     );
 
@@ -104,6 +108,7 @@ export class DecorationTypeFactory {
     const permissionMinimapColors: Record<string, string> = {};
     const userColors: Record<string, string> = {};
     const permissionEnabledStates: Record<string, boolean> = {};
+    const permissionHighlightEntireLine: Record<string, boolean> = {};
 
     // Process guardColorsComplete permissions
     if (guardColorsComplete?.permissions) {
@@ -114,6 +119,8 @@ export class DecorationTypeFactory {
           permissionBorderOpacities[key] = permission.borderOpacity ?? 1.0;
           permissionMinimapColors[key] = permission.minimapColor || permission.color;
           permissionEnabledStates[key] = permission.enabled !== false;
+          // Always default to false if not specified - do not inherit from other themes
+          permissionHighlightEntireLine[key] = permission.highlightEntireLine ?? false;
 
           // Debug logging for write permissions
           if (key.includes('Write')) {
@@ -148,6 +155,8 @@ export class DecorationTypeFactory {
           permissionBorderOpacities[key] = permission.borderOpacity ?? 1.0;
           permissionMinimapColors[key] = permission.minimapColor || permission.color;
           permissionEnabledStates[key] = permission.enabled;
+          // Always default to false if not specified - do not inherit from other themes
+          permissionHighlightEntireLine[key] = permission.highlightEntireLine ?? false;
         }
       }
     }
@@ -157,7 +166,8 @@ export class DecorationTypeFactory {
       permissionTransparencies,
       permissionBorderOpacities,
       permissionMinimapColors,
-      permissionEnabledStates
+      permissionEnabledStates,
+      permissionHighlightEntireLine
     };
   }
 
@@ -244,7 +254,9 @@ export class DecorationTypeFactory {
     permissionBorderOpacities: Record<string, number>,
     permissionMinimapColors: Record<string, string>,
     permissionEnabledStates: Record<string, boolean>,
+    permissionHighlightEntireLine: Record<string, boolean>,
     borderBarEnabled: boolean,
+    globalHighlightEntireLine: boolean,
     mixPattern: MixPattern
   ): void {
     // Define all permission combinations
@@ -265,7 +277,9 @@ export class DecorationTypeFactory {
         permissionBorderOpacities,
         permissionMinimapColors,
         permissionEnabledStates,
+        permissionHighlightEntireLine,
         borderBarEnabled,
+        globalHighlightEntireLine,
         mixPattern
       );
     }
@@ -282,7 +296,9 @@ export class DecorationTypeFactory {
     permissionBorderOpacities: Record<string, number>,
     permissionMinimapColors: Record<string, string>,
     permissionEnabledStates: Record<string, boolean>,
+    permissionHighlightEntireLine: Record<string, boolean>,
     borderBarEnabled: boolean,
+    globalHighlightEntireLine: boolean,
     mixPattern: MixPattern
   ): void {
     const colorInfo = this.getPermissionColor(key, colors, opacity);
@@ -327,8 +343,33 @@ export class DecorationTypeFactory {
     const isMixed = colors[aiKey] && colors[humanKey];
     const mixedColor = isMixed ? colors[humanKey] : undefined;
 
+    // Determine which highlightEntireLine setting to use
+    let shouldHighlightEntireLine = globalHighlightEntireLine;
+    
+    // Check for per-permission setting
+    if (key.includes('Context')) {
+      if (key.includes('WriteContext')) {
+        shouldHighlightEntireLine = permissionHighlightEntireLine.contextWrite ?? globalHighlightEntireLine;
+      } else if (key.includes('ReadContext')) {
+        shouldHighlightEntireLine = permissionHighlightEntireLine.contextRead ?? globalHighlightEntireLine;
+      }
+    } else {
+      // For mixed permissions, check both parts
+      const aiPermission = aiPart.replace('ai', '').toLowerCase();
+      const humanPermission = humanPart.replace('human', '').toLowerCase();
+      
+      // Use the setting from whichever permission is active
+      if (colors[aiKey] && permissionHighlightEntireLine[aiKey] !== undefined) {
+        shouldHighlightEntireLine = permissionHighlightEntireLine[aiKey];
+      } else if (colors[humanKey] && permissionHighlightEntireLine[humanKey] !== undefined) {
+        shouldHighlightEntireLine = permissionHighlightEntireLine[humanKey];
+      }
+    }
+
     // Create decoration options
-    const decorationOptions: any = {};
+    const decorationOptions: any = {
+      isWholeLine: shouldHighlightEntireLine
+    };
 
     // Handle minimap and border colors
     const minimapColor = permissionMinimapColors[key] || color;
