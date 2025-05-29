@@ -3,156 +3,7 @@ import { getLanguagePatterns, UTILITY_PATTERNS, GUARD_TAG_PREFIX } from './regex
 import { parseDocument, findNodeAtPosition, findParentOfType, getNodeBoundaries, initializeTreeSitter } from './treeSitterParser';
 import type { Node, Tree } from 'web-tree-sitter';
 import { DebugLogger } from './debugLogger';
-
-// Common patterns shared across languages
-const COMMON_BLOCKS = ['if_statement', 'for_statement', 'while_statement', 'try_statement', 'switch_statement'];
-const JS_BLOCKS = ['statement_block', 'object', 'object_expression', 'array', 'array_expression'];
-const JS_FUNCS = ['function_declaration', 'function_expression', 'arrow_function', 'method_definition'];
-const JS_CLASSES = ['class_declaration', 'class_expression', 'object', 'object_expression'];
-
-// Base JavaScript/TypeScript patterns
-const JS_BASE = {
-  'func': JS_FUNCS,
-  'class': JS_CLASSES,
-  'block': [...COMMON_BLOCKS, ...JS_BLOCKS],
-  'sig': ['function_declaration', 'method_definition', 'function_signature'],
-  'body': ['statement_block', 'class_body'],
-  'method': ['method_definition'],
-  'import': ['import_statement'],
-  'export': ['export_statement'],
-};
-
-// TypeScript additions
-const TS_ADDITIONS = {
-  'func': ['method_signature'],
-  'class': ['interface_declaration'],
-  'sig': ['method_signature', 'function_signature'],
-  'body': ['interface_body'],
-  'method': ['method_signature'],
-};
-
-// Helper to merge base with additions
-function mergePatterns(base: Record<string, string[]>, additions: Record<string, string[]>): Record<string, string[]> {
-  const result: Record<string, string[]> = {};
-  for (const key in base) {
-    result[key] = [...base[key]];
-  }
-  for (const key in additions) {
-    if (result[key]) {
-      result[key] = [...result[key], ...additions[key]];
-    } else {
-      result[key] = additions[key];
-    }
-  }
-  return result;
-}
-
-// Semantic scope to tree-sitter node type mappings
-const SCOPE_MAPPINGS: Record<string, Record<string, string[]>> = {
-  'javascript': JS_BASE,
-  'typescript': mergePatterns(JS_BASE, TS_ADDITIONS),
-  'tsx': mergePatterns(JS_BASE, TS_ADDITIONS),
-  'python': {
-    'func': ['function_definition'],
-    'class': ['class_definition'],
-    'block': ['block', ...COMMON_BLOCKS, 'with_statement', 'dictionary', 'list', 'set'],
-    'sig': ['function_definition'],
-    'body': ['block'],
-    'method': ['function_definition'],
-    'import': ['import_statement', 'import_from_statement'],
-    'docstring': ['expression_statement'],
-  },
-  'java': {
-    'func': ['method_declaration', 'constructor_declaration'],
-    'class': ['class_declaration', 'interface_declaration', 'enum_declaration'],
-    'block': ['block', ...COMMON_BLOCKS],
-    'sig': ['method_declaration', 'constructor_declaration'],
-    'body': ['block', 'class_body', 'interface_body', 'enum_body'],
-    'method': ['method_declaration'],
-    'import': ['import_declaration'],
-  },
-  'csharp': {
-    'func': ['method_declaration', 'constructor_declaration', 'property_declaration', 'local_function_statement'],
-    'class': ['class_declaration', 'interface_declaration', 'struct_declaration', 'record_declaration'],
-    'block': ['block', ...COMMON_BLOCKS],
-    'sig': ['method_declaration', 'constructor_declaration'],
-    'body': ['block', 'class_body', 'interface_body'],
-    'method': ['method_declaration'],
-    'import': ['using_directive'],
-  },
-  'go': {
-    'func': ['function_declaration', 'method_declaration'],
-    'class': ['type_declaration'],
-    'block': ['block', 'if_statement', 'for_statement', 'switch_statement'],
-    'sig': ['function_declaration', 'method_declaration'],
-    'body': ['block'],
-    'method': ['method_declaration'],
-    'import': ['import_declaration'],
-  },
-  'rust': {
-    'func': ['function_item', 'function_signature_item'],
-    'class': ['struct_item', 'enum_item', 'trait_item', 'impl_item'],
-    'block': ['block', 'if_expression', 'for_expression', 'while_expression', 'match_expression'],
-    'sig': ['function_item', 'function_signature_item'],
-    'body': ['block'],
-    'method': ['function_item'],
-    'import': ['use_declaration'],
-  },
-  'ruby': {
-    'func': ['method', 'lambda'],
-    'class': ['class', 'module'],
-    'block': ['do_block', 'block', 'if', 'for', 'while', 'case'],
-    'sig': ['method'],
-    'body': ['do_block', 'block'],
-    'method': ['method'],
-    'import': ['require', 'load'],
-  },
-  'php': {
-    'func': ['function_definition', 'method_declaration'],
-    'class': ['class_declaration', 'interface_declaration', 'trait_declaration'],
-    'block': ['compound_statement', ...COMMON_BLOCKS],
-    'sig': ['function_definition', 'method_declaration'],
-    'body': ['compound_statement'],
-    'method': ['method_declaration'],
-    'import': ['use_statement', 'require_expression', 'include_expression'],
-  },
-  'c': {
-    'func': ['function_definition'],
-    'class': ['struct_specifier', 'union_specifier'],
-    'block': ['compound_statement', ...COMMON_BLOCKS],
-    'sig': ['function_declarator'],
-    'body': ['compound_statement'],
-    'method': ['function_definition'],
-    'import': ['preproc_include'],
-  },
-  'cpp': {
-    'func': ['function_definition', 'lambda_expression'],
-    'class': ['class_specifier', 'struct_specifier', 'union_specifier'],
-    'block': ['compound_statement', ...COMMON_BLOCKS],
-    'sig': ['function_declarator'],
-    'body': ['compound_statement', 'field_declaration_list'],
-    'method': ['function_definition'],
-    'import': ['preproc_include', 'using_declaration'],
-  },
-  'swift': {
-    'func': ['function_declaration'],
-    'class': ['class_declaration', 'struct_declaration', 'protocol_declaration', 'enum_declaration'],
-    'block': ['code_block', ...COMMON_BLOCKS],
-    'sig': ['function_declaration'],
-    'body': ['code_block', 'class_body'],
-    'method': ['function_declaration'],
-    'import': ['import_declaration'],
-  },
-  'kotlin': {
-    'func': ['function_declaration', 'anonymous_function'],
-    'class': ['class_declaration', 'object_declaration', 'interface_declaration'],
-    'block': ['statements', 'if_expression', 'for_statement', 'while_statement', 'when_expression'],
-    'sig': ['function_declaration'],
-    'body': ['statements', 'class_body'],
-    'method': ['function_declaration'],
-    'import': ['import_header'],
-  },
-};
+import { getScopeMappings, getLanguageScopeMappings } from './languageScopeLoader';
 
 // Store the extension context for tree-sitter initialization
 let extensionContext: vscode.ExtensionContext | null = null;
@@ -185,7 +36,8 @@ export async function resolveSemantic(
   _removeScopes?: string[]
 ): Promise<ScopeBoundary | null> {
   const languageId = document.languageId;
-  const hasTreeSitterSupport = SCOPE_MAPPINGS[languageId] !== undefined;
+  const languageScopes = getLanguageScopeMappings(languageId);
+  const hasTreeSitterSupport = languageScopes !== undefined;
 
   // If we have tree-sitter support for this language, it MUST work
   if (hasTreeSitterSupport) {
@@ -227,7 +79,7 @@ async function resolveSemanticWithTreeSitter(
   if (!tree) return null;
 
   const languageId = document.languageId;
-  const scopeMap = SCOPE_MAPPINGS[languageId];
+  const scopeMap = getLanguageScopeMappings(languageId);
   if (!scopeMap) return null;
 
   const nodeTypes = scopeMap[scope] || scopeMap[scope.toLowerCase()];
@@ -409,7 +261,7 @@ function findBodyScopeTreeSitter(
   nodeTypes: string[]
 ): ScopeBoundary | null {
   // Find the function/method containing this node
-  const funcTypes = SCOPE_MAPPINGS[node.tree.rootNode.type]?.func || nodeTypes;
+  const funcTypes = getLanguageScopeMappings(node.tree.rootNode.type)?.func || nodeTypes;
   const funcNode = findParentOfType(node, funcTypes);
   if (!funcNode) return null;
 

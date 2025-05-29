@@ -44,7 +44,9 @@ const config = {
         { from: 'resources/tree-sitter-wasm', to: 'resources/tree-sitter-wasm', noErrorOnMissing: true },
         { from: 'src/tools/colorCustomizer/styles.css', to: 'tools/colorCustomizer/styles.css' },
         { from: 'src/tools/colorCustomizer/webview.js', to: 'tools/colorCustomizer/webview.js' },
-        { from: 'resources/preview-lines.json', to: 'resources/preview-lines.json' }
+        { from: 'resources/preview-lines.json', to: 'resources/preview-lines.json' },
+        { from: 'resources/language-scopes.json', to: 'resources/language-scopes.json' },
+        { from: 'resources/language-scopes.schema.json', to: 'resources/language-scopes.schema.json' }
       ],
     }),
   ]
