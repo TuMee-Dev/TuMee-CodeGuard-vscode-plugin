@@ -39,176 +39,234 @@ const processedDocumentVersions = new WeakMap<TextDocument, number>();
 // Cache decoration ranges to prevent flashing when switching tabs
 const decorationCache = new WeakMap<TextDocument, DecorationRanges>();
 
-export async function activate(context: ExtensionContext) {
-  try {
-    disposables = [];
+/**
+ * Initialize the extension core components
+ */
+async function initializeExtension(context: ExtensionContext): Promise<void> {
+  disposables = [];
+  
+  // Initialize tree-sitter for semantic scope resolution
+  await initializeScopeResolver(context);
+  
+  // Run first-time setup if needed
+  firstTimeRun(context);
+}
 
-    // Initialize tree-sitter for semantic scope resolution
-    await initializeScopeResolver(context);
+/**
+ * Register all extension commands
+ */
+function registerCommands(context: ExtensionContext, provider: any): void {
+  // Register file and folder decoration provider
+  const { disposable } = registerFileDecorationProvider(context);
+  disposables.push(disposable);
 
-    const isEnabled = context.globalState.get('isEnabled');
+  // Register context menu commands
+  const contextMenuDisposables = registerContextMenu(context, provider);
+  disposables.push(...contextMenuDisposables);
 
-    if (isEnabled !== false) {
-      firstTimeRun(context);
+  // Register guard tag commands for editor context menu
+  const guardDisposables = registerGuardTagCommands(context);
+  disposables.push(...guardDisposables);
 
-      // Register file and folder decoration provider
-      const { disposable, provider } = registerFileDecorationProvider(context);
-      disposables.push(disposable);
+  // Register color customizer command
+  disposables.push(registerColorCustomizerCommand(context));
 
-      // Register context menu commands
-      const contextMenuDisposables = registerContextMenu(context, provider);
-      disposables.push(...contextMenuDisposables);
+  // Register refresh decorations command
+  disposables.push(
+    commands.registerCommand('tumee-vscode-plugin.refreshDecorations', () => {
+      // Dispose old decorations
+      decorationTypes.forEach(decoration => decoration.dispose());
+      decorationTypes.clear();
 
-      // Register guard tag commands for editor context menu
-      const guardDisposables = registerGuardTagCommands(context);
-      disposables.push(...guardDisposables);
-
-      // Register color customizer command
-      disposables.push(registerColorCustomizerCommand(context));
-
-      // Register refresh decorations command
-      disposables.push(
-        commands.registerCommand('tumee-vscode-plugin.refreshDecorations', () => {
-          // Dispose old decorations
-          decorationTypes.forEach(decoration => decoration.dispose());
-          decorationTypes.clear();
-
-          // Reinitialize with new colors
-          initializeCodeDecorations(context);
-
-          // Update current editor
-          const activeEditor = window.activeTextEditor;
-          if (activeEditor) {
-            triggerUpdateDecorations(activeEditor.document);
-          }
-        })
-      );
-
-      // Create decorations for code regions
+      // Reinitialize with new colors
       initializeCodeDecorations(context);
 
-      // Create status bar item
-      createStatusBarItem(context);
-
-      // Register performance report command
-      disposables.push(
-        commands.registerCommand('tumee-vscode-plugin.showPerformanceReport', () => {
-          performanceMonitor.showReport();
-        })
-      );
-
-      // Register validation commands (developer feature)
-      const validationDisposables = registerValidationCommands(context);
-      disposables.push(...validationDisposables);
-
-      // Validate configuration on startup
-      const validationResult = configValidator.validateConfiguration();
-      if (!validationResult.valid) {
-        configValidator.showValidationErrors(validationResult);
-        // Auto-fix if possible
-        void configValidator.autoFixConfiguration();
-      }
-
-      // Watch for configuration changes
-      disposables.push(
-        workspace.onDidChangeConfiguration(event => {
-          configValidator.handleConfigurationChange(event);
-
-          // If guard colors changed, recreate decoration types and refresh all decorations
-          if (event.affectsConfiguration('tumee-vscode-plugin.guardColors') ||
-              event.affectsConfiguration('tumee-vscode-plugin.guardColorsComplete')) {
-            // Get current decorations from cache to reapply immediately
-            const cachedDecorations = new Map<TextDocument, DecorationRanges>();
-            for (const editor of window.visibleTextEditors) {
-              const cached = decorationCache.get(editor.document);
-              if (cached) {
-                cachedDecorations.set(editor.document, cached);
-              }
-            }
-
-            // Recreate decoration types with new colors
-            initializeCodeDecorations(context);
-
-            // Immediately reapply cached decorations to prevent flash
-            for (const editor of window.visibleTextEditors) {
-              const cached = cachedDecorations.get(editor.document);
-              if (cached) {
-                decorationTypes.forEach((decoration, key) => {
-                  const ranges = cached[key as keyof DecorationRanges] || [];
-                  editor.setDecorations(decoration, ranges);
-                });
-              }
-            }
-          }
-        })
-      );
-
-      // Set up listeners for active editor
+      // Update current editor
       const activeEditor = window.activeTextEditor;
       if (activeEditor) {
-        // Update immediately without debounce for initial load
-        void updateCodeDecorations(activeEditor.document);
-        void updateStatusBarItem(activeEditor.document);
+        triggerUpdateDecorations(activeEditor.document);
       }
+    })
+  );
 
-      // Update decorations when document changes
-      disposables.push(
-        workspace.onDidChangeTextDocument(event => {
-          const activeEditor = window.activeTextEditor;
-          if (activeEditor && event.document === activeEditor.document) {
-            // Track modified lines for partial cache invalidation
-            for (const change of event.contentChanges) {
-              const startLine = change.range.start.line;
-              const endLine = change.range.end.line;
-              const linesAdded = change.text.split('\n').length - 1;
-              // const linesRemoved = endLine - startLine; // kept for future use
+  // Register performance report command
+  disposables.push(
+    commands.registerCommand('tumee-vscode-plugin.showPerformanceReport', () => {
+      performanceMonitor.showReport();
+    })
+  );
 
-              // Mark affected lines as modified
-              markLinesModified(event.document, startLine, Math.max(endLine, startLine + linesAdded));
-            }
+  // Register validation commands (developer feature)
+  const validationDisposables = registerValidationCommands(context);
+  disposables.push(...validationDisposables);
+}
 
-            triggerUpdateDecorations(event.document);
-            void updateStatusBarItem(event.document);
-          }
-        })
-      );
+/**
+ * Set up event handlers for editor and document events
+ */
+function setupEventHandlers(context: ExtensionContext): void {
+  // Watch for configuration changes
+  disposables.push(
+    workspace.onDidChangeConfiguration(event => {
+      configValidator.handleConfigurationChange(event);
 
-      // Update decorations when editor changes
-      disposables.push(
-        window.onDidChangeActiveTextEditor(editor => {
-          if (editor) {
-            // Apply cached decorations immediately to prevent flashing
-            const cachedDecorations = decorationCache.get(editor.document);
-            if (cachedDecorations) {
-              decorationTypes.forEach((decoration, key) => {
-                const ranges = cachedDecorations[key as keyof DecorationRanges] || [];
-                editor.setDecorations(decoration, ranges);
-              });
-            }
+      // If guard colors changed, recreate decoration types and refresh all decorations
+      if (event.affectsConfiguration('tumee-vscode-plugin.guardColors') ||
+          event.affectsConfiguration('tumee-vscode-plugin.guardColorsComplete')) {
+        handleColorConfigurationChange(context);
+      }
+    })
+  );
 
-            // Then trigger a proper update (no debounce for tab switches)
-            void updateCodeDecorations(editor.document);
-            void updateStatusBarItem(editor.document);
-          }
-        })
-      );
+  // Update decorations when document changes
+  disposables.push(
+    workspace.onDidChangeTextDocument(event => {
+      const activeEditor = window.activeTextEditor;
+      if (activeEditor && event.document === activeEditor.document) {
+        handleDocumentChange(event);
+      }
+    })
+  );
 
-      // Clear caches when documents are closed
-      disposables.push(
-        workspace.onDidCloseTextDocument(document => {
-          processedDocumentVersions.delete(document);
-          decorationCache.delete(document);
-        })
-      );
+  // Update decorations when editor changes
+  disposables.push(
+    window.onDidChangeActiveTextEditor(editor => {
+      if (editor) {
+        handleActiveEditorChange(editor);
+      }
+    })
+  );
 
-      // Update decorations when visible ranges change (scrolling)
-      disposables.push(
-        window.onDidChangeTextEditorVisibleRanges(event => {
-          if (event.textEditor === window.activeTextEditor) {
-            triggerUpdateDecorations(event.textEditor.document);
-          }
-        })
-      );
+  // Clear caches when documents are closed
+  disposables.push(
+    workspace.onDidCloseTextDocument(document => {
+      processedDocumentVersions.delete(document);
+      decorationCache.delete(document);
+    })
+  );
+
+  // Update decorations when visible ranges change (scrolling)
+  disposables.push(
+    window.onDidChangeTextEditorVisibleRanges(event => {
+      if (event.textEditor === window.activeTextEditor) {
+        triggerUpdateDecorations(event.textEditor.document);
+      }
+    })
+  );
+}
+
+/**
+ * Handle color configuration changes
+ */
+function handleColorConfigurationChange(context: ExtensionContext): void {
+  // Get current decorations from cache to reapply immediately
+  const cachedDecorations = new Map<TextDocument, DecorationRanges>();
+  for (const editor of window.visibleTextEditors) {
+    const cached = decorationCache.get(editor.document);
+    if (cached) {
+      cachedDecorations.set(editor.document, cached);
+    }
+  }
+
+  // Recreate decoration types with new colors
+  initializeCodeDecorations(context);
+
+  // Immediately reapply cached decorations to prevent flash
+  for (const editor of window.visibleTextEditors) {
+    const cached = cachedDecorations.get(editor.document);
+    if (cached) {
+      decorationTypes.forEach((decoration, key) => {
+        const ranges = cached[key as keyof DecorationRanges] || [];
+        editor.setDecorations(decoration, ranges);
+      });
+    }
+  }
+}
+
+/**
+ * Handle document text changes
+ */
+function handleDocumentChange(event: vscode.TextDocumentChangeEvent): void {
+  // Track modified lines for partial cache invalidation
+  for (const change of event.contentChanges) {
+    const startLine = change.range.start.line;
+    const endLine = change.range.end.line;
+    const linesAdded = change.text.split('\n').length - 1;
+
+    // Mark affected lines as modified
+    markLinesModified(event.document, startLine, Math.max(endLine, startLine + linesAdded));
+  }
+
+  triggerUpdateDecorations(event.document);
+  void updateStatusBarItem(event.document);
+}
+
+/**
+ * Handle active editor changes
+ */
+function handleActiveEditorChange(editor: vscode.TextEditor): void {
+  // Apply cached decorations immediately to prevent flashing
+  const cachedDecorations = decorationCache.get(editor.document);
+  if (cachedDecorations) {
+    decorationTypes.forEach((decoration, key) => {
+      const ranges = cachedDecorations[key as keyof DecorationRanges] || [];
+      editor.setDecorations(decoration, ranges);
+    });
+  }
+
+  // Then trigger a proper update (no debounce for tab switches)
+  void updateCodeDecorations(editor.document);
+  void updateStatusBarItem(editor.document);
+}
+
+/**
+ * Initialize the current active editor
+ */
+function initializeActiveEditor(): void {
+  const activeEditor = window.activeTextEditor;
+  if (activeEditor) {
+    // Update immediately without debounce for initial load
+    void updateCodeDecorations(activeEditor.document);
+    void updateStatusBarItem(activeEditor.document);
+  }
+}
+
+/**
+ * Validate and fix configuration if needed
+ */
+function validateConfiguration(): void {
+  const validationResult = configValidator.validateConfiguration();
+  if (!validationResult.valid) {
+    configValidator.showValidationErrors(validationResult);
+    // Auto-fix if possible
+    void configValidator.autoFixConfiguration();
+  }
+}
+
+export async function activate(context: ExtensionContext) {
+  try {
+    await initializeExtension(context);
+
+    const isEnabled = context.globalState.get('isEnabled');
+    if (isEnabled !== false) {
+      const { provider } = registerFileDecorationProvider(context);
+      
+      registerCommands(context, provider);
+      
+      // Create decorations for code regions
+      initializeCodeDecorations(context);
+      
+      // Create status bar item
+      createStatusBarItem(context);
+      
+      // Validate configuration on startup
+      validateConfiguration();
+      
+      // Set up event handlers
+      setupEventHandlers(context);
+      
+      // Initialize current editor
+      initializeActiveEditor();
     }
   } catch (error) {
     errorHandler.handleError(
