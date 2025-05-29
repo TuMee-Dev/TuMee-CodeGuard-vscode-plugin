@@ -26,10 +26,60 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     let colorLinks = {};
     const PREVIEW_LINES = ${JSON.stringify(previewLines)};
     
+    // Constants for code organization and DRY principles
+    const PERMISSION_TYPES = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
+    const PERMISSION_FIELDS = ['enabled', 'color', 'minimapColor', 'transparency', 'borderOpacity', 'link'];
+    
+    // Helper functions for DOM manipulation
+    function getPermissionElements(permission) {
+      const elements = {};
+      PERMISSION_FIELDS.forEach(field => {
+        const elementId = permission + '-' + field;
+        elements[field] = document.getElementById(elementId);
+      });
+      return elements;
+    }
+    
+    function setRgbaStyle(element, property, hexColor, opacity) {
+      if (!element) return;
+      if (!hexColor) {
+        element.style[property] = '';
+        return;
+      }
+      const rgb = hexToRgb(hexColor);
+      if (rgb) {
+        element.style[property] = \`rgba(\${rgb.r}, \${rgb.g}, \${rgb.b}, \${opacity})\`;
+      }
+    }
+    
+    function setBorderStyle(element, hexColor, opacity, width = '3px') {
+      if (!element) return;
+      if (!hexColor) {
+        element.style.borderLeft = '';
+        return;
+      }
+      const rgb = hexToRgb(hexColor);
+      if (rgb) {
+        element.style.borderLeft = \`\${width} solid rgba(\${rgb.r}, \${rgb.g}, \${rgb.b}, \${opacity})\`;
+      }
+    }
+    
+    function getConfigKey(type, perm) {
+      if (perm === 'context') return 'contextRead';
+      if (perm === 'contextWrite') return 'contextWrite';
+      return (type === 'ai' ? 'ai' : type) + capitalizeFirst(perm);
+    }
+    
+    function processPermissions(callback) {
+      PERMISSION_TYPES.forEach(permission => {
+        const elements = getPermissionElements(permission);
+        callback(permission, elements);
+      });
+    }
+    
     // Initialize on load
     window.addEventListener('load', () => {
-      const permissions = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
-      permissions.forEach(perm => {
+      PERMISSION_TYPES.forEach(perm => {
         colorLinks[perm] = true;
       });
       
@@ -156,35 +206,25 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       const minimapColor = getElementValue(permission + '-minimapColor');
       const borderOpacity = getElementValue(permission + '-borderOpacity', '100') / 100;
       const minimapPreview = getElement(permission + '-minimapColor-preview');
-      if (minimapPreview) {
-        const rgb = hexToRgb(minimapColor);
-        if (rgb) {
-          minimapPreview.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + borderOpacity + ')';
-        }
-      }
+      setRgbaStyle(minimapPreview, 'backgroundColor', minimapColor, borderOpacity);
       
       const rowColor = getElementValue(permission + '-color');
       const rowOpacity = getElementValue(permission + '-transparency', '20') / 100;
       const rowPreview = getElement(permission + '-color-preview');
-      if (rowPreview) {
-        const rgb = hexToRgb(rowColor);
-        if (rgb) {
-          rowPreview.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + rowOpacity + ')';
-        }
-      }
+      setRgbaStyle(rowPreview, 'backgroundColor', rowColor, rowOpacity);
     }
     
     function toggleColorLink(event, permission) {
       event.stopPropagation();
       
       // Check if controls are disabled
-      const icon = document.getElementById(permission + '-link');
-      if (icon && icon.style.pointerEvents === 'none') {
+      const elements = getPermissionElements(permission);
+      if (elements.link && elements.link.style.pointerEvents === 'none') {
         return;
       }
       
       colorLinks[permission] = !colorLinks[permission];
-      icon.className = colorLinks[permission] ? 'link-icon linked' : 'link-icon unlinked';
+      elements.link.className = colorLinks[permission] ? 'link-icon linked' : 'link-icon unlinked';
       
       if (colorLinks[permission]) {
         const rowColor = getElementValue(permission + '-color');
@@ -226,18 +266,12 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     window.updateMixPattern = updateMixPattern;
     
     function toggleEnabled(permission) {
-      const enabled = document.getElementById(permission + '-enabled').checked;
+      const elements = getPermissionElements(permission);
+      const enabled = elements.enabled.checked;
       
-      const controls = [
-        document.getElementById(permission + '-color'),
-        document.getElementById(permission + '-minimapColor'),
-        document.getElementById(permission + '-transparency'),
-        document.getElementById(permission + '-borderOpacity'),
-        document.getElementById(permission + '-link')
-      ];
-      
-      controls.forEach(control => {
-        if (control) {
+      // Toggle enabled state for all permission controls
+      Object.values(elements).forEach(control => {
+        if (control && control !== elements.enabled) {
           if (enabled) {
             control.classList.remove('disabled');
             control.disabled = false;
@@ -248,7 +282,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         }
       });
       
-      const enabledCheckbox = document.getElementById(permission + '-enabled');
+      const enabledCheckbox = elements.enabled;
       if (enabledCheckbox) {
         const permissionSection = enabledCheckbox.closest('.permission-section');
         if (permissionSection) {
@@ -303,7 +337,7 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       const perms1 = colors1.permissions || {};
       const perms2 = colors2.permissions || {};
       
-      const permTypes = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
+      const permTypes = PERMISSION_TYPES;
       
       for (const perm of permTypes) {
         const p1 = perms1[perm];
@@ -453,23 +487,8 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         }
       }
       
-      if (bgColor) {
-        const rgb = hexToRgb(bgColor);
-        if (rgb) {
-          line.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + opacity + ')';
-        }
-      } else {
-        line.style.backgroundColor = '';
-      }
-      
-      if (borderColor && borderOpacity > 0) {
-        const rgb = hexToRgb(borderColor);
-        if (rgb) {
-          border.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + borderOpacity + ')';
-        }
-      } else {
-        border.style.backgroundColor = '';
-      }
+      setRgbaStyle(line, 'backgroundColor', bgColor, opacity);
+      setRgbaStyle(border, 'backgroundColor', (borderColor && borderOpacity > 0) ? borderColor : '', borderOpacity);
     }
     
     function updateExample(id, type, perm) {
@@ -519,17 +538,8 @@ export function getWebviewJavaScript(previewLines: any[]): string {
         }
       }
       
-      if (bgColor) {
-        const rgb = hexToRgb(bgColor);
-        const borderRgb = hexToRgb(borderColor);
-        if (rgb && borderRgb) {
-          elem.style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + opacity + ')';
-          elem.style.borderLeft = '3px solid rgba(' + borderRgb.r + ', ' + borderRgb.g + ', ' + borderRgb.b + ', ' + borderOpacity + ')';
-        }
-      } else {
-        elem.style.backgroundColor = '';
-        elem.style.borderLeft = '';
-      }
+      setRgbaStyle(elem, 'backgroundColor', bgColor, opacity);
+      setBorderStyle(elem, borderColor, borderOpacity);
       
       if (!elem.classList.contains('context-half')) {
         elem.style.padding = '8px 12px';
@@ -660,23 +670,17 @@ export function getWebviewJavaScript(previewLines: any[]): string {
     
     function getColors() {
       const permissions = {};
-      const permTypes = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
-      
-      permTypes.forEach(perm => {
-        const enabledElem = document.getElementById(perm + '-enabled');
-        const borderOpacityElem = document.getElementById(perm + '-borderOpacity');
-        const colorElem = document.getElementById(perm + '-color');
-        const transElem = document.getElementById(perm + '-transparency');
-        const minimapElem = document.getElementById(perm + '-minimapColor');
+      PERMISSION_TYPES.forEach(perm => {
+        const elements = getPermissionElements(perm);
         
-        const color = colorElem ? colorElem.value : '#000000';
-        const minimapColor = minimapElem ? minimapElem.value : '#000000';
+        const color = elements.color ? elements.color.value : '#000000';
+        const minimapColor = elements.minimapColor ? elements.minimapColor.value : '#000000';
         
         permissions[perm] = {
-          enabled: enabledElem ? enabledElem.checked : true,
+          enabled: elements.enabled ? elements.enabled.checked : true,
           color: color,
-          transparency: transElem ? (transElem.value / 100) : 0.2,
-          borderOpacity: borderOpacityElem ? (borderOpacityElem.value / 100) : 1.0,
+          transparency: elements.transparency ? (elements.transparency.value / 100) : 0.2,
+          borderOpacity: elements.borderOpacity ? (elements.borderOpacity.value / 100) : 1.0,
           minimapColor: minimapColor
         };
       });
@@ -697,37 +701,33 @@ export function getWebviewJavaScript(previewLines: any[]): string {
       isLoadingTheme = true;
       
       Object.entries(colors.permissions).forEach(([key, config]) => {
-        const enabledElem = document.getElementById(key + '-enabled');
-        if (enabledElem) {
-          enabledElem.checked = config.enabled !== false;
+        const elements = getPermissionElements(key);
+        
+        if (elements.enabled) {
+          elements.enabled.checked = config.enabled !== false;
           toggleEnabled(key);
         }
         
-        const colorInput = document.getElementById(key + '-color');
-        if (colorInput) colorInput.value = config.color;
+        if (elements.color) elements.color.value = config.color;
         
-        const minimapInput = document.getElementById(key + '-minimapColor');
-        if (minimapInput && config.minimapColor) {
-          minimapInput.value = config.minimapColor;
-        } else if (minimapInput) {
-          minimapInput.value = config.color;
+        if (elements.minimapColor && config.minimapColor) {
+          elements.minimapColor.value = config.minimapColor;
+        } else if (elements.minimapColor) {
+          elements.minimapColor.value = config.color;
         }
         
-        const transInput = document.getElementById(key + '-transparency');
-        if (transInput) {
+        if (elements.transparency) {
           const transPercent = Math.round(config.transparency * 100);
-          transInput.value = transPercent;
-          document.getElementById(key + '-transparency-value').textContent = transPercent + '%';
+          elements.transparency.value = transPercent;
+          const valueElem = document.getElementById(key + '-transparency-value');
+          if (valueElem) valueElem.textContent = transPercent + '%';
         }
         
-        const borderInput = document.getElementById(key + '-borderOpacity');
-        if (borderInput && config.borderOpacity !== undefined) {
+        if (elements.borderOpacity && config.borderOpacity !== undefined) {
           const borderPercent = Math.round(config.borderOpacity * 100);
-          borderInput.value = borderPercent;
-          const borderValueElem = document.getElementById(key + '-borderOpacity-value');
-          if (borderValueElem) {
-            borderValueElem.textContent = borderPercent + '%';
-          }
+          elements.borderOpacity.value = borderPercent;
+          const valueElem = document.getElementById(key + '-borderOpacity-value');
+          if (valueElem) valueElem.textContent = borderPercent + '%';
         }
       });
       
