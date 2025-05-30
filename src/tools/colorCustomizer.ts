@@ -144,6 +144,7 @@ export class ColorCustomizerPanel {
 
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
+  private readonly _cm = configManager();
   private _disposables: vscode.Disposable[] = [];
   private _currentTheme: string = '';
   private _isSystemTheme: boolean = false;
@@ -225,8 +226,28 @@ export class ColorCustomizerPanel {
     );
   }
 
+  // Helper methods for common operations
+  private _postMessage(command: string, data?: any): void {
+    void this._panel.webview.postMessage({ command, ...data });
+  }
+
+  private _showInfo(message: string): void {
+    void vscode.window.showInformationMessage(message);
+  }
+
+  private _showError(message: string): void {
+    void vscode.window.showErrorMessage(message);
+  }
+
+  private _getCustomThemes(): Record<string, GuardColors> {
+    return this._cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
+  }
+
+  private _getBuiltInThemes(): string[] {
+    return Object.keys(COLOR_THEMES);
+  }
+
   private async _saveColors(colors: GuardColors, fromTheme: boolean = false) {
-    const cm = configManager();
 
     // If we're editing a system theme, prompt to create a new theme
     if (this._isSystemTheme && !fromTheme) {
@@ -237,7 +258,7 @@ export class ColorCustomizerPanel {
           if (!value || value.trim().length === 0) {
             return 'Theme name cannot be empty';
           }
-          const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
+          const customThemes = this._getCustomThemes();
           if (customThemes[value]) {
             return 'A theme with this name already exists';
           }
@@ -249,58 +270,51 @@ export class ColorCustomizerPanel {
         await this._saveAsNewTheme(themeName, colors);
         this._currentTheme = themeName;
         this._isSystemTheme = false;
-        await cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
+        await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
 
         // Update the dropdown in the webview
-        void this._panel.webview.postMessage({
-          command: 'setSelectedTheme',
-          theme: themeName
-        });
+        this._postMessage('setSelectedTheme', { theme: themeName });
       }
       return;
     }
 
     // If we have a current custom theme and not applying from theme selector
     if (this._currentTheme && !this._isSystemTheme && !fromTheme) {
-      const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
+      const customThemes = this._getCustomThemes();
       if (customThemes[this._currentTheme]) {
         customThemes[this._currentTheme] = colors;
-        await cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
+        await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
 
         // If this is the currently selected theme, update guardColorsComplete too
-        const selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, '');
+        const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, '');
         if (selectedTheme === this._currentTheme) {
-          await cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
+          await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
         }
 
-        void vscode.window.showInformationMessage(`Theme '${this._currentTheme}' updated successfully!`);
+        this._showInfo(`Theme '${this._currentTheme}' updated successfully!`);
       }
       // Don't send colors back - webview already has current values
     } else if (!fromTheme) {
-      await cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
-      await cm.update(CONFIG_KEYS.SELECTED_THEME, '');
-      void vscode.window.showInformationMessage('Guard tag colors saved successfully!');
+      await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
+      await this._cm.update(CONFIG_KEYS.SELECTED_THEME, '');
+      this._showInfo('Guard tag colors saved successfully!');
     } else {
       // This is fromTheme = true case, update the config
-      await cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
+      await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
       // Send the new theme colors to update the UI
-      void this._panel.webview.postMessage({
-        command: 'updateColors',
-        colors: colors
-      });
+      this._postMessage('updateColors', { colors });
     }
   }
 
   private _sendCurrentColors() {
-    const cm = configManager();
-    const savedColors = cm.get<GuardColors>(CONFIG_KEYS.GUARD_COLORS_COMPLETE);
+    const savedColors = this._cm.get<GuardColors>(CONFIG_KEYS.GUARD_COLORS_COMPLETE);
     let colors: GuardColors;
 
     if (savedColors) {
       colors = mergeWithDefaults(savedColors);
     } else {
       // No saved colors, check if we have a selected theme
-      const selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, 'light');
+      const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'light');
       const theme = COLOR_THEMES[selectedTheme];
       if (theme) {
         colors = mergeWithDefaults(theme.colors);
@@ -309,10 +323,7 @@ export class ColorCustomizerPanel {
       }
     }
 
-    void this._panel.webview.postMessage({
-      command: 'updateColors',
-      colors: colors
-    });
+    this._postMessage('updateColors', { colors });
   }
 
   private async _applyTheme(themeName: string) {
@@ -320,8 +331,7 @@ export class ColorCustomizerPanel {
     this._isSystemTheme = !!theme;
 
     if (!theme) {
-      const cm = configManager();
-      const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
+      const customThemes = this._getCustomThemes();
       if (customThemes[themeName]) {
         theme = { name: themeName, colors: customThemes[themeName] };
         this._isSystemTheme = false;
@@ -332,47 +342,33 @@ export class ColorCustomizerPanel {
       this._currentTheme = themeName;
 
       // Update colors without showing notification
-      const cm = configManager();
       const mergedColors = mergeWithDefaults(theme.colors);
-      await cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
-      await cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
+      await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
+      await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
 
-      void this._panel.webview.postMessage({
-        command: 'updateColors',
-        colors: mergedColors
-      });
+      this._postMessage('updateColors', { colors: mergedColors });
 
       // Send theme type info to webview
-      void this._panel.webview.postMessage({
-        command: 'setThemeType',
-        isSystem: this._isSystemTheme
-      });
+      this._postMessage('setThemeType', { isSystem: this._isSystemTheme });
     }
   }
 
   private async _saveAsNewTheme(name: string, colors: GuardColors) {
-    const cm = configManager();
-    const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
+    const customThemes = this._getCustomThemes();
     customThemes[name] = colors;
-    await cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
-    await cm.update(CONFIG_KEYS.SELECTED_THEME, name);
+    await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
+    await this._cm.update(CONFIG_KEYS.SELECTED_THEME, name);
 
     this._currentTheme = name;
     this._isSystemTheme = false;
 
-    void vscode.window.showInformationMessage(`Theme '${name}' saved successfully!`);
+    this._showInfo(`Theme '${name}' saved successfully!`);
     this._sendThemeList();
 
     // Update the dropdown selection
     setTimeout(() => {
-      void this._panel.webview.postMessage({
-        command: 'setSelectedTheme',
-        theme: name
-      });
-      void this._panel.webview.postMessage({
-        command: 'setThemeType',
-        isSystem: false
-      });
+      this._postMessage('setSelectedTheme', { theme: name });
+      this._postMessage('setThemeType', { isSystem: false });
     }, 100);
   }
 
@@ -396,18 +392,17 @@ export class ColorCustomizerPanel {
         return;
       }
 
-      const cm = configManager();
-      const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
+      const customThemes = this._getCustomThemes();
 
       // Create a shallow copy to avoid proxy issues
       const updatedThemes = { ...customThemes };
       delete updatedThemes[name];
-      await cm.update(CONFIG_KEYS.CUSTOM_THEMES, updatedThemes);
+      await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, updatedThemes);
 
       // Determine next theme to select (only custom themes can be deleted)
       let nextTheme = '';
       if (this._currentTheme === name) {
-        const builtInThemes = Object.keys(COLOR_THEMES);
+        const builtInThemes = this._getBuiltInThemes();
         const originalCustomThemes = Object.keys(customThemes);
         const remainingCustomThemes = Object.keys(updatedThemes);
 
@@ -435,22 +430,18 @@ export class ColorCustomizerPanel {
         } else {
           this._currentTheme = '';
           this._isSystemTheme = false;
-          await cm.update(CONFIG_KEYS.SELECTED_THEME, '');
+          await this._cm.update(CONFIG_KEYS.SELECTED_THEME, '');
         }
       }
 
-      void vscode.window.showInformationMessage(`Theme '${name}' deleted successfully!`);
+      this._showInfo(`Theme '${name}' deleted successfully!`);
 
       // Send the theme list update first
       this._sendThemeList();
 
       // Then send the deletion notification with a slight delay to ensure theme list is processed
       setTimeout(() => {
-        void this._panel.webview.postMessage({
-          command: 'themeDeleted',
-          deletedTheme: name,
-          nextTheme: nextTheme
-        });
+        this._postMessage('themeDeleted', { deletedTheme: name, nextTheme });
       }, 50);
     } finally {
       this._isDeleting = false;
@@ -458,9 +449,8 @@ export class ColorCustomizerPanel {
   }
 
   private async _saveDefaultPermissions(defaultAiWrite: boolean, defaultHumanWrite: boolean) {
-    const cm = configManager();
-    await cm.update(CONFIG_KEYS.DEFAULT_AI_WRITE, defaultAiWrite);
-    await cm.update(CONFIG_KEYS.DEFAULT_HUMAN_WRITE, defaultHumanWrite);
+    await this._cm.update(CONFIG_KEYS.DEFAULT_AI_WRITE, defaultAiWrite);
+    await this._cm.update(CONFIG_KEYS.DEFAULT_HUMAN_WRITE, defaultHumanWrite);
   }
 
   private async _exportTheme() {
@@ -468,7 +458,7 @@ export class ColorCustomizerPanel {
     if (colors) {
       const json = JSON.stringify(colors, null, 2);
       void vscode.env.clipboard.writeText(json);
-      void vscode.window.showInformationMessage('Theme copied to clipboard as JSON!');
+      this._showInfo('Theme copied to clipboard as JSON!');
     }
   }
 
@@ -477,32 +467,29 @@ export class ColorCustomizerPanel {
       const json = await vscode.env.clipboard.readText();
 
       if (!json || json.trim().length === 0) {
-        void vscode.window.showErrorMessage('Clipboard is empty! Please copy a theme JSON first.');
+        this._showError('Clipboard is empty! Please copy a theme JSON first.');
         return;
       }
 
       const colors = JSON.parse(json) as GuardColors;
 
       if (!colors.permissions) {
-        void vscode.window.showErrorMessage('Invalid theme format: missing permissions object');
+        this._showError('Invalid theme format: missing permissions object');
         return;
       }
 
       const mergedColors = mergeWithDefaults(colors);
-      void this._panel.webview.postMessage({
-        command: 'updateColors',
-        colors: mergedColors
-      });
-      void vscode.window.showInformationMessage('Theme imported from clipboard!');
+      this._postMessage('updateColors', { colors: mergedColors });
+      this._showInfo('Theme imported from clipboard!');
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-      void vscode.window.showErrorMessage(`Failed to import theme: ${errorMessage}`);
+      this._showError(`Failed to import theme: ${errorMessage}`);
       console.error('Import theme error:', e);
     }
   }
 
   private async _getCurrentColorsFromWebview(): Promise<GuardColors | undefined> {
-    void this._panel.webview.postMessage({ command: 'requestCurrentColors' });
+    this._postMessage('requestCurrentColors');
 
     return new Promise((resolve) => {
       const disposable = this._panel.webview.onDidReceiveMessage(
@@ -522,14 +509,11 @@ export class ColorCustomizerPanel {
   }
 
   private _sendThemeList() {
-    const cm = configManager();
-    const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
-
-    const builtInThemes = Object.keys(COLOR_THEMES);
+    const customThemes = this._getCustomThemes();
+    const builtInThemes = this._getBuiltInThemes();
     const customThemeNames = Object.keys(customThemes);
 
-    void this._panel.webview.postMessage({
-      command: 'updateThemeList',
+    this._postMessage('updateThemeList', {
       builtIn: builtInThemes,
       custom: customThemeNames
     });
@@ -543,8 +527,7 @@ export class ColorCustomizerPanel {
     setTimeout(async () => {
       this._sendThemeList();
 
-      const cm = configManager();
-      let selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, '');
+      let selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, '');
 
       // If no theme is selected, default to 'light'
       if (!selectedTheme) {
@@ -554,19 +537,15 @@ export class ColorCustomizerPanel {
       // Apply the theme to ensure colors and dropdown are in sync
       await this._applyTheme(selectedTheme);
 
-      void this._panel.webview.postMessage({
-        command: 'setSelectedTheme',
-        theme: selectedTheme
-      });
+      this._postMessage('setSelectedTheme', { theme: selectedTheme });
 
       // Restore default permissions from user preferences
-      const defaultAiWrite = cm.get(CONFIG_KEYS.DEFAULT_AI_WRITE, false);
-      const defaultHumanWrite = cm.get(CONFIG_KEYS.DEFAULT_HUMAN_WRITE, true);
+      const defaultAiWrite = this._cm.get(CONFIG_KEYS.DEFAULT_AI_WRITE, false);
+      const defaultHumanWrite = this._cm.get(CONFIG_KEYS.DEFAULT_HUMAN_WRITE, true);
 
-      void this._panel.webview.postMessage({
-        command: 'restoreDefaultPermissions',
-        defaultAiWrite: defaultAiWrite,
-        defaultHumanWrite: defaultHumanWrite
+      this._postMessage('restoreDefaultPermissions', {
+        defaultAiWrite,
+        defaultHumanWrite
       });
     }, 100);
   }
@@ -657,8 +636,7 @@ export class ColorCustomizerPanel {
     const javascript = getWebviewJavaScript(previewLines);
 
     // Get the current theme colors for initial HTML generation
-    const cm = configManager();
-    const selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, 'light');
+    const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'light');
     const theme = COLOR_THEMES[selectedTheme] || COLOR_THEMES.light;
     const colors = theme.colors;
 
