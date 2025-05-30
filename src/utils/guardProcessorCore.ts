@@ -9,23 +9,23 @@ import { parseGuardTag } from './acl';
 import { GuardProcessingError, ErrorSeverity } from './errorHandler';
 import { isLineAComment } from './commentDetector';
 
-/**
- * Document interface that matches what we need from vscode.TextDocument
- */
-export interface IDocument {
-  getText(): string;
-  readonly lineCount: number;
-  readonly languageId: string;
-  lineAt(line: number): ITextLine;
-}
+// Import cache management
+import { 
+  clearScopeCache as clearScopeCacheCore, 
+  markLinesModified as markLinesModifiedCore, 
+  resolveSemanticWithCache,
+  type IDocument,
+  type ITextLine,
+  type SemanticResolver
+} from './guardCache';
 
-/**
- * Text line interface that matches vscode.TextLine
- */
-export interface ITextLine {
-  readonly text: string;
-  readonly firstNonWhitespaceCharacterIndex: number;
-}
+// Import scope resolution functionality
+import {
+  resolveGuardScope,
+  determineGuardBoundaries,
+  findNextGuardLine,
+  trimTrailingWhitespace
+} from './guardScopeResolver';
 
 /**
  * Configuration interface
@@ -42,128 +42,13 @@ import {
   type GuardStackEntry
 } from './guardStackManager';
 
-/**
- * Cache for scope resolutions to avoid recalculating on every keystroke
- */
-const scopeCacheMap = new WeakMap<IDocument, Map<string, ScopeBoundary>>();
-
-/**
- * Track which lines have been modified for smarter cache invalidation
- */
-const modifiedLinesMap = new WeakMap<IDocument, Set<number>>();
-
-/**
- * Semantic resolver function type
- */
-export type SemanticResolver = (
-  document: IDocument,
-  line: number,
-  scope: string,
-  addScopes?: string[],
-  removeScopes?: string[]
-) => Promise<ScopeBoundary | null>;
+// Re-export types for backward compatibility
+export type { IDocument, ITextLine, SemanticResolver } from './guardCache';
+export type { GuardStackEntry } from './guardStackManager';
 
 
-/**
- * Clear the scope cache for a document
- */
-export function clearScopeCache(document: IDocument): void {
-  scopeCacheMap.delete(document);
-}
-
-/**
- * Mark lines as modified for partial cache invalidation
- */
-export function markLinesModified(document: IDocument, startLine: number, endLine: number): void {
-  let modifiedLines = modifiedLinesMap.get(document);
-  if (!modifiedLines) {
-    modifiedLines = new Set<number>();
-    modifiedLinesMap.set(document, modifiedLines);
-  }
-
-  for (let line = startLine; line <= endLine; line++) {
-    modifiedLines.add(line);
-  }
-
-  // Partial cache invalidation for scope cache
-  const scopeCache = scopeCacheMap.get(document);
-  if (scopeCache) {
-    // Remove cached scope entries that overlap with modified lines
-    for (const [key, boundary] of scopeCache.entries()) {
-      if (boundary.startLine <= endLine && boundary.endLine >= startLine) {
-        scopeCache.delete(key);
-      }
-    }
-  }
-}
-
-/**
- * Get cached scope boundaries for a given line and scope type
- */
-function getCachedScope(
-  document: IDocument,
-  line: number,
-  scope: string,
-  addScopes?: string[],
-  removeScopes?: string[]
-): ScopeBoundary | undefined {
-  const scopeCache = scopeCacheMap.get(document);
-  if (!scopeCache) return undefined;
-
-  // Create a cache key that includes all scope modifiers
-  const scopeKey = `${line}:${scope}:${addScopes?.join(',') || ''}:${removeScopes?.join(',') || ''}`;
-  return scopeCache.get(scopeKey);
-}
-
-/**
- * Cache scope boundaries
- */
-function setCachedScope(
-  document: IDocument,
-  line: number,
-  scope: string,
-  boundary: ScopeBoundary,
-  addScopes?: string[],
-  removeScopes?: string[]
-): void {
-  let scopeCache = scopeCacheMap.get(document);
-  if (!scopeCache) {
-    scopeCache = new Map();
-    scopeCacheMap.set(document, scopeCache);
-  }
-
-  // Create a cache key that includes all scope modifiers
-  const scopeKey = `${line}:${scope}:${addScopes?.join(',') || ''}:${removeScopes?.join(',') || ''}`;
-  scopeCache.set(scopeKey, boundary);
-}
-
-/**
- * Resolve semantic scope with caching
- */
-async function resolveSemanticWithCache(
-  document: IDocument,
-  line: number,
-  scope: string,
-  semanticResolver: SemanticResolver,
-  addScopes?: string[],
-  removeScopes?: string[]
-): Promise<ScopeBoundary | undefined> {
-  // Check cache first
-  const cached = getCachedScope(document, line, scope, addScopes, removeScopes);
-  if (cached) {
-    return cached;
-  }
-
-  // Resolve scope
-  const boundary = await semanticResolver(document, line, scope, addScopes, removeScopes);
-
-  // Cache the result
-  if (boundary) {
-    setCachedScope(document, line, scope, boundary, addScopes, removeScopes);
-  }
-
-  return boundary || undefined;
-}
+// Re-export cache functions for external use
+export { clearScopeCache, markLinesModified } from './guardCache';
 
 /**
  * Parse guard tags from document lines
@@ -236,139 +121,29 @@ export async function parseGuardTagsCore(
           humanIsContext: tagInfo.humanIsContext
         };
 
-        const effectiveScope = guardTag.scope;
+        // Handle semantic scope resolution using dedicated scope resolver
+        await resolveGuardScope(
+          guardTag,
+          lineNumber,
+          totalLines,
+          lines,
+          document,
+          semanticResolver,
+          tagInfo,
+          debugEnabled,
+          logger
+        );
 
-        // Handle semantic scope resolution
-        if (effectiveScope && !guardTag.lineCount) {
-          // Special handling for 'file' scope
-          if (effectiveScope === 'file') {
-            guardTag.scopeStart = lineNumber;
-            guardTag.scopeEnd = totalLines;
-          } else {
-            try {
-              const scopeBoundary = await resolveSemanticWithCache(
-                document,
-                lineNumber - 1,  // Convert to 0-based for the resolver
-                effectiveScope,
-                semanticResolver,
-                tagInfo.addScopes,
-                tagInfo.removeScopes
-              );
-
-              // Check if tree-sitter returned a meaningful block
-              // For guards in comments with block scope, we should use tree-sitter's block
-              // UNLESS it extends to end-of-file (suggesting no real block was found)
-              const isGuardInComment = isLineAComment(lines[lineNumber - 1], document.languageId);
-              let isMeaningfulBlock = scopeBoundary &&
-                (scopeBoundary.startLine !== lineNumber || scopeBoundary.endLine !== totalLines);
-
-              // For guards in comments with block scope, only use tree-sitter if it found a reasonable block
-              // (not extending to end of file)
-              if (isGuardInComment && effectiveScope === 'block' && scopeBoundary && scopeBoundary.endLine === totalLines) {
-                isMeaningfulBlock = false;
-              }
-
-              if (isMeaningfulBlock && scopeBoundary) {
-                guardTag.scopeStart = scopeBoundary.startLine;
-                guardTag.scopeEnd = scopeBoundary.endLine;
-                guardTag.lineCount = scopeBoundary.endLine - scopeBoundary.startLine + 1;
-                if (debugEnabled && logger) {
-                  logger.log(`[GuardProcessor] Resolved ${effectiveScope} at line ${lineNumber}: start=${scopeBoundary.startLine}, end=${scopeBoundary.endLine}`);
-                }
-              } else {
-                // No block found - for block scope, extend to next guard or end of file
-                if (effectiveScope === 'block') {
-                  guardTag.scopeStart = lineNumber;
-                  // Find the next guard tag of any type
-                  let nextGuardLine = totalLines;
-                  for (let i = lineNumber + 1; i <= totalLines; i++) {
-                    if (isLineAComment(lines[i - 1], document.languageId)) {
-                      const nextTag = parseGuardTag(lines[i - 1]);
-                      if (nextTag) {
-                        nextGuardLine = i - 1; // End just before the next guard
-                        break;
-                      }
-                    }
-                  }
-
-                  // Trim trailing whitespace
-                  let effectiveEndLine = nextGuardLine;
-                  for (let i = nextGuardLine; i > lineNumber; i--) {
-                    const lineText = lines[i - 1];
-                    if (lineText.trim().length > 0) {
-                      effectiveEndLine = i;
-                      break;
-                    }
-                  }
-
-                  guardTag.scopeEnd = effectiveEndLine;
-                  if (debugEnabled) {
-                    console.warn(`[GuardProcessor] No ${effectiveScope} found for guard at line ${lineNumber}, extending to line ${effectiveEndLine} (trimmed from ${nextGuardLine})`);
-                  }
-                } else {
-                  // For other scopes, apply only to current line
-                  if (debugEnabled) {
-                    console.warn(`[GuardProcessor] No ${effectiveScope} found for guard at line ${lineNumber}, applying to current line only`);
-                  }
-                  guardTag.scopeStart = lineNumber;
-                  guardTag.scopeEnd = lineNumber;
-                  guardTag.lineCount = 1;
-                }
-              }
-            } catch (error) {
-              console.error(`[GuardProcessor] Tree-sitter scope resolution failed at line ${lineNumber}:`, error);
-              throw new GuardProcessingError(
-                `Failed to resolve scope '${effectiveScope}' at line ${lineNumber}: ${error instanceof Error ? error.message : String(error)}`,
-                ErrorSeverity.ERROR
-              );
-            }
-          }
-        }
-
-        // Determine guard boundaries
-        let startLine = lineNumber;
-        let endLine = totalLines;
-        let isLineLimited = false;
-
-        if (tagInfo.lineCount) {
-          // Line-limited guard - starts from the guard tag line
-          endLine = startLine + tagInfo.lineCount - 1;
-          isLineLimited = true;
-          guardTag.scopeStart = startLine;
-          guardTag.scopeEnd = endLine;
-        } else if (guardTag.scopeStart && guardTag.scopeEnd) {
-          // Semantic scope - scope boundaries already set by resolver
-          // For block/class/func scopes, the guard applies to the resolved scope
-          // Don't overwrite the resolved boundaries!
-          startLine = guardTag.scopeStart;
-          endLine = guardTag.scopeEnd;
-        } else if (tagInfo.aiIsContext || tagInfo.humanIsContext) {
-          // Context guards without explicit scope extend until the next guard
-          guardTag.scopeStart = lineNumber;
-          // Find the next guard tag
-          let nextGuardLine = totalLines;
-          for (let i = lineNumber + 1; i <= totalLines; i++) {
-            if (isLineAComment(lines[i - 1], document.languageId)) {
-              const nextTag = parseGuardTag(lines[i - 1]);
-              if (nextTag) {
-                nextGuardLine = i - 1; // End just before the next guard
-                break;
-              }
-            }
-          }
-          guardTag.scopeEnd = nextGuardLine;
-          startLine = guardTag.scopeStart;
-          endLine = guardTag.scopeEnd;
-        } else {
-          // No scope specified - guard only applies to current line
-          if (debugEnabled) {
-            console.warn(`[GuardProcessor] No scope resolution for line ${lineNumber} - using line-only fallback`);
-          }
-          guardTag.scopeStart = lineNumber;
-          guardTag.scopeEnd = lineNumber;
-          startLine = lineNumber;
-          endLine = lineNumber;
-        }
+        // Determine guard boundaries using dedicated boundary determination
+        let { startLine, endLine, isLineLimited } = determineGuardBoundaries(
+          guardTag,
+          tagInfo,
+          lineNumber,
+          totalLines,
+          lines,
+          document,
+          debugEnabled
+        );
 
         // Before pushing new guard, remove any interrupted context guards
         removeInterruptedContextGuards(guardStack);
@@ -416,7 +191,7 @@ export async function parseGuardTagsCore(
 
         // For context guards, trim the endLine to exclude trailing whitespace
         let effectiveEndLine = endLine;
-        if ((tagInfo.aiIsContext || tagInfo.humanIsContext) && effectiveScope !== 'file') {
+        if ((tagInfo.aiIsContext || tagInfo.humanIsContext) && guardTag.scope !== 'file') {
           // Find the last line with content within the scope
           let lastContentLine = startLine; // Default to start if all lines are empty
           // Work backwards from the end to find the last non-empty line
