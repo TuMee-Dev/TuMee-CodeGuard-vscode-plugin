@@ -34,21 +34,13 @@ export interface IConfiguration {
   get<T>(key: string, defaultValue: T): T;
 }
 
-/**
- * Stack entry for guard processing - contains complete permission state
- */
-interface GuardStackEntry {
-  permissions: {
-    [target: string]: string;  // e.g., { ai: 'w', human: 'r' }
-  };
-  isContext: {
-    [target: string]: boolean;  // e.g., { ai: true, human: false }
-  };
-  startLine: number;
-  endLine: number;
-  isLineLimited: boolean;
-  sourceGuard?: GuardTag;  // The guard that triggered this state change
-}
+// Import guard stack management
+import { 
+  popGuardWithContextCleanup,
+  removeInterruptedContextGuards,
+  createGuardStackEntry,
+  type GuardStackEntry
+} from './guardStackManager';
 
 /**
  * Cache for scope resolutions to avoid recalculating on every keystroke
@@ -71,43 +63,6 @@ export type SemanticResolver = (
   removeScopes?: string[]
 ) => Promise<ScopeBoundary | null>;
 
-/**
- * Pop expired guards from stack and clean up any context guards below
- * Context guards cannot resume after being interrupted
- */
-function popGuardWithContextCleanup(guardStack: GuardStackEntry[]): void {
-  guardStack.pop();
-
-  // After popping, also pop any context guards below
-  // Context guards cannot resume after being interrupted
-  while (guardStack.length > 0) {
-    const next = guardStack[guardStack.length - 1];
-    // Check if any permission in this entry is 'context'
-    const hasContextPermission = Object.values(next.permissions).includes('context');
-    if (hasContextPermission) {
-      guardStack.pop();
-    } else {
-      break;
-    }
-  }
-}
-
-/**
- * Remove any context guards from the top of the stack
- * Context guards cannot be interrupted and resumed later
- */
-function removeInterruptedContextGuards(guardStack: GuardStackEntry[]): void {
-  while (guardStack.length > 0) {
-    const top = guardStack[guardStack.length - 1];
-    // Check if any permission in this entry is 'context'
-    const hasContextPermission = Object.values(top.permissions).includes('context');
-    if (hasContextPermission) {
-      guardStack.pop();
-    } else {
-      break;
-    }
-  }
-}
 
 /**
  * Clear the scope cache for a document
