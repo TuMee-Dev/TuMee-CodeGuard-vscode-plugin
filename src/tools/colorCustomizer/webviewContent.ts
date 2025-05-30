@@ -18,10 +18,17 @@ export function getWebviewStyles(): string {
 }
 
 export function getWebviewJavaScript(previewLines: any[]): string {
+  // Read the shared color rendering engine for webview
+  const enginePath = path.join(__dirname, 'tools', 'colorCustomizer', 'colorRenderingEngineWebview.js');
+  const engineContent = fs.readFileSync(enginePath, 'utf8');
+
   // Read the webview JavaScript from external file
   const jsPath = path.join(__dirname, 'tools', 'colorCustomizer', 'webview.js');
   const jsContent = fs.readFileSync(jsPath, 'utf8');
 
+  // Combine the engine and webview code
+  const combinedJs = engineContent + '\n\n' + jsContent;
+
   // Replace the PREVIEW_LINES placeholder with actual data
-  return jsContent.replace('__PREVIEW_LINES_PLACEHOLDER__', JSON.stringify(previewLines));
+  return combinedJs.replace('__PREVIEW_LINES_PLACEHOLDER__', JSON.stringify(previewLines));
 }

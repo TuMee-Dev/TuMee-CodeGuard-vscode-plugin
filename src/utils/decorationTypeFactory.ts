@@ -3,12 +3,11 @@
  */
 
 import type { TextEditorDecorationType } from 'vscode';
-import { window, ThemeColor } from 'vscode';
+import { window } from 'vscode';
 import { DEFAULT_COLORS, COLOR_THEMES } from '../tools/colorCustomizer';
 import { MixPattern } from '../types/mixPatterns';
 import type { GuardColors } from '../types/colorTypes';
-import { renderMixPattern, getMixedBorderColor } from './mixPatternRenderer';
-import { hexToRgba } from './colorUtils';
+import { ColorRenderingEngine } from './colorRenderingEngine';
 import { DebugLogger } from './debugLogger';
 import { configManager, CONFIG_KEYS } from './configurationManager';
 
@@ -102,7 +101,7 @@ export class DecorationTypeFactory {
   /**
    * Process color configuration and extract needed data
    */
-  private processColorConfiguration(guardColorsComplete: GuardColors, opacity: number) {
+  private processColorConfiguration(guardColorsComplete: GuardColors, _opacity: number) {
     const permissionTransparencies: Record<string, number> = {};
     const permissionBorderOpacities: Record<string, number> = {};
     const permissionMinimapColors: Record<string, string> = {};
@@ -301,125 +300,143 @@ export class DecorationTypeFactory {
     globalHighlightEntireLine: boolean,
     mixPattern: MixPattern
   ): void {
-    const colorInfo = this.getPermissionColor(key, colors, opacity);
-    const { color } = colorInfo;
-
-    // Get effective opacity - need to look up by permission type, not full key
-    let effectiveOpacity = colorInfo.opacity;
-
-    // For context types, look up transparency by contextRead/contextWrite
-    if (key.includes('Context')) {
-      if (key.includes('WriteContext')) {
-        effectiveOpacity = permissionTransparencies.contextWrite || colorInfo.opacity;
-      } else if (key.includes('ReadContext')) {
-        effectiveOpacity = permissionTransparencies.contextRead || colorInfo.opacity;
-      }
-    } else {
-      // For non-context, use the key directly
-      effectiveOpacity = permissionTransparencies[key] || colorInfo.opacity;
-    }
-
-    // Check if this permission is enabled
-    const isPermissionEnabled = permissionEnabledStates[key] !== false;
-
-    // Skip creating decoration if permission is disabled (unless it's the default state)
-    if (!isPermissionEnabled && key !== 'aiRead_humanWrite') {
-      return;
-    }
-
     // For aiRead_humanWrite (default state), use no decoration
     if (key === 'aiRead_humanWrite') {
       this.decorationTypes.set(key, window.createTextEditorDecorationType({}));
       return;
     }
 
-    // Get mixed permission information
+    // Parse permission key to get ai and human parts
     const parts = key.split('_');
-    const aiPart = parts[0].replace('Context', '');
-    const humanPart = parts[1];
+    if (parts.length !== 2) return;
 
-    const aiKey = aiPart;
-    const humanKey = humanPart;
-    const isMixed = colors[aiKey] && colors[humanKey];
-    const mixedColor = isMixed ? colors[humanKey] : undefined;
+    let aiPerm: string | null = null;
+    let humanPerm: string | null = null;
 
-    // Determine which highlightEntireLine setting to use
-    let shouldHighlightEntireLine = globalHighlightEntireLine;
-    
-    // Check for per-permission setting
-    if (key.includes('Context')) {
-      if (key.includes('WriteContext')) {
-        shouldHighlightEntireLine = permissionHighlightEntireLine.contextWrite ?? globalHighlightEntireLine;
-      } else if (key.includes('ReadContext')) {
-        shouldHighlightEntireLine = permissionHighlightEntireLine.contextRead ?? globalHighlightEntireLine;
-      }
-    } else {
-      // For mixed permissions, check both parts
-      const aiPermission = aiPart.replace('ai', '').toLowerCase();
-      const humanPermission = humanPart.replace('human', '').toLowerCase();
-      
-      // Use the setting from whichever permission is active
-      if (colors[aiKey] && permissionHighlightEntireLine[aiKey] !== undefined) {
-        shouldHighlightEntireLine = permissionHighlightEntireLine[aiKey];
-      } else if (colors[humanKey] && permissionHighlightEntireLine[humanKey] !== undefined) {
-        shouldHighlightEntireLine = permissionHighlightEntireLine[humanKey];
-      }
-    }
-
-    // Create decoration options
-    const decorationOptions: any = {
-      isWholeLine: shouldHighlightEntireLine
-    };
-
-    // Handle minimap and border colors
-    const minimapColor = permissionMinimapColors[key] || color;
-    const borderOpacity = permissionBorderOpacities[key] ?? 1.0;
-
-    if (borderBarEnabled && borderOpacity > 0 && isPermissionEnabled) {
-      decorationOptions.borderWidth = '0 0 0 3px';
-      decorationOptions.borderStyle = 'solid';
-      decorationOptions.borderColor = minimapColor ? hexToRgba(minimapColor, borderOpacity) : 'rgba(0, 0, 0, 0)';
-    }
-
-    // Only add overview ruler if border opacity > 0 AND permission is enabled
-    if (borderOpacity > 0 && isPermissionEnabled) {
-      decorationOptions.overviewRulerColor = minimapColor ? hexToRgba(minimapColor, borderOpacity) : 'rgba(0, 0, 0, 0)';
-      decorationOptions.overviewRulerLane = 2;
-    } else {
-      delete decorationOptions.overviewRulerColor;
-      delete decorationOptions.overviewRulerLane;
-    }
-
-    // Only add background color if transparency > 0
-    if (effectiveOpacity > 0) {
-      if (isMixed && mixedColor) {
-        // For mixed permissions, use the mix pattern renderer
-        DebugLogger.log(`[DEBUG] ${key}: Creating mixed decoration with pattern=${colorInfo.mixPattern}`);
-
-        const mixResult = renderMixPattern(colorInfo.mixPattern || mixPattern, {
-          aiColor: color,
-          humanColor: mixedColor,
-          aiOpacity: colorInfo.aiOpacity || effectiveOpacity,
-          humanOpacity: colorInfo.humanOpacity || effectiveOpacity,
-          aiMinimapColor: colorInfo.aiMinimapColor,
-          humanMinimapColor: colorInfo.humanMinimapColor,
-          aiBorderOpacity: colorInfo.aiBorderOpacity,
-          humanBorderOpacity: colorInfo.humanBorderOpacity
-        });
-
-        if (mixResult.backgroundColor) {
-          decorationOptions.backgroundColor = mixResult.backgroundColor;
-        }
-        if (mixResult.borderColor && borderBarEnabled) {
-          decorationOptions.borderColor = mixResult.borderColor;
+    // Extract ai permission
+    if (parts[0].startsWith('ai')) {
+      if (parts[0].includes('Context')) {
+        if (parts[0].includes('WriteContext')) {
+          aiPerm = 'contextWrite';
+        } else {
+          aiPerm = 'context';
         }
       } else {
-        // Single color decoration
-        decorationOptions.backgroundColor = color ? hexToRgba(color, effectiveOpacity) : 'rgba(0, 0, 0, 0)';
+        const permission = parts[0].replace('ai', '');
+        aiPerm = permission === 'NoAccess' ? 'noAccess' : permission.toLowerCase();
       }
     }
 
+    // Extract human permission
+    if (parts[1].startsWith('human')) {
+      const permission = parts[1].replace('human', '');
+      humanPerm = permission === 'NoAccess' ? 'noAccess' : permission.toLowerCase();
+    }
+
+    // Create color rendering engine with current colors
+    const guardColors: GuardColors = {
+      permissions: this.buildPermissionsFromConfig(
+        permissionTransparencies,
+        permissionBorderOpacities,
+        permissionMinimapColors,
+        permissionEnabledStates,
+        permissionHighlightEntireLine,
+        colors
+      ),
+      borderBarEnabled,
+      mixPattern
+    };
+
+    const engine = new ColorRenderingEngine(guardColors);
+    const result = engine.getColorForPermission({ ai: aiPerm, human: humanPerm });
+
+    // Skip if no color result or permission disabled
+    if (result.opacity === 0 && result.borderOpacity === 0) {
+      return;
+    }
+
+    // Create VSCode decoration options using shared engine
+    const decorationOptions = engine.toVSCodeDecorationOptions(result, borderBarEnabled);
     this.decorationTypes.set(key, window.createTextEditorDecorationType(decorationOptions));
+  }
+
+  /**
+   * Build GuardColors permissions structure from processed configuration
+   */
+  private buildPermissionsFromConfig(
+    permissionTransparencies: Record<string, number>,
+    permissionBorderOpacities: Record<string, number>,
+    permissionMinimapColors: Record<string, string>,
+    permissionEnabledStates: Record<string, boolean>,
+    permissionHighlightEntireLine: Record<string, boolean>,
+    colors: Record<string, string>
+  ): GuardColors['permissions'] {
+    return {
+      aiWrite: {
+        enabled: permissionEnabledStates.aiWrite !== false,
+        color: colors.aiWrite || '#000000',
+        transparency: permissionTransparencies.aiWrite || 0.3,
+        borderOpacity: permissionBorderOpacities.aiWrite || 1.0,
+        minimapColor: permissionMinimapColors.aiWrite || colors.aiWrite || '#000000',
+        highlightEntireLine: permissionHighlightEntireLine.aiWrite || false
+      },
+      aiRead: {
+        enabled: permissionEnabledStates.aiRead !== false,
+        color: colors.aiRead || '#000000',
+        transparency: permissionTransparencies.aiRead || 0.3,
+        borderOpacity: permissionBorderOpacities.aiRead || 1.0,
+        minimapColor: permissionMinimapColors.aiRead || colors.aiRead || '#000000',
+        highlightEntireLine: permissionHighlightEntireLine.aiRead || false
+      },
+      aiNoAccess: {
+        enabled: permissionEnabledStates.aiNoAccess !== false,
+        color: colors.aiNoAccess || '#000000',
+        transparency: permissionTransparencies.aiNoAccess || 0.3,
+        borderOpacity: permissionBorderOpacities.aiNoAccess || 1.0,
+        minimapColor: permissionMinimapColors.aiNoAccess || colors.aiNoAccess || '#000000',
+        highlightEntireLine: permissionHighlightEntireLine.aiNoAccess || false
+      },
+      humanWrite: {
+        enabled: permissionEnabledStates.humanWrite !== false,
+        color: colors.humanWrite || '#000000',
+        transparency: permissionTransparencies.humanWrite || 0.3,
+        borderOpacity: permissionBorderOpacities.humanWrite || 1.0,
+        minimapColor: permissionMinimapColors.humanWrite || colors.humanWrite || '#000000',
+        highlightEntireLine: permissionHighlightEntireLine.humanWrite || false
+      },
+      humanRead: {
+        enabled: permissionEnabledStates.humanRead !== false,
+        color: colors.humanRead || '#000000',
+        transparency: permissionTransparencies.humanRead || 0.3,
+        borderOpacity: permissionBorderOpacities.humanRead || 1.0,
+        minimapColor: permissionMinimapColors.humanRead || colors.humanRead || '#000000',
+        highlightEntireLine: permissionHighlightEntireLine.humanRead || false
+      },
+      humanNoAccess: {
+        enabled: permissionEnabledStates.humanNoAccess !== false,
+        color: colors.humanNoAccess || '#000000',
+        transparency: permissionTransparencies.humanNoAccess || 0.3,
+        borderOpacity: permissionBorderOpacities.humanNoAccess || 1.0,
+        minimapColor: permissionMinimapColors.humanNoAccess || colors.humanNoAccess || '#000000',
+        highlightEntireLine: permissionHighlightEntireLine.humanNoAccess || false
+      },
+      contextRead: {
+        enabled: permissionEnabledStates.contextRead !== false,
+        color: colors.contextRead || '#000000',
+        transparency: permissionTransparencies.contextRead || 0.3,
+        borderOpacity: permissionBorderOpacities.contextRead || 1.0,
+        minimapColor: permissionMinimapColors.contextRead || colors.contextRead || '#000000',
+        highlightEntireLine: permissionHighlightEntireLine.contextRead || false
+      },
+      contextWrite: {
+        enabled: permissionEnabledStates.contextWrite !== false,
+        color: colors.contextWrite || '#000000',
+        transparency: permissionTransparencies.contextWrite || 0.3,
+        borderOpacity: permissionBorderOpacities.contextWrite || 1.0,
+        minimapColor: permissionMinimapColors.contextWrite || colors.contextWrite || '#000000',
+        highlightEntireLine: permissionHighlightEntireLine.contextWrite || false
+      }
+    };
   }
 
   /**

@@ -2,7 +2,7 @@
 // API Key Manager Example - Demonstrates all guard tag colors
 
 
-// # @guard:ai:w.class @guard:human:r.class
+// # @guard:ai:w @guard:human:r
 // AI can modify this initialization code - RED highlight
 const apiManager = {
     version: '1.0.0',
