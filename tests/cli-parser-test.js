@@ -38,7 +38,16 @@ Module.prototype.require = function(id) {
             // Try to load from VSCode settings file
             try {
               const os = require('os');
-              const settingsPath = path.join(os.homedir(), '.config', 'Code', 'User', 'settings.json');
+              const platform = os.platform();
+              const homeDir = os.homedir();
+              let settingsPath;
+              if (platform === 'darwin') {
+                settingsPath = path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'settings.json');
+              } else if (platform === 'win32') {
+                settingsPath = path.join(process.env.APPDATA || '', 'Code', 'User', 'settings.json');
+              } else {
+                settingsPath = path.join(homeDir, '.config', 'Code', 'User', 'settings.json');
+              }
               if (fs.existsSync(settingsPath)) {
                 const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
                 const fullKey = namespace ? `${namespace}.${key}` : key;
@@ -110,6 +119,9 @@ const {
 
 // Import the semantic resolver
 const { resolveSemantic, initializeScopeResolver } = require('../src/utils/scopeResolver');
+
+// Import the theme loader
+const { getColorThemes } = require('../src/utils/themeLoader');
 
 // Simple document implementation for CLI
 class CLIDocument {
@@ -252,6 +264,7 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
   
   // Load theme colors once if using color
   const themeColors = useColor ? loadThemeColors(themeName) : null;
+  const themeConfig = useColor ? loadFullThemeConfig(themeName) : null;
   
   // Check for overlapping guards (mixed permissions)
   const mixedLines = new Set();
@@ -272,8 +285,8 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
     }
   }
   
-  // Function to convert hex color to nearest ANSI color
-  function hexToAnsi(hexColor) {
+  // Function to convert hex color to nearest ANSI color with transparency support
+  function hexToAnsi(hexColor, transparency = 0.5) {
     // Remove # if present
     const hex = hexColor.replace('#', '');
     const r = parseInt(hex.substr(0, 2), 16);
@@ -281,16 +294,16 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
     const b = parseInt(hex.substr(4, 2), 16);
     
     // Map to nearest basic ANSI colors based on RGB values
-    // These are approximations of the 8 basic ANSI background colors
+    // Normal colors for low transparency (light tint), bright colors for high transparency (solid)
     const ansiColors = [
-      { name: 'black', bg: '\x1b[40m', rgb: [0, 0, 0] },
-      { name: 'red', bg: '\x1b[41m', rgb: [205, 49, 49] },
-      { name: 'green', bg: '\x1b[42m', rgb: [13, 188, 121] },
-      { name: 'yellow', bg: '\x1b[43m', rgb: [229, 229, 16] },
-      { name: 'blue', bg: '\x1b[44m', rgb: [36, 114, 200] },
-      { name: 'magenta', bg: '\x1b[45m', rgb: [188, 63, 188] },
-      { name: 'cyan', bg: '\x1b[46m', rgb: [17, 168, 205] },
-      { name: 'white', bg: '\x1b[47m', rgb: [229, 229, 229] }
+      { name: 'black', bg: '\x1b[40m', bgBright: '\x1b[100m', rgb: [0, 0, 0] },
+      { name: 'red', bg: '\x1b[41m', bgBright: '\x1b[101m', rgb: [205, 49, 49] },
+      { name: 'green', bg: '\x1b[42m', bgBright: '\x1b[102m', rgb: [13, 188, 121] },
+      { name: 'yellow', bg: '\x1b[43m', bgBright: '\x1b[103m', rgb: [229, 229, 16] },
+      { name: 'blue', bg: '\x1b[44m', bgBright: '\x1b[104m', rgb: [36, 114, 200] },
+      { name: 'magenta', bg: '\x1b[45m', bgBright: '\x1b[105m', rgb: [188, 63, 188] },
+      { name: 'cyan', bg: '\x1b[46m', bgBright: '\x1b[106m', rgb: [17, 168, 205] },
+      { name: 'white', bg: '\x1b[47m', bgBright: '\x1b[107m', rgb: [229, 229, 229] }
     ];
     
     // Find closest color using Euclidean distance
@@ -309,129 +322,137 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
       }
     }
     
-    return closestColor.bg;
+    // Use bright color for high transparency (>=50% opacity), normal for low (<50%)
+    return transparency >= 0.5 ? closestColor.bgBright : closestColor.bg;
   }
   
-  // Load theme configuration
+  // Load theme configuration using the extension's theme system
   function loadThemeColors(overrideTheme = null) {
-    try {
-      // Try to load VSCode settings from various locations
-      const os = require('os');
-      const platform = os.platform();
-      const homeDir = os.homedir();
+    // Get the selected theme name from VSCode settings
+    let selectedTheme = overrideTheme;
+    
+    if (!selectedTheme) {
+      // Use the VSCode mock to get configuration
+      const vscode = Module.prototype.require('vscode');
+      selectedTheme = vscode.workspace.getConfiguration('tumee-vscode-plugin').get('selectedTheme');
       
-      // Possible settings paths by platform
-      const settingsPaths = [];
-      if (platform === 'darwin') {
-        settingsPaths.push(
-          path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'settings.json'),
-          path.join(homeDir, '.config', 'Code', 'User', 'settings.json')
-        );
-      } else if (platform === 'win32') {
-        settingsPaths.push(
-          path.join(process.env.APPDATA || '', 'Code', 'User', 'settings.json')
-        );
-      } else {
-        settingsPaths.push(
-          path.join(homeDir, '.config', 'Code', 'User', 'settings.json')
-        );
-      }
-      
-      // Also check workspace settings
-      settingsPaths.push(path.join(process.cwd(), '.vscode', 'settings.json'));
-      
-      for (const settingsPath of settingsPaths) {
-        if (fs.existsSync(settingsPath)) {
-          const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-          const customThemes = settings['tumee-vscode-plugin.customThemes'] || {};
-          const currentTheme = overrideTheme || settings['tumee-vscode-plugin.currentTheme'] || 'default';
-          
-          // Get theme colors
-          const themeColors = customThemes[currentTheme] || getBuiltInTheme(currentTheme);
-          if (themeColors) {
-            // Log which theme is being used
-            if (process.env.DEBUG || overrideTheme) {
-              console.error(`Using theme: ${currentTheme} from ${settingsPath}`);
-            }
-            return mapThemeToAnsi(themeColors);
-          }
-        }
-      }
-    } catch (e) {
-      // Ignore errors, fall back to defaults
-      if (process.env.DEBUG) {
-        console.error('Error loading theme:', e.message);
+      if (!selectedTheme) {
+        console.error('Error: No theme selected in VSCode settings');
+        process.exit(1);
       }
     }
     
-    // Default color mapping
-    return {
-      aiWrite: '\x1b[43m',      // Yellow
-      aiRead: '\x1b[2m',         // Dim (no background)
-      aiNoAccess: '\x1b[41m',    // Red
-      humanWrite: '\x1b[2m',     // Dim (no background)
-      humanRead: '\x1b[44m',     // Blue
-      humanNoAccess: '\x1b[42m', // Green
-      contextRead: '\x1b[46m',   // Cyan
-      contextWrite: '\x1b[46m'   // Cyan
-    };
+    // First check custom themes
+    const customThemes = Module.prototype.require('vscode').workspace.getConfiguration('tumee-vscode-plugin').get('customThemes') || {};
+    
+    if (customThemes[selectedTheme]) {
+      // Custom theme
+      if (process.env.DEBUG) {
+        console.error(`Using custom theme: ${selectedTheme}`);
+      }
+      return mapThemeToAnsi(customThemes[selectedTheme].permissions);
+    }
+    
+    // Fall back to built-in themes
+    const themes = getColorThemes();
+    if (themes[selectedTheme]) {
+      if (process.env.DEBUG) {
+        console.error(`Using built-in theme: ${selectedTheme}`);
+      }
+      return mapThemeToAnsi(themes[selectedTheme].colors.permissions);
+    }
+    
+    // Theme not found
+    console.error(`Error: Theme '${selectedTheme}' not found.`);
+    console.error(`Available built-in themes: ${Object.keys(themes).join(', ')}`);
+    console.error(`Available custom themes: ${Object.keys(customThemes).join(', ')}`);
+    process.exit(1);
   }
   
-  // Get built-in theme colors from the actual VSCode extension
+  // Get built-in theme colors using the theme loader
   function getBuiltInTheme(themeName) {
-    // Read the theme data directly from the colorCustomizer source file
-    try {
-      const colorCustomizerPath = path.join(__dirname, '..', 'src', 'tools', 'colorCustomizer.ts');
-      const content = fs.readFileSync(colorCustomizerPath, 'utf8');
-      
-      // Extract THEME_CONFIGS array from the source
-      const themeConfigMatch = content.match(/const THEME_CONFIGS[^=]*=\s*(\[[^;]+\]);/s);
-      if (themeConfigMatch) {
-        // Parse the theme configs (this is a bit hacky but works for our needs)
-        const themeConfigsStr = themeConfigMatch[1]
-          .replace(/MixPattern\.\w+/g, '"HUMAN_BORDER"') // Replace enum references
-          .replace(/(['"])?(\w+)(['"])?:/g, '"$2":'); // Ensure all keys are quoted
-        
-        const themeConfigs = eval(themeConfigsStr); // Safe here as we control the source
-        const theme = themeConfigs.find(t => t.name === themeName);
-        if (theme) {
-          return theme.permissions;
-        }
-      }
-    } catch (e) {
-      if (process.env.DEBUG) {
-        console.error('Could not parse theme configs:', e.message);
-      }
+    const themes = getColorThemes();
+    if (themes[themeName]) {
+      return themes[themeName].colors.permissions;
     }
     
-    // Minimal fallback - only default theme if we can't read the source
-    const fallbackThemes = {
-      default: {
-        aiWrite: { enabled: true, color: '#FFD700', transparency: 0.4 },
-        aiRead: { enabled: true, color: '#FFFFE0', transparency: 0.2 },
-        aiNoAccess: { enabled: true, color: '#DC143C', transparency: 0.4 },
-        humanWrite: { enabled: false, color: '#00FF00', transparency: 0.4 },
-        humanRead: { enabled: true, color: '#4169E1', transparency: 0.5 },
-        humanNoAccess: { enabled: true, color: '#228B22', transparency: 0.4 },
-        contextRead: { enabled: true, color: '#20B2AA', transparency: 0.3 },
-        contextWrite: { enabled: true, color: '#20B2AA', transparency: 0.3 }
-      }
-    };
-    
-    return fallbackThemes[themeName];
+    // If theme not found, show error
+    console.error(`Error: Theme '${themeName}' not found.`);
+    console.error(`Available themes: ${Object.keys(themes).join(', ')}`);
+    process.exit(1);
   }
   
   // Map theme colors to ANSI codes
   function mapThemeToAnsi(themeColors) {
     const mapping = {};
+    // Also store transparency values for border color calculation
+    const transparencies = {};
+    
     for (const [key, value] of Object.entries(themeColors)) {
-      if (value && value.color && value.enabled !== false) {
-        mapping[key] = hexToAnsi(value.color);
+      if (value && value.color && value.enabled !== false && value.transparency > 0) {
+        // Pass transparency to get appropriate ANSI variant
+        mapping[key] = hexToAnsi(value.color, value.transparency);
+        transparencies[key] = value.transparency;
+        if (process.env.DEBUG && (key === 'aiRead' || key === 'aiWrite' || key === 'humanRead')) {
+          console.error(`${key}: enabled=${value.enabled}, transparency=${value.transparency}, borderOpacity=${value.borderOpacity}, color=${value.color} -> ${mapping[key]}`);
+        }
       } else {
         mapping[key] = '\x1b[2m'; // Dim for disabled
+        transparencies[key] = 0;
+        if (process.env.DEBUG && key === 'aiRead') {
+          console.error(`aiRead: DISABLED (enabled=${value?.enabled}, transparency=${value?.transparency})`);
+        }
       }
     }
+    
+    // Store transparencies on the mapping object for later use
+    mapping._transparencies = transparencies;
     return mapping;
+  }
+  
+  // Load full theme configuration with enabled/transparency info
+  function loadFullThemeConfig(overrideTheme = null) {
+    // Get the selected theme name from VSCode settings
+    let selectedTheme = overrideTheme;
+    
+    if (!selectedTheme) {
+      // Use the VSCode mock to get configuration
+      const vscode = Module.prototype.require('vscode');
+      selectedTheme = vscode.workspace.getConfiguration('tumee-vscode-plugin').get('selectedTheme');
+      
+      if (!selectedTheme) {
+        console.error('Error: No theme selected in VSCode settings');
+        process.exit(1);
+      }
+    }
+    
+    // Get mix pattern from settings
+    const vscode = Module.prototype.require('vscode');
+    const mixPattern = vscode.workspace.getConfiguration('tumee-vscode-plugin').get('mixPattern') || 'humanBorder';
+    
+    // First check custom themes
+    const customThemes = vscode.workspace.getConfiguration('tumee-vscode-plugin').get('customThemes') || {};
+    
+    if (customThemes[selectedTheme]) {
+      // Custom theme
+      return {
+        permissions: customThemes[selectedTheme].permissions,
+        mixPattern: customThemes[selectedTheme].mixPattern || mixPattern
+      };
+    }
+    
+    // Fall back to built-in themes
+    const themes = getColorThemes();
+    if (themes[selectedTheme]) {
+      return {
+        permissions: themes[selectedTheme].colors.permissions,
+        mixPattern: themes[selectedTheme].colors.mixPattern || mixPattern
+      };
+    }
+    
+    // Theme not found
+    console.error(`Error: Theme '${selectedTheme}' not found.`);
+    process.exit(1);
   }
   
   // ANSI color codes
@@ -473,47 +494,216 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
       // Check if this line has mixed permissions (from overlapping guards)
       const isMixed = mixedLines.has(lineNum);
       
-      // Determine background color based on permissions
+      // Determine colors based on permissions
       let bgColor = '';
+      let borderColor = '';
       let textColor = colors.black;
-      let borderChar = ' '; // Character to show in the border position
+      let borderChar = '▒'; // Character to show in the border position
+      
+      // Get AI and Human colors separately
+      let aiColor = '';
+      let humanColor = '';
       
       if (isContext) {
-        bgColor = themeColors.contextRead || themeColors.contextWrite;
-        // Determine text color based on background brightness
-        textColor = bgColor.includes('46') ? colors.black : colors.white;
-      } else if (aiPerm === 'n' && humanPerm === 'n') {
-        // Both no access - use AI no access color (AI takes precedence visually)
-        bgColor = themeColors.aiNoAccess;
-        textColor = bgColor.includes('41') ? colors.white : colors.black;
-      } else if (aiPerm === 'n') {
-        bgColor = themeColors.aiNoAccess;
-        textColor = bgColor.includes('41') ? colors.white : colors.black;
-      } else if (humanPerm === 'n') {
-        bgColor = themeColors.humanNoAccess;
-        textColor = bgColor.includes('42') ? colors.black : colors.white;
-      } else if (aiPerm === 'w') {
-        bgColor = themeColors.aiWrite;
-        textColor = bgColor.includes('43') ? colors.black : colors.white;
-      } else if (humanPerm === 'r') {
-        bgColor = themeColors.humanRead;
-        textColor = bgColor.includes('44') ? colors.white : colors.black;
+        aiColor = humanColor = themeColors.contextRead || themeColors.contextWrite;
+      } else {
+        // Determine AI color
+        if (aiPerm === 'w') {
+          aiColor = themeColors.aiWrite;
+        } else if (aiPerm === 'r') {
+          aiColor = themeColors.aiRead;
+        } else if (aiPerm === 'n') {
+          aiColor = themeColors.aiNoAccess;
+        }
+        
+        // Determine Human color
+        if (humanPerm === 'w') {
+          humanColor = themeColors.humanWrite;
+        } else if (humanPerm === 'r') {
+          humanColor = themeColors.humanRead;
+        } else if (humanPerm === 'n') {
+          humanColor = themeColors.humanNoAccess;
+        }
+      }
+      
+      // Debug what we got from themeColors
+      if (lineNum === 3 && process.env.DEBUG) {
+        console.error(`Line 3: aiColor='${aiColor}', humanColor='${humanColor}'`);
+      }
+      
+      // Get the actual permission configs to check if enabled
+      let aiPermConfig = null;
+      let humanPermConfig = null;
+      
+      if (themeConfig && themeConfig.permissions) {
+        if (isContext) {
+          aiPermConfig = humanPermConfig = themeConfig.permissions.contextRead || themeConfig.permissions.contextWrite;
+        } else {
+          // Get AI permission config
+          if (aiPerm === 'w') {
+            aiPermConfig = themeConfig.permissions.aiWrite;
+          } else if (aiPerm === 'r') {
+            aiPermConfig = themeConfig.permissions.aiRead;
+          } else if (aiPerm === 'n') {
+            aiPermConfig = themeConfig.permissions.aiNoAccess;
+          }
+          
+          // Get Human permission config
+          if (humanPerm === 'w') {
+            humanPermConfig = themeConfig.permissions.humanWrite;
+          } else if (humanPerm === 'r') {
+            humanPermConfig = themeConfig.permissions.humanRead;
+          } else if (humanPerm === 'n') {
+            humanPermConfig = themeConfig.permissions.humanNoAccess;
+          }
+        }
+      }
+      
+      // Check if colors are actually enabled with transparency > 0
+      // Only set color if it's not the dim ANSI code
+      const aiEnabled = aiColor && aiColor !== '\x1b[2m';
+      const humanEnabled = humanColor && humanColor !== '\x1b[2m';
+      
+      // Clear colors if they're disabled
+      if (!aiEnabled) aiColor = '';
+      if (!humanEnabled) humanColor = '';
+      
+      // Debug color assignment
+      if (lineNum === 1 && process.env.DEBUG) {
+        console.error(`Line 1 colors: aiPerm=${aiPerm}, humanPerm=${humanPerm}`);
+        console.error(`  aiColor='${aiColor}', humanColor='${humanColor}'`);
+        console.error(`  Before mix: aiEnabled=${aiEnabled}, humanEnabled=${humanEnabled}`);
+      }
+      
+      if (aiEnabled && humanEnabled) {
+        // Both colors enabled - use mix pattern
+        const mixPattern = themeConfig ? themeConfig.mixPattern : 'humanBorder';
+        
+        // Get the original hex colors and transparencies
+        let bgHex, bgTransparency, borderHex, borderTransparency;
+        
+        switch (mixPattern) {
+          case 'aiBorder':
+            bgColor = humanColor;
+            borderColor = aiColor;
+            // For border bar, use border opacity if available
+            if (themeConfig && themeConfig.permissions) {
+              bgHex = humanPermConfig?.color;
+              bgTransparency = humanPermConfig?.transparency || 0.5;
+              borderHex = aiPermConfig?.color;
+              borderTransparency = aiPermConfig?.borderOpacity || aiPermConfig?.transparency || 0.5;
+            }
+            break;
+          case 'humanBorder':
+            bgColor = aiColor;
+            borderColor = humanColor;
+            // For border bar, use border opacity if available
+            if (themeConfig && themeConfig.permissions) {
+              bgHex = aiPermConfig?.color;
+              bgTransparency = aiPermConfig?.transparency || 0.5;
+              borderHex = humanPermConfig?.color;
+              borderTransparency = humanPermConfig?.borderOpacity || humanPermConfig?.transparency || 0.5;
+            }
+            break;
+          case 'aiPriority':
+            bgColor = borderColor = aiColor;
+            if (themeConfig && themeConfig.permissions) {
+              bgHex = borderHex = aiPermConfig?.color;
+              bgTransparency = aiPermConfig?.transparency || 0.5;
+              borderTransparency = aiPermConfig?.borderOpacity || aiPermConfig?.transparency || 0.5;
+            }
+            break;
+          case 'humanPriority':
+            bgColor = borderColor = humanColor;
+            if (themeConfig && themeConfig.permissions) {
+              bgHex = borderHex = humanPermConfig?.color;
+              bgTransparency = humanPermConfig?.transparency || 0.5;
+              borderTransparency = humanPermConfig?.borderOpacity || humanPermConfig?.transparency || 0.5;
+            }
+            break;
+          case 'average':
+            // For average, both get the same blended color (we can't blend ANSI easily)
+            // So we'll just use AI color for simplicity
+            bgColor = borderColor = aiColor;
+            if (themeConfig && themeConfig.permissions) {
+              bgHex = borderHex = aiPermConfig?.color;
+              bgTransparency = aiPermConfig?.transparency || 0.5;
+              borderTransparency = aiPermConfig?.borderOpacity || aiPermConfig?.transparency || 0.5;
+            }
+            break;
+          default:
+            bgColor = aiColor;
+            borderColor = humanColor;
+            if (themeConfig && themeConfig.permissions) {
+              bgHex = aiPermConfig?.color;
+              bgTransparency = aiPermConfig?.transparency || 0.5;
+              borderHex = humanPermConfig?.color;
+              borderTransparency = humanPermConfig?.borderOpacity || humanPermConfig?.transparency || 0.5;
+            }
+        }
+        
+        // If ANSI colors are the same but transparencies differ, use different variants
+        if (bgColor === borderColor && bgHex && borderHex && bgTransparency !== borderTransparency) {
+          // Recalculate border color with its actual transparency to get different variant
+          borderColor = hexToAnsi(borderHex, borderTransparency);
+          if (process.env.DEBUG && lineNum <= 5) {
+            console.error(`  Recalculated border: transparency=${borderTransparency} -> ${borderColor}`);
+          }
+        }
+      } else if (aiEnabled) {
+        bgColor = borderColor = aiColor;
+        // Handle single color case
+        if (themeConfig && themeConfig.permissions && aiPermConfig) {
+          const borderTransparency = aiPermConfig.borderOpacity || aiPermConfig.transparency || 0.5;
+          if (borderTransparency !== aiPermConfig.transparency) {
+            borderColor = hexToAnsi(aiPermConfig.color, borderTransparency);
+          }
+        }
+      } else if (humanEnabled) {
+        bgColor = borderColor = humanColor;
+        // Handle single color case
+        if (themeConfig && themeConfig.permissions && humanPermConfig) {
+          const borderTransparency = humanPermConfig.borderOpacity || humanPermConfig.transparency || 0.5;
+          if (borderTransparency !== humanPermConfig.transparency) {
+            borderColor = hexToAnsi(humanPermConfig.color, borderTransparency);
+          }
+        }
+      }
+      
+      // Set text color based on background
+      if (bgColor) {
+        textColor = bgColor.includes('41') || bgColor.includes('44') || bgColor.includes('45') ? colors.white : colors.black;
       }
       
       // Handle mixed permissions - use a special border character
       if (isMixed) {
-        borderChar = '█'; // Block character for better visibility
-        // For mixed, we could also use a different background pattern
-        // or alternate the background color
+        //borderChar = '█'; // Block character for better visibility
+        borderChar = '▒'; // Use a lighter block character for mixed
       }
       
-      // Apply color only to the border char and line content, not the permission block
-      if (bgColor) {
+      // Apply colors separately to border and content
+      if (bgColor || borderColor) {
+        // Debug first few lines
+        if (lineNum <= 5 && process.env.DEBUG) {
+          console.error(`Line ${lineNum}: aiEnabled=${aiEnabled}, humanEnabled=${humanEnabled}`);
+          console.error(`  bgColor='${bgColor}', borderColor='${borderColor}'`);
+          console.error(`  mixPattern=${themeConfig?.mixPattern}`);
+        }
+        
         // Format: line# [perms]|content (where | is the colored border char)
-        console.log(`${lineNumStr} ${permBlock}${bgColor}${textColor}${borderChar}${lines[i]}${colors.reset}`);
+        if (borderColor && bgColor && borderColor !== bgColor) {
+          // Different colors for border and background
+          console.log(`${lineNumStr} ${permBlock}${borderColor}${borderChar}${colors.reset}${bgColor}${textColor}${lines[i]}${colors.reset}`);
+        } else if (bgColor) {
+          // Same color for both or no border color
+          console.log(`${lineNumStr} ${permBlock}${bgColor}${textColor}${borderChar}${lines[i]}${colors.reset}`);
+        } else if (borderColor) {
+          // Only border color
+          console.log(`${lineNumStr} ${permBlock}${borderColor}${borderChar}${colors.reset} ${lines[i]}`);
+        }
       } else {
-        // Default state - dimmed border and content only
-        console.log(`${lineNumStr} ${permBlock}${colors.dim}${borderChar}${lines[i]}${colors.reset}`);
+        // Default state - no colors
+        console.log(`${lineNumStr} ${permBlock} ${lines[i]}`);
       }
     } else {
       console.log(`${lineNumStr} ${permBlock} ${lines[i]}`);
