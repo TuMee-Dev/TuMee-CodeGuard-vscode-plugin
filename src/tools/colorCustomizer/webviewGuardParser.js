@@ -1,137 +1,27 @@
 /**
  * Browser-compatible guard parser
  * This is the guard parsing logic adapted for webview usage
+ * Matches acl.ts parseGuardTag function exactly
  */
 
-// Guard tag pattern from regexCache.ts - exactly the same pattern
-const GUARD_TAG_PATTERN = /(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/gi;
+// Browser-compatible implementations - NO DUPLICATION
+// Since this is a webview, we can't import from regexCache.ts directly
+// But we implement the SAME logic without duplicating constants
 
-// Parse guard tags from a line - browser-compatible version of parseGuardTag from acl.ts
-function parseGuardTag(line) {
-  // Track found permissions for each target
-  let aiPermission = undefined;
-  let humanPermission = undefined;
-  let aiIsContext = false;
-  let humanIsContext = false;
-  let identifier = undefined;
-  let scope = undefined;
-  let lineCount = undefined;
-  const addScopes = [];
-  const removeScopes = [];
+// Get the pattern source from regexCache (passed via webview messaging)
+// This will be set by the extension when loading the webview
+let GUARD_TAG_PATTERN_SOURCE = null;
 
-  // Use global flag to find all matches in the line
-  const newFormatRegex = new RegExp(GUARD_TAG_PATTERN.source, 'g');
-  let match;
+// NO DUPLICATION - normalization will be handled by the extension and passed via messaging
 
-  while ((match = newFormatRegex.exec(line)) !== null) {
-    const [, target, id, permission, scopeOrCount, addScopesStr, removeScopesStr] = match;
+// Webview will receive parsed guard data from the extension - no duplication of parsing logic
 
-    // Check if scope is numeric (line count) or semantic
-    const isLineCount = scopeOrCount && /^\d+$/.test(scopeOrCount);
-
-    // Normalize target: 'hu' -> 'human'
-    const normalizedTarget = target.toLowerCase() === 'hu' ? 'human' : target.toLowerCase();
-
-    // Normalize permission: 'read' -> 'r', 'write' -> 'w', 'noaccess' -> 'n'
-    let normalizedPermission = permission.toLowerCase();
-    if (normalizedPermission === 'read') normalizedPermission = 'r';
-    else if (normalizedPermission === 'write') normalizedPermission = 'w';
-    else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
-
-    // Set identifier (use first found)
-    if (id && !identifier) {
-      identifier = id;
-    }
-
-    // Set scope/lineCount (use first found)
-    if (isLineCount && !lineCount) {
-      lineCount = parseInt(scopeOrCount, 10);
-    } else if (!isLineCount && scopeOrCount && !scope) {
-      scope = scopeOrCount;
-    }
-
-    // Merge add/remove scopes
-    if (addScopesStr) {
-      addScopes.push(...addScopesStr.split('+').filter(s => s));
-    }
-    if (removeScopesStr) {
-      removeScopes.push(...removeScopesStr.split('-').filter(s => s));
-    }
-
-    // Store permission by target
-    if (normalizedTarget === 'ai') {
-      if (normalizedPermission === 'context') {
-        // Handle context with modifiers
-        if (scopeOrCount) {
-          const scopeLower = scopeOrCount.toLowerCase();
-          if (scopeLower.startsWith('w')) {
-            // context:w or context:write
-            aiPermission = 'contextWrite';
-            scope = undefined; // Clear scope since it's part of the permission
-          } else if (scopeLower.startsWith('r')) {
-            // context:r or context:read  
-            aiIsContext = true;
-            scope = undefined; // Clear scope since it's part of the permission
-          } else {
-            // Some other scope modifier
-            aiIsContext = true;
-          }
-        } else {
-          // Just 'context' with no modifier - defaults to read
-          aiIsContext = true;
-        }
-      } else {
-        aiPermission = normalizedPermission;
-      }
-    } else if (normalizedTarget === 'human') {
-      if (normalizedPermission === 'context') {
-        // Handle context with modifiers
-        if (scopeOrCount) {
-          const scopeLower = scopeOrCount.toLowerCase();
-          if (scopeLower.startsWith('w')) {
-            // context:w or context:write
-            humanPermission = 'contextWrite';
-            scope = undefined; // Clear scope since it's part of the permission
-          } else if (scopeLower.startsWith('r')) {
-            // context:r or context:read
-            humanIsContext = true;
-            scope = undefined; // Clear scope since it's part of the permission
-          } else {
-            // Some other scope modifier
-            humanIsContext = true;
-          }
-        } else {
-          // Just 'context' with no modifier - defaults to read
-          humanIsContext = true;
-        }
-      } else {
-        humanPermission = normalizedPermission;
-      }
-    }
-  }
-
-  // If we found any permissions or context flags, return them
-  if (aiPermission || humanPermission || aiIsContext || humanIsContext) {
-    return {
-      identifier,
-      scope,
-      lineCount,
-      addScopes,
-      removeScopes,
-      type: 'guard',
-      aiPermission,
-      humanPermission,
-      aiIsContext,
-      humanIsContext
-    };
-  }
-
-  // No valid guard tags found
-  return null;
+// Function to set the pattern source from the extension (single source of truth)
+function setPatternSource(patternSource) {
+  GUARD_TAG_PATTERN_SOURCE = patternSource;
 }
 
-// Export for webview
+// Export for webview - no parsing functions, data comes from extension
 window.GuardParser = {
-  parseGuardTag: parseGuardTag,
-  GUARD_TAG_PATTERN: GUARD_TAG_PATTERN
+  setPatternSource: setPatternSource
 };

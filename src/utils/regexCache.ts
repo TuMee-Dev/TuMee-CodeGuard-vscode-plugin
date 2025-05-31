@@ -1,20 +1,41 @@
 /**
  * Cached and compiled regex patterns for better performance
+ * Single source of truth for all guard tag patterns
  */
 
 // Guard tag prefix constant
 export const GUARD_TAG_PREFIX = '@guard:';
 
+// Permission aliases mapping
+export const PERMISSION_ALIASES = {
+  'read': 'r',
+  'readonly': 'r',
+  'read-only': 'r',
+  'write': 'w',
+  'noaccess': 'n',
+  'none': 'n',
+  'no-access': 'n'
+} as const;
+
+// Scope aliases mapping
+export const SCOPE_ALIASES = {
+  'sig': 'signature',
+  'func': 'function',
+  'stmt': 'statement',
+  'doc': 'docstring',
+  'dec': 'decorator',
+  'val': 'value',
+  'expr': 'expression'
+} as const;
+
 // Guard tag patterns - compile once and reuse
 export const GUARD_TAG_PATTERNS = {
-  // Main guard tag pattern with new format support
-  GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/gi,
+  // Comprehensive guard tag pattern supporting ALL specification formats
+  // Pattern: @guard:target[identifier]:permission[.scope][+scope][-scope][.if(condition)][metadata]
+  GUARD_TAG: /(?:\/\/|#|--|\/\*|\*|<!--)*\s*@guard:(ai|human|hu|all)(?:,(ai|human|hu|all))*(?:\[([^\]]+)\])?:(read-only|readonly|read|write|noaccess|none|context|r|w|n)(?::(r|w|read|write))?(?:\[([^\]]+)\])?(?:\.([a-zA-Z]+|\d+))?(?:\.if\(([^)]+)\))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/gi,
 
   // Markdown-specific guard tag pattern
-  MARKDOWN_GUARD_TAG: /<!--\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?(?:\s*-->)?/gi,
-
-  // Legacy format pattern (backwards compatibility)
-  LEGACY_GUARD_TAG: /(?:\/\/|#|--)\s*@guard:(ai|human|hu):(read|write|noaccess|r|w|n)(?:\.(\d+))?/gi,
+  MARKDOWN_GUARD_TAG: /<!--\s*@guard:(ai|human|hu|all)(?:,(ai|human|hu|all))*(?:\[([^\]]+)\])?:(read-only|readonly|read|write|noaccess|none|context|r|w|n)(?::(r|w|read|write))?(?:\[([^\]]+)\])?(?:\.([a-zA-Z]+|\d+))?(?:\.if\(([^)]+)\))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?(?:\s*-->)?/gi,
 
   // Pattern for extracting scope modifiers
   SCOPE_MODIFIER: /([+-])([a-zA-Z]+)/g,
@@ -22,22 +43,23 @@ export const GUARD_TAG_PATTERNS = {
   // Pattern for numeric line counts
   NUMERIC_SCOPE: /^\d+$/,
 
-  // Additional patterns for specific use cases
-  GUARD_TAG_NO_SPACE: /(?:\/\/|#|--|\*)\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/gi,
-  GUARD_TAG_LINE: /.*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?.*/gi,
-
-  // Language-specific line count patterns
-  LINE_COUNT: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(read|write|noaccess|r|w|n)\.(\d+)/i,
-  PYTHON_LINE_COUNT: /#\s*@guard:ai:(read|write|noaccess|r|w|n)\.(\d+)/i,
-  JAVASCRIPT_LINE_COUNT: /\/\/\s*@guard:ai:(read|write|noaccess|r|w|n)\.(\d+)/i,
-
-  // Inline guard tag patterns for parseGuardTag function
-  PARSE_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:(ai|human|hu)(?:\[([^\]]+)\])?:(read|write|noaccess|context|r|w|n)(?:\.([a-zA-Z]+|\d+))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/i,
-  PARSE_LEGACY_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*)*\s*@guard:ai:(read|write|noaccess|r|w|n)(?:\.(\d+))?/i,
+  // Inline guard tag pattern for parseGuardTag function (non-global)
+  PARSE_GUARD_TAG: /(?:\/\/|#|--|\/\*|\*|<!--)*\s*@guard:(ai|human|hu|all)(?:,(ai|human|hu|all))*(?:\[([^\]]+)\])?:(read-only|readonly|read|write|noaccess|none|context|r|w|n)(?::(r|w|read|write))?(?:\[([^\]]+)\])?(?:\.([a-zA-Z]+|\d+))?(?:\.if\(([^)]+)\))?(?:(\+[a-zA-Z]+)*)?(?:(-[a-zA-Z]+)*)?/i,
 
   // Simple pattern to detect any guard tag (case-insensitive)
   HAS_GUARD_TAG: /@guard:/i
 } as const;
+
+// Helper functions for normalizing permissions and scopes
+export function normalizePermission(permission: string): string {
+  const normalized = permission.toLowerCase();
+  return PERMISSION_ALIASES[normalized as keyof typeof PERMISSION_ALIASES] || normalized;
+}
+
+export function normalizeScope(scope: string): string {
+  const normalized = scope.toLowerCase();
+  return SCOPE_ALIASES[normalized as keyof typeof SCOPE_ALIASES] || normalized;
+}
 
 // Utility patterns
 export const UTILITY_PATTERNS = {
@@ -82,7 +104,7 @@ export const LANGUAGE_PATTERNS = {
   // C# patterns
   csharp: {
     FUNCTION: /^(?:\s*(?:public|private|protected|internal)?\s*(?:static\s+)?(?:async\s+)?(?:\w+(?:<[^>]+>)?)\s+\w+\s*\([^)]*\)\s*(?:where\s+\w+\s*:\s*\w+)?\s*\{)/,
-    CLASS: /^(?:\s*(?:public|private|protected|internal)?\s*(?:abstract\s+|sealed\s+)?(?:partial\s+)?class\s+\w+(?:<[^>]+>)?(?:\s*:\s*\w+(?:\s*,\s*\w+)*)?\s*(?:where\s+\w+\s*:\s*\w+)?\s*\{)/,
+    CLASS: /^(?:\s*(?:public|private|protected|internal)?\s*(?:abstract\s+|sealed\s+)?(?:partial\s+)?class\s+\w+(?:<[^>]+>)?(?:\s*:\s*\w+(?:\s*,\s*\w+)*)?(?:\s*where\s+\w+\s*:\s*\w+)?\s*\{)/,
     METHOD: /^(?:\s*(?:public|private|protected|internal)?\s*(?:static\s+)?(?:async\s+)?(?:\w+(?:<[^>]+>)?)\s+\w+\s*\([^)]*\)\s*(?:where\s+\w+\s*:\s*\w+)?\s*\{)/,
     BLOCK: /^(?:\s*(?:if|for|foreach|while|do|try|catch|finally)\s*(?:\([^)]*\))?\s*\{)/,
   }

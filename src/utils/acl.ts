@@ -3,7 +3,7 @@ import { exec as execCallback } from 'child_process';
 import { Uri, workspace } from 'vscode';
 import type { ACLStatus } from '@/types';
 import { cleanPath } from '.';
-import { GUARD_TAG_PATTERNS } from './regexCache';
+import { GUARD_TAG_PATTERNS, normalizePermission, normalizeScope } from './regexCache';
 import { getConfig, CONFIG_KEYS } from './configurationManager';
 
 const exec = promisify(execCallback);
@@ -45,21 +45,15 @@ export const isCliAvailable = async (): Promise<boolean> => {
 
 /**
  * Regular expressions for parsing guard tags in code
- * These are now imported from regexCache.ts for better performance
+ * Single source of truth from regexCache.ts
  */
 export const GUARD_TAG_REGEX = GUARD_TAG_PATTERNS.GUARD_TAG;
 export const MARKDOWN_GUARD_TAG_REGEX = GUARD_TAG_PATTERNS.MARKDOWN_GUARD_TAG;
-export const LEGACY_GUARD_TAG_REGEX = GUARD_TAG_PATTERNS.LEGACY_GUARD_TAG;
-export const GUARD_TAG_NO_SPACE_REGEX = GUARD_TAG_PATTERNS.GUARD_TAG_NO_SPACE;
-export const GUARD_TAG_LINE_REGEX = GUARD_TAG_PATTERNS.GUARD_TAG_LINE;
-export const LINE_COUNT_REGEX = GUARD_TAG_PATTERNS.LINE_COUNT;
-export const PYTHON_LINE_COUNT_REGEX = GUARD_TAG_PATTERNS.PYTHON_LINE_COUNT;
-export const JAVASCRIPT_LINE_COUNT_REGEX = GUARD_TAG_PATTERNS.JAVASCRIPT_LINE_COUNT;
 
 /**
  * Helper function to parse a guard tag from a line of text
- * Returns the parsed guard tag information
- * If multiple tags exist, they are merged into a single combined state
+ * Returns the parsed guard tag information supporting ALL specification formats
+ * Uses single source of truth from regexCache.ts
  */
 export const parseGuardTag = (line: string): {
   identifier?: string,
@@ -71,146 +65,149 @@ export const parseGuardTag = (line: string): {
   aiPermission?: string,
   humanPermission?: string,
   aiIsContext?: boolean,
-  humanIsContext?: boolean
+  humanIsContext?: boolean,
+  allPermission?: string,
+  allIsContext?: boolean,
+  metadata?: string,
+  conditional?: string
 } | null => {
   // Track found permissions for each target
   let aiPermission: string | undefined;
   let humanPermission: string | undefined;
+  let allPermission: string | undefined;
   let aiIsContext = false;
   let humanIsContext = false;
+  let allIsContext = false;
   let identifier: string | undefined;
   let scope: string | undefined;
   let lineCount: number | undefined;
+  let metadata: string | undefined;
+  let conditional: string | undefined;
   const addScopes: string[] = [];
   const removeScopes: string[] = [];
 
-  // Use global flag to find all matches in the line
-  const newFormatRegex = new RegExp(GUARD_TAG_PATTERNS.PARSE_GUARD_TAG.source, 'g');
+  // Use comprehensive pattern to find all matches in the line
+  const comprehensiveRegex = new RegExp(GUARD_TAG_PATTERNS.PARSE_GUARD_TAG.source, 'g');
   let match;
 
-  while ((match = newFormatRegex.exec(line)) !== null) {
-    const [, target, id, permission, scopeOrCount, addScopesStr, removeScopesStr] = match;
+  while ((match = comprehensiveRegex.exec(line)) !== null) {
+    // Updated capture groups for comprehensive pattern:
+    // [1] = primary target (ai|human|hu|all)
+    // [2] = secondary target (if comma-separated)
+    // [3] = identifier [...]
+    // [4] = permission (read-only|readonly|read|write|noaccess|none|context|r|w|n)
+    // [5] = context modifier (:r|:w|:read|:write)
+    // [6] = metadata [...]
+    // [7] = scope (.word or .number)
+    // [8] = conditional (.if(condition))
+    // [9] = add scopes (+scope)
+    // [10] = remove scopes (-scope)
+    const [, primaryTarget, secondaryTarget, id, permission, contextModifier, metadataCapture, scopeOrCount, conditionalCapture, addScopesStr, removeScopesStr] = match;
+
+    // Handle targets - support multi-target syntax
+    const targets = [primaryTarget];
+    if (secondaryTarget) {
+      targets.push(secondaryTarget);
+    }
 
     // Check if scope is numeric (line count) or semantic
     const isLineCount = scopeOrCount && GUARD_TAG_PATTERNS.NUMERIC_SCOPE.test(scopeOrCount);
 
-    // Normalize target: 'hu' -> 'human'
-    const normalizedTarget = target.toLowerCase() === 'hu' ? 'human' : target.toLowerCase();
+    // Normalize permission using alias mapping
+    let normalizedPermission = normalizePermission(permission);
 
-    // Normalize permission: 'read' -> 'r', 'write' -> 'w', 'noaccess' -> 'n'
-    let normalizedPermission = permission.toLowerCase();
-    if (normalizedPermission === 'read') normalizedPermission = 'r';
-    else if (normalizedPermission === 'write') normalizedPermission = 'w';
-    else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
+    // Handle context modifier for context permissions
+    if (normalizedPermission === 'context' && contextModifier) {
+      const modifierNormalized = normalizePermission(contextModifier.substring(1)); // Remove ':'
+      if (modifierNormalized === 'w') {
+        normalizedPermission = 'contextWrite';
+      }
+      // For 'r' or 'read', keep as 'context' (read context)
+    }
 
     // Set identifier (use first found)
     if (id && !identifier) {
       identifier = id;
     }
 
+    // Set metadata (use first found)
+    if (metadataCapture && !metadata) {
+      metadata = metadataCapture;
+    }
+
+    // Set conditional (use first found)
+    if (conditionalCapture && !conditional) {
+      conditional = conditionalCapture;
+    }
+
     // Set scope/lineCount (use first found)
     if (isLineCount && !lineCount) {
       lineCount = parseInt(scopeOrCount, 10);
     } else if (!isLineCount && scopeOrCount && !scope) {
-      scope = scopeOrCount;
+      scope = normalizeScope(scopeOrCount);
     }
 
     // Merge add/remove scopes
     if (addScopesStr) {
-      addScopes.push(...addScopesStr.split('+').filter(s => s));
+      addScopes.push(...addScopesStr.split('+').filter(s => s).map(s => normalizeScope(s)));
     }
     if (removeScopesStr) {
-      removeScopes.push(...removeScopesStr.split('-').filter(s => s));
+      removeScopes.push(...removeScopesStr.split('-').filter(s => s).map(s => normalizeScope(s)));
     }
 
-    // Store permission by target
-    if (normalizedTarget === 'ai') {
-      if (normalizedPermission === 'context') {
-        aiIsContext = true;
-        // Context is a modifier, not a permission
-        // Don't set aiPermission - keep whatever was already set
-      } else {
-        aiPermission = normalizedPermission;
-        // Don't reset context flag - allow multiple tags on same line
-      }
-    } else if (normalizedTarget === 'human') {
-      if (normalizedPermission === 'context') {
-        humanIsContext = true;
-        // Context is a modifier, not a permission
-        // Don't set humanPermission - keep whatever was already set
-      } else {
-        humanPermission = normalizedPermission;
-        // Don't reset context flag - allow multiple tags on same line
+    // Store permission by target(s)
+    for (const target of targets) {
+      const normalizedTarget = target.toLowerCase() === 'hu' ? 'human' : target.toLowerCase();
+      
+      if (normalizedTarget === 'ai') {
+        if (normalizedPermission === 'context') {
+          aiIsContext = true;
+        } else if (normalizedPermission === 'contextWrite') {
+          aiPermission = 'contextWrite';
+        } else {
+          aiPermission = normalizedPermission;
+        }
+      } else if (normalizedTarget === 'human') {
+        if (normalizedPermission === 'context') {
+          humanIsContext = true;
+        } else if (normalizedPermission === 'contextWrite') {
+          humanPermission = 'contextWrite';
+        } else {
+          humanPermission = normalizedPermission;
+        }
+      } else if (normalizedTarget === 'all') {
+        if (normalizedPermission === 'context') {
+          allIsContext = true;
+        } else if (normalizedPermission === 'contextWrite') {
+          allPermission = 'contextWrite';
+        } else {
+          allPermission = normalizedPermission;
+        }
       }
     }
   }
 
-  // If we found any permissions or context flags from new format tags, return them
-  if (aiPermission || humanPermission || aiIsContext || humanIsContext) {
+  // If we found any permissions or context flags, return them
+  if (aiPermission || humanPermission || allPermission || aiIsContext || humanIsContext || allIsContext) {
     return {
       identifier,
       scope,
       lineCount,
       addScopes: addScopes.length > 0 ? [...new Set(addScopes)] : undefined,
       removeScopes: removeScopes.length > 0 ? [...new Set(removeScopes)] : undefined,
-      type: 'new-format',
+      type: 'comprehensive',
       aiPermission,
       humanPermission,
+      allPermission,
       aiIsContext,
-      humanIsContext
+      humanIsContext,
+      allIsContext,
+      metadata,
+      conditional
     };
   }
 
-  // Try legacy formats if no new format tags found
-  const legacyMatch = line.match(GUARD_TAG_PATTERNS.PARSE_LEGACY_GUARD_TAG);
-  if (legacyMatch) {
-    // Normalize permission for legacy format too
-    let normalizedPermission = legacyMatch[1].toLowerCase();
-    if (normalizedPermission === 'read') normalizedPermission = 'r';
-    else if (normalizedPermission === 'write') normalizedPermission = 'w';
-    else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
-
-    return {
-      lineCount: legacyMatch[2] ? parseInt(legacyMatch[2], 10) : undefined,
-      type: 'legacy',
-      aiPermission: normalizedPermission === 'context' ? undefined : normalizedPermission,
-      aiIsContext: normalizedPermission === 'context'
-    };
-  }
-
-  // Try Python-specific pattern (legacy)
-  const pythonMatch = line.match(PYTHON_LINE_COUNT_REGEX);
-  if (pythonMatch) {
-    let normalizedPermission = pythonMatch[1].toLowerCase();
-    if (normalizedPermission === 'read') normalizedPermission = 'r';
-    else if (normalizedPermission === 'write') normalizedPermission = 'w';
-    else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
-
-    return {
-      lineCount: parseInt(pythonMatch[2], 10),
-      type: 'python',
-      aiPermission: normalizedPermission === 'context' ? undefined : normalizedPermission,
-      aiIsContext: normalizedPermission === 'context'
-    };
-  }
-
-  // Try JavaScript-specific pattern (legacy)
-  const jsMatch = line.match(JAVASCRIPT_LINE_COUNT_REGEX);
-  if (jsMatch) {
-    let normalizedPermission = jsMatch[1].toLowerCase();
-    if (normalizedPermission === 'read') normalizedPermission = 'r';
-    else if (normalizedPermission === 'write') normalizedPermission = 'w';
-    else if (normalizedPermission === 'noaccess') normalizedPermission = 'n';
-
-    return {
-      lineCount: parseInt(jsMatch[2], 10),
-      type: 'javascript',
-      aiPermission: normalizedPermission === 'context' ? undefined : normalizedPermission,
-      aiIsContext: normalizedPermission === 'context'
-    };
-  }
-
-  // If no match, return null
+  // No valid guard tags found
   return null;
 };
 
@@ -281,10 +278,10 @@ export const setAclStatus = async (path: string, who: string, permission: string
 
       if (isDirectory) {
         // Create or modify .ai-attributes file
-        command = `${cliPath} create-aiattributes --directory "${cleanedPath}" --rule "* @GUARD:${who}-${permission}"`;
+        command = `${cliPath} create-aiattributes --directory "${cleanedPath}" --rule "* @guard:${who.toLowerCase()}:${permission.toLowerCase()}"`;
       } else {
         // Set in-file annotation by modifying the file
-        command = `${cliPath} set-guard --file "${cleanedPath}" --rule "@GUARD:${who}-${permission}"`;
+        command = `${cliPath} set-guard --file "${cleanedPath}" --rule "@guard:${who.toLowerCase()}:${permission.toLowerCase()}"`;
       }
 
       await exec(command);
