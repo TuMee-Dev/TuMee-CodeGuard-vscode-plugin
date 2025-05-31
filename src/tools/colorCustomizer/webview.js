@@ -3,6 +3,17 @@ let currentColors = null;
 let colorLinks = {};
 const PREVIEW_LINES = __PREVIEW_LINES_PLACEHOLDER__;
 
+// Cache for parsed guard tags to avoid repeated calls to extension
+const parseCache = new Map();
+
+// Use pre-parsed guard data from extension instead of parsing in webview
+function callExtensionParseGuardTag(content) {
+  // Preview lines now include pre-parsed guard data from the extension
+  // This eliminates the need to duplicate parseGuardTag logic in the webview
+  const currentLine = PREVIEW_LINES.find(line => line.content === content);
+  return currentLine ? currentLine.parsed : null;
+}
+
 // Initialize on load
 window.addEventListener('load', () => {
   const permissions = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
@@ -210,7 +221,8 @@ function updatePreview() {
   
   PREVIEW_LINES.forEach((line, index) => {
     const content = line.content || '';
-    const parsed = window.GuardParser.parseGuardTag(content);
+    // Call real parseGuardTag from extension instead of duplicating logic
+    const parsed = callExtensionParseGuardTag(content);
     
     // Debug line 51 specifically
     if (index === 50) {

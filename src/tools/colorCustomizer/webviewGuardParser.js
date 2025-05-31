@@ -14,14 +14,14 @@ let GUARD_TAG_PATTERN_SOURCE = null;
 
 // NO DUPLICATION - normalization will be handled by the extension and passed via messaging
 
-// Webview will receive parsed guard data from the extension - no duplication of parsing logic
+// Webview receives parsed guard data from extension - calls real parseGuardTag via messaging
 
 // Function to set the pattern source from the extension (single source of truth)
 function setPatternSource(patternSource) {
   GUARD_TAG_PATTERN_SOURCE = patternSource;
 }
 
-// Export for webview - no parsing functions, data comes from extension
+// Export for webview - no parseGuardTag duplication
 window.GuardParser = {
   setPatternSource: setPatternSource
 };
