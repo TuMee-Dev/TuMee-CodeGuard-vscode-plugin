@@ -666,13 +666,17 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
-    "compile": "webpack",
+    "compile": "webpack && npm run build:core-wasm",
     "watch": "webpack --watch --mode development",
+    "watch:all": "concurrently \"npm run watch\" \"npm run watch:wasm\"",
+    "watch:wasm": "nodemon --watch src/core --ext ts --exec \"npm run build:core-wasm\"",
     "package": "webpack --mode production --devtool hidden-source-map",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "typecheck": "tsc --noEmit",
     "test": "node ./tests/integration.test.js",
+    "build:core-wasm": "npm run build:core-bundle && ./javy build dist/core-bundle.js -o dist/core.wasm",
+    "build:core-bundle": "webpack --config webpack.config.wasm.js",
     "test:old": "node ./tests/line-count/focused-fix.js",
     "test:tree-sitter": "node ./tests/tree-sitter-direct-test.js",
     "test:parser": "ts-node ./tests/cli-parser-test.ts",
@@ -692,7 +696,10 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5",
     "webpack": "^5.99.8",
-    "webpack-cli": "^5.1.4"
+    "webpack-cli": "^5.1.4",
+    "esbuild": "^0.19.0",
+    "nodemon": "^3.0.1",
+    "concurrently": "^8.2.0"
   },
   "dependencies": {
     "commander": "^11.0.0",
