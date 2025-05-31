@@ -437,7 +437,8 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
       // Custom theme
       return {
         permissions: customThemes[selectedTheme].permissions,
-        mixPattern: customThemes[selectedTheme].mixPattern || mixPattern
+        mixPattern: customThemes[selectedTheme].mixPattern || mixPattern,
+        highlightEntireLine: customThemes[selectedTheme].highlightEntireLine ?? true
       };
     }
     
@@ -446,7 +447,8 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
     if (themes[selectedTheme]) {
       return {
         permissions: themes[selectedTheme].colors.permissions,
-        mixPattern: themes[selectedTheme].colors.mixPattern || mixPattern
+        mixPattern: themes[selectedTheme].colors.mixPattern || mixPattern,
+        highlightEntireLine: themes[selectedTheme].colors.highlightEntireLine ?? true
       };
     }
     
@@ -463,6 +465,14 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
     white: '\x1b[37m',   // White text
     dim: '\x1b[2m',      // Dim text
   };
+  
+  // Calculate the longest line length for padding (minimum 80 chars)
+  let maxLineLength = 80;
+  for (const line of lines) {
+    if (line.length > maxLineLength) {
+      maxLineLength = line.length;
+    }
+  }
   
   // Generate output
   for (let i = 0; i < lines.length; i++) {
@@ -690,16 +700,33 @@ async function generateDebugOutput(filePath, content, useColor = false, themeNam
           console.error(`  mixPattern=${themeConfig?.mixPattern}`);
         }
         
+        // Get the current line and pad it if needed for full line highlighting
+        const currentLine = lines[i];
+        const paddedLine = currentLine.padEnd(maxLineLength, ' ');
+        
+        // Check if we should highlight the entire line based on the active permission's setting
+        let highlightEntireLine = false;
+        
+        // Check the permission configs to see if this line should be highlighted entirely
+        if (aiPermConfig && aiPermConfig.highlightEntireLine) {
+          highlightEntireLine = true;
+        }
+        if (humanPermConfig && humanPermConfig.highlightEntireLine) {
+          highlightEntireLine = true;
+        }
+        
+        const lineToDisplay = highlightEntireLine ? paddedLine : currentLine;
+        
         // Format: line# [perms]|content (where | is the colored border char)
         if (borderColor && bgColor && borderColor !== bgColor) {
           // Different colors for border and background
-          console.log(`${lineNumStr} ${permBlock}${borderColor}${borderChar}${colors.reset}${bgColor}${textColor}${lines[i]}${colors.reset}`);
+          console.log(`${lineNumStr} ${permBlock}${borderColor}${borderChar}${colors.reset}${bgColor}${textColor}${lineToDisplay}${colors.reset}`);
         } else if (bgColor) {
           // Same color for both or no border color
-          console.log(`${lineNumStr} ${permBlock}${bgColor}${textColor}${borderChar}${lines[i]}${colors.reset}`);
+          console.log(`${lineNumStr} ${permBlock}${bgColor}${textColor}${borderChar}${lineToDisplay}${colors.reset}`);
         } else if (borderColor) {
           // Only border color
-          console.log(`${lineNumStr} ${permBlock}${borderColor}${borderChar}${colors.reset} ${lines[i]}`);
+          console.log(`${lineNumStr} ${permBlock}${borderColor}${borderChar}${colors.reset} ${lineToDisplay}`);
         }
       } else {
         // Default state - no colors
