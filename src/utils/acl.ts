@@ -87,7 +87,7 @@ export const parseGuardTag = (line: string): {
   const removeScopes: string[] = [];
 
   // Use comprehensive pattern to find all matches in the line
-  const comprehensiveRegex = new RegExp(GUARD_TAG_PATTERNS.PARSE_GUARD_TAG.source, 'g');
+  const comprehensiveRegex = new RegExp(GUARD_TAG_PATTERNS.PARSE_GUARD_TAG.source, 'gi');
   let match;
 
   while ((match = comprehensiveRegex.exec(line)) !== null) {
