@@ -187,8 +187,6 @@ export async function parseGuardTagsCore(
         }
 
         guardTags.push(guardTag);
-        
-        logger.log(`[Core] Parsed guard tag at line ${lineNumber}: ${JSON.stringify(guardTag)}`);
       }
     } catch (error) {
       const guardError = new GuardProcessingError(
@@ -290,7 +288,6 @@ export function getLinePermissionsCore(
     });
   }
 
-  logger.log(`[Core] Processed ${linePermissions.size} line permissions`);
   return linePermissions;
 }
 
