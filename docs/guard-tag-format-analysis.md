@@ -188,22 +188,50 @@ financial/** @guard:ai[finance-certified]:r[approval=finance-team]
 
 ## Recommendations for Reconciliation
 
-### 1. High Priority - Core Functionality
-1. **Add `all` target support** - Required by specification_extend_1.md
+### VSCode Extension (Visual Coloring) Requirements
+
+For the VSCode extension's visual rendering, implement these features:
+
+#### 1. High Priority - Core Visual Features
+1. **Add `all` target support** - Parse and color `@guard:all:permission`
 2. **Implement full case-insensitive parsing** - Already mostly there, just need to handle more aliases
 3. **Add permission aliases** - Simple string mapping for `readonly`→`r`, `none`→`n`
 4. **Add scope aliases** - Map `sig`→`signature`, `func`→`function`, etc.
+5. **Support wildcard patterns** - Parse `ai[claude-*]`, `human[team-*]` for visual indication
 
-### 2. Medium Priority - Enhanced Features
-1. **Multi-target syntax** - Parse comma-separated targets in single tag
-2. **Negation identifiers** - Support `[!identifier]` syntax
-3. **Group identifiers** - Support `[group:*]` syntax
-4. **Context metadata** - Parse and store `[key=value]` pairs
+#### 2. Medium Priority - Enhanced Visual Features
+1. **Multi-target syntax** - Parse comma-separated targets in single tag for coloring
+2. **Visual distinction for special identifiers** - Different styling for wildcards, negations
+3. **Context metadata parsing** - Extract and display `[key=value]` pairs in tooltips
 
-### 3. Low Priority - Advanced Features
-1. **Conditional guards** - `[approval=team]` syntax
+#### 3. Not Required for VSCode
+- Identity resolution (treat all guards as active)
+- Group membership checking
+- Environment condition evaluation
+- Approval system integration
+- External identity provider connections
+
+### CLI Tool (Enforcement) Requirements
+
+For full permission enforcement in the CLI tool:
+
+#### 1. High Priority - Core Enforcement
+1. **Identity resolution system** - Know current AI/human actor
+2. **Callback architecture** - Pluggable resolvers for identity, groups, context
+3. **Configuration file support** - `.guardconfig.yml` for identity and context
+4. **Wildcard pattern matching** - Support `claude-*`, `team-*` patterns
+
+#### 2. Medium Priority - Advanced Enforcement
+1. **Group membership resolution** - LDAP, Active Directory, custom providers
+2. **Context metadata evaluation** - Match against current execution context
+3. **Negation identifiers** - Support `[!identifier]` exclusions
+4. **Environment conditionals** - `.if(production)` evaluation
+
+#### 3. Low Priority - Enterprise Features
+1. **Approval system integration** - Check `[approval=team]` conditions
 2. **Directory-level pattern guards** - Full `.ai-attributes` support
-3. **External identity provider integration** - For identifier resolution
+3. **External identity provider plugins** - OAuth, SAML, custom systems
+4. **Audit logging** - Track permission checks and violations
 
 ### 4. Implementation Strategy
 
@@ -244,6 +272,130 @@ Update `parseGuardTag` function to:
 4. Extract context metadata
 5. Support negation and group identifiers
 
+## External Variables Required for Full Processing
+
+For complete guard tag enforcement, the following external data sources and resolvers are required:
+
+### 1. Identity Resolution
+- **Current AI Model/Agent Identifier**: Required to match tags like `@guard:ai[claude-3]:r`
+  - Must know if current AI is "claude-3", "gpt-4", etc.
+  - Should support wildcard matching (e.g., "claude-opus-4" matches `ai[claude-*]`)
+- **Current Human User Identifier**: Required to match tags like `@guard:human[john]:w`
+  - Must know the current user's identifier
+  - Should support multiple identifiers per user (username, email, employee ID)
+
+### 2. Group Membership Resolution
+- **Group Membership Callback**: Function to determine if user/AI belongs to a group
+  - Example: `isInGroup(identifier: string, group: string): boolean`
+  - Required for tags like `@guard:human[@team-alpha]:w`
+  - Should support nested groups (team-alpha is part of engineering-dept)
+
+### 3. Context Metadata Resolution
+- **Context Resolver**: Provides current execution context
+  - For tags like `@guard:ai:context[purpose:authentication]`
+  - Should provide: purpose, environment, task type, security level
+  - Example structure: `{ purpose: 'authentication', level: 'high', task: 'code-review' }`
+
+### 4. Environment and Conditional Resolution
+- **Environment Variables**: For conditional guards
+  - Production/staging/development environment
+  - Feature flags and deployment settings
+  - For tags like `.if(production)` or `[when=staging]`
+- **Approval System Integration**: For approval-based guards
+  - Check if approval exists for `[approval=finance-team]`
+  - Callback: `hasApproval(resource: string, team: string): boolean`
+
+### 5. External Identity Providers
+- **LDAP/Active Directory Integration**: For enterprise user groups
+- **OAuth/SAML Providers**: For federated identity
+- **Custom Identity Systems**: Plugin architecture for custom providers
+
+### 6. Permission Inheritance and Override Systems
+- **Hierarchy Resolver**: Determine permission precedence
+  - File-level vs block-level vs line-level guards
+  - Directory `.ai-attributes` inheritance
+  - Default permission policies
+
+## Implementation Strategy for VSCode Extension
+
+### Visual Rendering (VSCode Extension)
+
+For the VSCode extension's primary purpose of **visual indication**, a simplified approach is appropriate:
+
+1. **Ignore Identifier Matching**
+   - Treat all `@guard:ai[any-identifier]:permission` as active
+   - Don't attempt to resolve current AI/human identity
+   - Apply coloring based on permission type regardless of identifier match
+
+2. **Simplified Processing**
+   - Parse guard tags for structure only
+   - Extract permission (r/w/n/context) and scope
+   - Apply decorations based on permission type
+   - No need for external data resolution
+
+3. **Benefits of This Approach**
+   - Fast, synchronous processing
+   - No external dependencies
+   - Consistent visual feedback
+   - Works offline
+   - No configuration needed
+
+### Command-Line Enforcement (CLI Tool)
+
+For actual permission **enforcement**, the CLI tool would need:
+
+1. **Callback Mechanism**
+   ```typescript
+   interface GuardEnforcementCallbacks {
+     getCurrentIdentity: () => { type: 'ai' | 'human', id: string };
+     isInGroup: (id: string, group: string) => boolean;
+     getContext: () => Record<string, any>;
+     hasApproval: (resource: string, approver: string) => boolean;
+     getEnvironment: () => string;
+   }
+   ```
+
+2. **Configuration File Support**
+   ```yaml
+   # .guardconfig.yml
+   identity:
+     type: ai
+     id: claude-opus-4
+     groups: [assistants, code-reviewers]
+   
+   context:
+     purpose: development
+     level: standard
+   
+   environment: development
+   ```
+
+3. **Plugin Architecture**
+   - Allow custom resolvers for enterprise systems
+   - Support for different identity providers
+   - Extensible context providers
+
+### Clear Separation of Concerns
+
+1. **VSCode Extension (Visual Layer)**
+   - Purpose: Visual indication and awareness
+   - Processing: Parse and color based on permission type
+   - Identity: Ignored - all guards shown as if active
+   - Performance: Fast, synchronous, no external calls
+   - Configuration: Minimal - just color preferences
+
+2. **CLI Tool (Enforcement Layer)**
+   - Purpose: Actual permission enforcement
+   - Processing: Full resolution with callbacks
+   - Identity: Required - must know current actor
+   - Performance: Can be async, make external calls
+   - Configuration: Extensive - identity, groups, context
+
+3. **Shared Components**
+   - Guard tag parser (syntax only)
+   - Scope resolver (code structure analysis)
+   - Permission type definitions
+
 ## Conclusion
 
 The current implementation covers the core functionality but lacks support for many convenience features and advanced capabilities described in the specifications. The recommended phased approach would bring the implementation into full compliance with the specifications while maintaining backward compatibility.
@@ -253,5 +405,8 @@ The most critical gaps are:
 2. Limited permission and scope aliases
 3. No multi-target syntax support
 4. Missing context metadata parsing
+5. Wildcard pattern support for identifiers
+
+For the VSCode extension specifically, focusing on visual rendering without identity resolution is the correct approach. This provides immediate value to developers while keeping the implementation simple and performant. Full enforcement with identity resolution should be delegated to the CLI tool, which can handle the complexity of external data integration and callback mechanisms.
 
 These can be addressed incrementally without breaking existing functionality.
