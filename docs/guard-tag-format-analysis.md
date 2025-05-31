@@ -186,6 +186,44 @@ financial/** @guard:ai[finance-certified]:r[approval=finance-team]
 - **Implementation**: Defaults to `block` scope (correctly implemented)
 - **Impact**: None - correctly aligned
 
+### 9. Special Comment Block Handling
+The implementation includes special logic for determining whether guard tags in comments apply to subsequent comment lines or to the next code block:
+
+#### Comment-Anchored Guards
+When a guard tag is placed in a comment and is followed by more comment lines without intervening code, the guard applies to those comment lines:
+```javascript
+// @guard:ai:context
+// This is documentation that AI should read for context
+// It continues across multiple comment lines
+// Until actual code is encountered
+function doSomething() { } // <- Guard scope ends before this line
+```
+
+#### Code-Block-Anchored Guards
+When a guard tag with `.block` scope (explicit or default) is followed by code, it applies to the next code block:
+```javascript
+// @guard:ai:w
+function processData() {  // <- Guard applies to this entire function block
+    // Function implementation
+}
+```
+
+#### Implementation Details
+1. **Trailing Whitespace Handling**:
+   - For file scope guards: All whitespace is preserved within the permission scope
+   - For block scope guards: Trailing empty lines after the last code statement are excluded
+   - This prevents block-scoped guards from "leaking" into subsequent unrelated code sections
+
+2. **Scope Resolution Logic**:
+   - The parser examines content following a guard tag to determine if it's comment-anchored or code-anchored
+   - Empty lines between a guard and code are ignored when searching for the target block
+   - Another guard tag immediately terminates the current guard's scope search
+
+3. **Context Guards**:
+   - Guards with `:context` or `:context:w` are always treated as comment-anchored
+   - They apply to subsequent comment lines until code or another guard is encountered
+   - This allows for inline documentation and TODOs to be properly scoped
+
 ## Recommendations for Reconciliation
 
 ### VSCode Extension (Visual Coloring) Requirements
