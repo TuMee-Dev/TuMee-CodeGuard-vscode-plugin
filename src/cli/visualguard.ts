@@ -289,8 +289,9 @@ async function displayFile(filePath: string, options: any): Promise<void> {
     let isContext = false;
     
     if (perm) {
-      aiPerm = perm.permissions?.ai || 'r';
-      humanPerm = perm.permissions?.human || 'w';
+      // Normalize contextWrite back to 'w' for display
+      aiPerm = (perm.permissions?.ai === 'contextWrite' ? 'w' : perm.permissions?.ai) || 'r';
+      humanPerm = (perm.permissions?.human === 'contextWrite' ? 'w' : perm.permissions?.human) || 'w';
       isContext = perm.isContext?.ai || perm.isContext?.human || false;
     }
     
@@ -305,7 +306,7 @@ async function displayFile(filePath: string, options: any): Promise<void> {
       let textColor = ANSI.black;
       let borderColor = '';
       
-      const colors = theme.colors;
+      const colors = theme.colors.permissions || theme.colors;
       
       // Determine colors
       let aiColor = '';
@@ -315,7 +316,14 @@ async function displayFile(filePath: string, options: any): Promise<void> {
       let highlightEntireLine = false;
       
       if (isContext) {
-        const contextColor = colors.contextRead || colors.contextWrite;
+        // Determine if this is read or write context based on the permission that has context
+        // Only check the permission that actually has the context flag
+        const isWriteContext = (perm?.isContext?.ai && aiPerm === 'w') || 
+                               (perm?.isContext?.human && humanPerm === 'w');
+        const contextColor = isWriteContext ? colors.contextWrite : colors.contextRead;
+        if (options.debug) {
+          console.error(`[DEBUG] Context type: ${isWriteContext ? 'write' : 'read'}, color config:`, contextColor);
+        }
         if (contextColor?.enabled && contextColor.transparency > 0) {
           aiColor = humanColor = hexToAnsi(contextColor.color, contextColor.transparency);
           highlightEntireLine = contextColor.highlightEntireLine || false;

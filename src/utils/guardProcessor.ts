@@ -16,10 +16,9 @@ import {
   getLinePermissionsCore,
   clearScopeCache as clearScopeCacheCore,
   markLinesModified as markLinesModifiedCore,
-  parseGuardTag,
   getDefaultPermissions
 } from './guardProcessorCore';
-import { isLineAComment } from './commentDetector';
+import { isLineAComment, parseGuardTag } from '../core';
 import { resolveSemantic } from './scopeResolver';
 import { logError, validateDocument } from './errorHandler';
 import { DebugLogger } from './debugLogger';

@@ -48,12 +48,21 @@ export async function resolveSemanticScope(
         let targetNode: Node | null = null;
 
         if (scope === 'block') {
-          // Special case: if we encounter a class or function when looking for a block,
-          // use the entire class/function as the block
-          const classOrFunc = findParentOfType(searchNode, ['class_declaration', 'function_declaration']);
-          if (classOrFunc && classOrFunc.startPosition.row >= line) {
-            targetNode = classOrFunc;
+          // Check if the guard is inside a function/class - if not, prefer statement-by-statement
+          const guardNode = findNodeAtPosition(tree, line);
+          const enclosingFunc = guardNode ? findParentOfType(guardNode, ['class_declaration', 'function_declaration', 'method_definition', 'function_definition']) : null;
+          
+          // If not inside a function/class, skip tree-sitter block detection and use fallback
+          if (!enclosingFunc) {
+            // Skip tree-sitter block detection for top-level statements
+            targetNode = null;
           } else {
+            // Special case: if we encounter a class or function when looking for a block,
+            // use the entire class/function as the block
+            const classOrFunc = findParentOfType(searchNode, ['class_declaration', 'function_declaration']);
+            if (classOrFunc && classOrFunc.startPosition.row >= line) {
+              targetNode = classOrFunc;
+            } else {
             // First check if the current node itself is a block type
             if (nodeTypes.includes(searchNode.type)) {
               targetNode = searchNode;
@@ -79,6 +88,7 @@ export async function resolveSemanticScope(
                   }
                 }
               }
+            }
             }
           }
         } else {
@@ -114,6 +124,48 @@ export async function resolveSemanticScope(
         }
       }
     }
+    
+    // If we couldn't find a block scope, fall back to statement block
+    // Include consecutive statements until hitting another guard, blank line, or EOF
+    // Also prefer statement-by-statement for top-level blocks (not inside functions/classes)
+    if (scope === 'block') {
+      const guardNode = findNodeAtPosition(tree, line);
+      const enclosingFunc = guardNode ? findParentOfType(guardNode, ['class_declaration', 'function_declaration', 'method_definition', 'function_definition']) : null;
+      
+      // Always use statement-by-statement for top-level blocks, or if tree-sitter failed
+      if (!enclosingFunc || true) {
+      const startLineNumber = line + 1; // Start from line after guard
+      let endLineNumber = startLineNumber;
+      
+      // Scan forward to find the end of the statement block
+      for (let currentLine = startLineNumber; currentLine < document.lineCount; currentLine++) {
+        const lineText = document.lineAt(currentLine).text.trim();
+        
+        // Stop at blank lines
+        if (lineText === '') {
+          break;
+        }
+        
+        // Stop at guard tags
+        if (lineText.includes(GUARD_TAG_PREFIX)) {
+          break;
+        }
+        
+        // Include this line in the block
+        endLineNumber = currentLine;
+      }
+      
+      // Return the statement block if we found any statements
+      if (endLineNumber >= startLineNumber) {
+        return {
+          startLine: startLineNumber + 1, // Convert to 1-based
+          endLine: endLineNumber + 1,     // Convert to 1-based
+          type: 'statement'
+        };
+      }
+      }
+    }
+    
     return null;
   }
 
