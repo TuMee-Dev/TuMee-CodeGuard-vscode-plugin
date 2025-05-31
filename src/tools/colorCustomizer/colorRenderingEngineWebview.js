@@ -47,7 +47,7 @@ function createColorRenderingEngine(colors) {
     getSinglePermissionColor: function(type, permission) {
       let configKey;
       
-      if (permission === 'context') {
+      if (permission === 'contextRead') {
         configKey = 'contextRead';
       } else if (permission === 'contextWrite') {
         configKey = 'contextWrite';
@@ -57,19 +57,6 @@ function createColorRenderingEngine(colors) {
 
       const config = colors.permissions[configKey];
       
-      // Debug logging for context permissions
-      if (permission === 'context' || permission === 'contextWrite') {
-        console.log('getSinglePermissionColor debug:', {
-          type,
-          permission,
-          configKey,
-          config: config ? { color: config.color, enabled: config.enabled } : 'undefined',
-          allContextColors: {
-            contextRead: colors.permissions.contextRead ? colors.permissions.contextRead.color : 'missing',
-            contextWrite: colors.permissions.contextWrite ? colors.permissions.contextWrite.color : 'missing'
-          }
-        });
-      }
       
       if (!config || !config.enabled) {
         return {
@@ -87,10 +74,6 @@ function createColorRenderingEngine(colors) {
         highlightEntireLine: config.highlightEntireLine || false
       };
       
-      // Debug: log what color we're returning for context permissions
-      if (permission === 'context' || permission === 'contextWrite') {
-        console.log(`Returning color for ${permission}:`, result.backgroundColor);
-      }
       
       return result;
     },
@@ -266,7 +249,7 @@ function createColorRenderingEngine(colors) {
      * Get config key for permission type and value
      */
     getConfigKey: function(type, permission) {
-      if (permission === 'context') {
+      if (permission === 'contextRead') {
         return 'contextRead';
       } else if (permission === 'contextWrite') {
         return 'contextWrite';

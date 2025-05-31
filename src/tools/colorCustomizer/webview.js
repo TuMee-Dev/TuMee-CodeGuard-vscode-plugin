@@ -224,39 +224,64 @@ function updatePreview() {
     // Call real parseGuardTag from extension instead of duplicating logic
     const parsed = callExtensionParseGuardTag(content);
     
-    // Debug line 51 specifically
-    if (index === 50) {
-      console.log('Line 51 content:', content, 'Parsed:', parsed);
+    // Temporary debug for context lines
+    if (content.includes('context')) {
+      console.log('Line', index + 1, 'content:', content, 'parsed aiPermission:', parsed.aiPermission, 'aiIsContext:', parsed.aiIsContext);
     }
+    
+    
     
     // Update active guards based on parsed tags
     if (parsed) {
       // Handle AI guards (both regular and context)
       if (parsed.aiPermission || parsed.aiIsContext) {
+        let finalPermission;
+        if (parsed.aiPermission === 'contextWrite') {
+          finalPermission = 'contextWrite';
+        } else if (parsed.aiIsContext) {
+          // Check if it's context:w by looking at the original content
+          finalPermission = content.includes(':context:w') ? 'contextWrite' : 'contextRead';
+        } else if (parsed.aiPermission === 'r') {
+          finalPermission = 'read';
+        } else if (parsed.aiPermission === 'w') {
+          finalPermission = 'write'; 
+        } else if (parsed.aiPermission === 'n') {
+          finalPermission = 'noAccess';
+        } else {
+          finalPermission = parsed.aiPermission;
+        }
         activeGuards.ai = {
-          permission: parsed.aiPermission === 'contextWrite' ? 'contextWrite' :
-                     parsed.aiIsContext ? 'context' :
-                     parsed.aiPermission === 'r' ? 'read' : 
-                     parsed.aiPermission === 'w' ? 'write' : 
-                     parsed.aiPermission === 'n' ? 'noAccess' : parsed.aiPermission,
+          permission: finalPermission,
           scope: parsed.scope || 'block', // Default to block scope, not file
           lineCount: parsed.lineCount,
           startLine: index,
-          isContext: parsed.aiIsContext || false
+          isContext: parsed.aiIsContext || finalPermission === 'contextRead' || finalPermission === 'contextWrite'
         };
       }
       // Handle Human guards (both regular and context)
       if (parsed.humanPermission || parsed.humanIsContext) {
+        let humanFinalPermission;
+        if (parsed.humanPermission === 'contextWrite') {
+          humanFinalPermission = 'contextWrite';
+        } else if (parsed.humanIsContext) {
+          // Check if it's context:w by looking at the original content
+          humanFinalPermission = content.includes(':context:w') ? 'contextWrite' : 'contextRead';
+        } else if (parsed.humanPermission === 'r') {
+          humanFinalPermission = 'read';
+        } else if (parsed.humanPermission === 'w') {
+          humanFinalPermission = 'write'; 
+        } else if (parsed.humanPermission === 'n') {
+          humanFinalPermission = 'noAccess';
+        } else {
+          humanFinalPermission = parsed.humanPermission;
+        }
+        
         activeGuards.human = {
-          permission: parsed.humanPermission === 'contextWrite' ? 'contextWrite' :
-                     parsed.humanIsContext ? 'context' :
-                     parsed.humanPermission === 'r' ? 'read' : 
-                     parsed.humanPermission === 'w' ? 'write' : 
-                     parsed.humanPermission === 'n' ? 'noAccess' : parsed.humanPermission,
+          permission: humanFinalPermission,
           scope: parsed.scope || 'block', // Default to block scope, not file
           lineCount: parsed.lineCount,
           startLine: index,
-          isContext: parsed.humanIsContext || false
+          isContext: parsed.humanIsContext || humanFinalPermission === 'contextRead' || humanFinalPermission === 'contextWrite'
         };
       }
     }
@@ -345,7 +370,7 @@ function updatePreview() {
   updateExample('ex-humanNoAccess', 'human', 'noAccess');
   updateExample('ex-mixed1', 'both', { ai: 'write', human: 'read' });
   updateExample('ex-mixed2', 'both', { ai: 'read', human: 'write' });
-  updateExample('ex-contextRead', 'ai', 'context');
+  updateExample('ex-contextRead', 'ai', 'contextRead');
   updateExample('ex-contextWrite', 'ai', 'contextWrite');
   
   // Enable Apply button when changes are detected
@@ -425,18 +450,6 @@ function updateLine(lineNum, aiPerm, humanPerm) {
   
   const colors = getColors();
   
-  // Check if contextRead and contextWrite are the same object
-  if (aiPerm === 'contextWrite' || humanPerm === 'contextWrite') {
-    const lineContent = document.getElementById('line' + lineNum)?.textContent || '';
-    console.log('Line ' + lineNum + ' checking colors:', {
-      lineContent: lineContent.trim(),
-      aiPerm,
-      contextReadColor: colors.permissions.contextRead?.color,
-      contextWriteColor: colors.permissions.contextWrite?.color,
-      contextReadEnabled: colors.permissions.contextRead?.enabled,
-      contextWriteEnabled: colors.permissions.contextWrite?.enabled
-    });
-  }
   
   const engine = createColorRenderingEngine(colors);
   
@@ -673,9 +686,90 @@ function updateThemeStatus(isSystem) {
   if (isSystem) {
     statusDiv.innerHTML = '🔒 System theme (read-only) - Click "Apply Colors" to create a custom copy';
     statusDiv.style.display = 'block';
+    // Disable all permission controls for system themes
+    disableAllPermissionControls(true);
   } else {
     statusDiv.innerHTML = '✏️ Custom theme - Changes will be saved to this theme';
     statusDiv.style.display = 'block';
+    // Enable all permission controls for custom themes
+    disableAllPermissionControls(false);
+  }
+}
+
+function disableAllPermissionControls(disable) {
+  const permissions = ['aiWrite', 'aiRead', 'aiNoAccess', 'humanWrite', 'humanRead', 'humanNoAccess', 'contextRead', 'contextWrite'];
+  
+  permissions.forEach(permission => {
+    // Disable/enable the enabled checkbox
+    const enabledCheckbox = document.getElementById(permission + '-enabled');
+    if (enabledCheckbox) {
+      enabledCheckbox.disabled = disable;
+    }
+    
+    // Disable/enable all other controls
+    const controls = [
+      document.getElementById(permission + '-color'),
+      document.getElementById(permission + '-minimapColor'),
+      document.getElementById(permission + '-transparency'),
+      document.getElementById(permission + '-borderOpacity'),
+      document.getElementById(permission + '-highlightEntireLine'),
+      document.getElementById(permission + '-link')
+    ];
+    
+    controls.forEach(control => {
+      if (control) {
+        control.disabled = disable;
+        if (disable) {
+          control.classList.add('disabled');
+        } else {
+          control.classList.remove('disabled');
+        }
+      }
+    });
+    
+    // Disable/enable the entire permission section
+    const permissionSections = document.querySelectorAll('.permission-section');
+    permissionSections.forEach(section => {
+      const checkbox = section.querySelector('input[type="checkbox"]');
+      if (checkbox && checkbox.id === permission + '-enabled') {
+        if (disable) {
+          section.classList.add('disabled');
+          section.style.opacity = '0.5';
+          section.style.pointerEvents = 'none';
+        } else {
+          section.classList.remove('disabled');
+          section.style.opacity = '1';
+          section.style.pointerEvents = 'auto';
+        }
+      }
+    });
+  });
+  
+  // Also disable/enable the Apply and Reset buttons for system themes
+  const applyButton = document.querySelector('button[onclick="saveColors()"]');
+  const resetButton = document.querySelector('button[onclick="resetColors()"]');
+  
+  if (disable) {
+    if (applyButton) {
+      applyButton.disabled = true;
+      applyButton.style.opacity = '0.5';
+      applyButton.style.cursor = 'not-allowed';
+    }
+    if (resetButton) {
+      resetButton.disabled = true;
+      resetButton.style.opacity = '0.5';
+      resetButton.style.cursor = 'not-allowed';
+    }
+  } else {
+    // For custom themes, re-enable buttons but let checkForChanges() control their state
+    if (applyButton) {
+      applyButton.style.cursor = 'pointer';
+    }
+    if (resetButton) {
+      resetButton.style.cursor = 'pointer';
+    }
+    // Call checkForChanges to set proper enabled/disabled state
+    checkForChanges();
   }
 }
 
