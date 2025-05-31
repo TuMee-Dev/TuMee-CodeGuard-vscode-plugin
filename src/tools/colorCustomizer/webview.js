@@ -83,6 +83,11 @@ window.addEventListener('message', event => {
           themeSelect.value = '';
         }
         updateDeleteButton();
+        
+        // Update theme status if the next theme is a system theme
+        if (message.isSystemTheme !== undefined) {
+          updateThemeStatus(message.isSystemTheme);
+        }
       }
       // Request updated theme list from extension
       vscode.postMessage({ command: 'requestThemeList' });
@@ -787,24 +792,32 @@ function generateDefaultThemeName() {
   const themeSelect = document.getElementById('themeSelect');
   const currentTheme = themeSelect ? themeSelect.value : '';
   
-  // Get all existing theme names from the dropdown
+  // Get all existing theme display names from the dropdown
   const existingNames = new Set();
+  const existingDisplayNames = new Set();
   if (themeSelect) {
     const options = themeSelect.querySelectorAll('option');
     options.forEach(option => {
-      if (option.value) existingNames.add(option.value);
+      if (option.value) {
+        existingNames.add(option.value.toLowerCase());
+        existingDisplayNames.add(option.textContent);
+      }
     });
   }
   
   let baseName = '';
-  if (currentTheme) {
+  if (currentTheme && themeSelect) {
+    // Get the display name of the currently selected theme
+    const selectedOption = themeSelect.querySelector('option[value="' + currentTheme + '"]');
+    const displayName = selectedOption ? selectedOption.textContent : currentTheme;
+    
     // If current theme name already ends with a number, extract the base
-    const numberMatch = currentTheme.match(/^(.+?) \d+$/);
+    const numberMatch = displayName.match(/^(.+?) \d+$/);
     
     if (numberMatch) {
       baseName = numberMatch[1];
     } else {
-      baseName = currentTheme;
+      baseName = displayName;
     }
   } else {
     baseName = 'My Theme';
@@ -814,7 +827,8 @@ function generateDefaultThemeName() {
   let counter = 1;
   let proposedName = `${baseName} ${counter}`;
   
-  while (existingNames.has(proposedName)) {
+  // Check against lowercase keys (since themes are stored with lowercase keys)
+  while (existingNames.has(proposedName.toLowerCase()) || existingDisplayNames.has(proposedName)) {
     counter++;
     proposedName = `${baseName} ${counter}`;
   }
@@ -846,10 +860,12 @@ function confirmNewTheme() {
   
   closeThemeDialog();
   
+  // Use lowercase key to match dropdown value
+  const themeKey = name.toLowerCase();
   setTimeout(() => {
     const select = document.getElementById('themeSelect');
     if (select) {
-      select.value = name;
+      select.value = themeKey;
       updateDeleteButton();
     }
   }, 200);

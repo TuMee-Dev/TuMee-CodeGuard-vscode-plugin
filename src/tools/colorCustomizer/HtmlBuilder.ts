@@ -54,7 +54,7 @@ export class ColorCustomizerHtmlBuilder {
       });
     }).join('');
 
-    const lineNumbers = Array.from({ length: 65 }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
+    const lineNumbers = Array.from({ length: previewLines.length }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
     const codeLines = previewLines.map((line: any, i: number) => this.generateCodeLine(i, line.content)).join('');
 
     return `<!DOCTYPE html>

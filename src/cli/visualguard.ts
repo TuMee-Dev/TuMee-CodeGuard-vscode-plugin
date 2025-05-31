@@ -232,8 +232,8 @@ function loadTheme(themeName: string | null): { colors: any; mixPattern: string 
     // Check custom themes first
     if (customThemes[selectedTheme]) {
       return {
-        colors: customThemes[selectedTheme].permissions,
-        mixPattern: customThemes[selectedTheme].mixPattern || mixPattern
+        colors: customThemes[selectedTheme].colors.permissions,
+        mixPattern: customThemes[selectedTheme].colors.mixPattern || mixPattern
       };
     }
     

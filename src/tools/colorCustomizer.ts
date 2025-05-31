@@ -251,12 +251,15 @@ export class ColorCustomizerPanel {
 
       if (themeName) {
         await this._saveAsNewTheme(themeName, colors);
+        const themeKey = themeName.toLowerCase();
         this._currentTheme = themeName;
         this._isSystemTheme = false;
         await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
 
-        // Update the dropdown in the webview
-        this._postMessage('setSelectedTheme', { theme: themeName });
+        // Update the dropdown in the webview - use lowercase key to match dropdown value
+        this._postMessage('setSelectedTheme', { theme: themeKey });
+        // Also update the theme type to enable controls
+        this._postMessage('setThemeType', { isSystem: false });
       }
       return;
     }
@@ -361,9 +364,9 @@ export class ColorCustomizerPanel {
     this._showInfo(`Theme '${name}' saved successfully!`);
     this._sendThemeList();
 
-    // Update the dropdown selection
+    // Update the dropdown selection - use lowercase key to match dropdown value
     setTimeout(() => {
-      this._postMessage('setSelectedTheme', { theme: name });
+      this._postMessage('setSelectedTheme', { theme: themeKey });
       this._postMessage('setThemeType', { isSystem: false });
     }, 100);
   }
@@ -393,7 +396,14 @@ export class ColorCustomizerPanel {
       // Create a shallow copy to avoid proxy issues
       const updatedThemes = { ...customThemes };
       const themeKey = name.toLowerCase();
-      delete updatedThemes[themeKey];
+      
+      // Handle legacy themes that might have wrong casing in the key
+      if (!customThemes[themeKey] && customThemes[name]) {
+        delete updatedThemes[name];
+      } else {
+        delete updatedThemes[themeKey];
+      }
+      
       await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, updatedThemes);
 
       // Determine next theme to select (only custom themes can be deleted)
@@ -405,11 +415,12 @@ export class ColorCustomizerPanel {
 
         if (remainingCustomThemes.length > 0) {
           // Still have custom themes - select the closest one by position
-          const deletedIndex = originalCustomThemes.indexOf(name);
+          // Use lowercase key for comparison since themes are stored with lowercase keys
+          const deletedIndex = originalCustomThemes.indexOf(themeKey);
           const nextIndex = Math.min(deletedIndex, remainingCustomThemes.length - 1);
 
           // Get the theme that should be at this position after deletion
-          const targetTheme = originalCustomThemes.filter(t => t !== name)[nextIndex];
+          const targetTheme = originalCustomThemes.filter(t => t !== themeKey)[nextIndex];
           if (targetTheme && remainingCustomThemes.includes(targetTheme)) {
             nextTheme = targetTheme;
           } else {
@@ -438,7 +449,13 @@ export class ColorCustomizerPanel {
 
       // Then send the deletion notification with a slight delay to ensure theme list is processed
       setTimeout(() => {
-        this._postMessage('themeDeleted', { deletedTheme: name, nextTheme });
+        // Include whether the next theme is a system theme
+        const isNextThemeSystem = nextTheme && !!COLOR_THEMES[nextTheme.toLowerCase()];
+        this._postMessage('themeDeleted', { 
+          deletedTheme: name, 
+          nextTheme,
+          isSystemTheme: isNextThemeSystem
+        });
       }, 50);
     } finally {
       this._isDeleting = false;
