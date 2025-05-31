@@ -963,20 +963,34 @@ function focusPermission(permission) {
 window.focusPermission = focusPermission;
 
 function updatePreviewForPermission(permission) {
-  let targetLine = null;
-  
-  const lineMap = {
-    'aiWrite': 'line3',
-    'aiRead': 'line10',
-    'aiNoAccess': 'line16',
-    'humanWrite': 'line22',
-    'humanRead': 'line29',
-    'humanNoAccess': 'line35',
-    'contextRead': 'line41',
-    'contextWrite': 'line51'
+  // Search strings to find in the preview content
+  const searchMap = {
+    'aiWrite': 'aiWrite example',
+    'aiRead': 'aiRead example',
+    'aiNoAccess': 'aiNoAccess example',
+    'humanWrite': 'humanWrite example',
+    'humanRead': 'humanRead example',
+    'humanNoAccess': 'humanNoAccess example',
+    'contextRead': 'contextRead example',
+    'contextWrite': 'contextWrite example'
   };
   
-  targetLine = document.getElementById(lineMap[permission]);
+  const searchString = searchMap[permission];
+  if (!searchString) return;
+  
+  // Find the first line containing the search string
+  let targetLineIndex = -1;
+  for (let i = 0; i < PREVIEW_LINES.length; i++) {
+    const content = PREVIEW_LINES[i].content || '';
+    if (content.includes(searchString)) {
+      targetLineIndex = i;
+      break;
+    }
+  }
+  
+  if (targetLineIndex === -1) return;
+  
+  const targetLine = document.getElementById('line' + (targetLineIndex + 1));
   
   if (targetLine) {
     const editorContainer = document.querySelector('.editor-container');
@@ -1098,18 +1112,24 @@ function calculateOffset(element, container) {
 }
 
 function findPreviewLineForPermission(permissionId) {
+  // Use the same search strings as updatePreviewForPermission
   const searchMap = {
-    'aiWrite': 'ai:w', 'aiRead': 'ai:r', 'aiNoAccess': 'ai:n',
-    'humanWrite': 'human:w', 'humanRead': 'human:r', 'humanNoAccess': 'human:n',
-    'contextRead': ':context', 'contextWrite': ':context:w'
+    'aiWrite': 'aiWrite example',
+    'aiRead': 'aiRead example',
+    'aiNoAccess': 'aiNoAccess example',
+    'humanWrite': 'humanWrite example',
+    'humanRead': 'humanRead example',
+    'humanNoAccess': 'humanNoAccess example',
+    'contextRead': 'contextRead example',
+    'contextWrite': 'contextWrite example'
   };
   
-  const searchTerm = searchMap[permissionId];
-  if (!searchTerm) return -1;
+  const searchString = searchMap[permissionId];
+  if (!searchString) return -1;
   
   for (let i = 0; i < PREVIEW_LINES.length; i++) {
-    const content = PREVIEW_LINES[i].content.toLowerCase();
-    if (content.includes('// @guard:') && content.includes(searchTerm)) {
+    const content = PREVIEW_LINES[i].content || '';
+    if (content.includes(searchString)) {
       return i;
     }
   }
