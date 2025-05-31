@@ -121,6 +121,20 @@
       background: var(--vscode-list-hoverBackground);
     }
     
+    .permission-section.system-theme {
+      opacity: 0.7;
+      position: relative;
+    }
+    
+    .permission-section.system-theme::after {
+      content: '🔒';
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      font-size: 14px;
+      opacity: 0.5;
+    }
+    
     .permission-header {
       display: flex;
       justify-content: space-between;

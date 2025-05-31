@@ -727,19 +727,16 @@ function disableAllPermissionControls(disable) {
       }
     });
     
-    // Disable/enable the entire permission section
+    // Add visual indicator but keep section clickable for navigation
     const permissionSections = document.querySelectorAll('.permission-section');
     permissionSections.forEach(section => {
       const checkbox = section.querySelector('input[type="checkbox"]');
       if (checkbox && checkbox.id === permission + '-enabled') {
         if (disable) {
-          section.classList.add('disabled');
-          section.style.opacity = '0.5';
-          section.style.pointerEvents = 'none';
+          section.classList.add('system-theme');
+          // Don't disable pointer events - keep section clickable for navigation
         } else {
-          section.classList.remove('disabled');
-          section.style.opacity = '1';
-          section.style.pointerEvents = 'auto';
+          section.classList.remove('system-theme');
         }
       }
     });
