@@ -221,8 +221,8 @@ export class ColorCustomizerPanel {
     void vscode.window.showErrorMessage(message);
   }
 
-  private _getCustomThemes(): Record<string, GuardColors> {
-    return this._cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
+  private _getCustomThemes(): Record<string, { name: string; colors: GuardColors }> {
+    return this._cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, { name: string; colors: GuardColors }>);
   }
 
   private _getBuiltInThemes(): string[] {
@@ -241,7 +241,8 @@ export class ColorCustomizerPanel {
             return 'Theme name cannot be empty';
           }
           const customThemes = this._getCustomThemes();
-          if (customThemes[value]) {
+          const themeKey = value.toLowerCase();
+          if (customThemes[themeKey] || COLOR_THEMES[themeKey]) {
             return 'A theme with this name already exists';
           }
           return null;
@@ -263,8 +264,13 @@ export class ColorCustomizerPanel {
     // If we have a current custom theme and not applying from theme selector
     if (this._currentTheme && !this._isSystemTheme && !fromTheme) {
       const customThemes = this._getCustomThemes();
-      if (customThemes[this._currentTheme]) {
-        customThemes[this._currentTheme] = colors;
+      const themeKey = this._currentTheme.toLowerCase();
+      if (customThemes[themeKey]) {
+        // Keep the same structure with name field
+        customThemes[themeKey] = {
+          name: customThemes[themeKey].name || this._currentTheme,
+          colors: colors
+        };
         await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
 
         // If this is the currently selected theme, update guardColorsComplete too
@@ -309,13 +315,16 @@ export class ColorCustomizerPanel {
   }
 
   private async _applyTheme(themeName: string) {
-    let theme = COLOR_THEMES[themeName];
+    // Always use lowercase keys for lookup
+    const themeKey = themeName.toLowerCase();
+    let theme = COLOR_THEMES[themeKey];
     this._isSystemTheme = !!theme;
 
     if (!theme) {
       const customThemes = this._getCustomThemes();
-      if (customThemes[themeName]) {
-        theme = { name: themeName, colors: customThemes[themeName] };
+      if (customThemes[themeKey]) {
+        // Custom themes already have the correct structure with name and colors
+        theme = customThemes[themeKey];
         this._isSystemTheme = false;
       }
     }
@@ -337,7 +346,12 @@ export class ColorCustomizerPanel {
 
   private async _saveAsNewTheme(name: string, colors: GuardColors) {
     const customThemes = this._getCustomThemes();
-    customThemes[name] = colors;
+    const themeKey = name.toLowerCase();
+    // Store with same structure as built-in themes
+    customThemes[themeKey] = {
+      name: name,  // Display name with original casing
+      colors: colors
+    };
     await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
     await this._cm.update(CONFIG_KEYS.SELECTED_THEME, name);
 
@@ -378,7 +392,8 @@ export class ColorCustomizerPanel {
 
       // Create a shallow copy to avoid proxy issues
       const updatedThemes = { ...customThemes };
-      delete updatedThemes[name];
+      const themeKey = name.toLowerCase();
+      delete updatedThemes[themeKey];
       await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, updatedThemes);
 
       // Determine next theme to select (only custom themes can be deleted)
@@ -492,12 +507,24 @@ export class ColorCustomizerPanel {
 
   private _sendThemeList() {
     const customThemes = this._getCustomThemes();
-    const builtInThemes = this._getBuiltInThemes();
+    const builtInThemeKeys = this._getBuiltInThemes();
     const customThemeNames = Object.keys(customThemes);
 
+    // Create arrays with both key and display name for built-in themes
+    const builtInThemesWithNames = builtInThemeKeys.map(key => ({
+      key: key,
+      name: COLOR_THEMES[key]?.name || key
+    }));
+
+    // For custom themes, use the name field from the theme data
+    const customThemesWithNames = customThemeNames.map(key => ({
+      key: key,
+      name: customThemes[key].name || key  // Use name field or fallback to key
+    }));
+
     this._postMessage('updateThemeList', {
-      builtIn: builtInThemes,
-      custom: customThemeNames
+      builtIn: builtInThemesWithNames,
+      custom: customThemesWithNames
     });
   }
 

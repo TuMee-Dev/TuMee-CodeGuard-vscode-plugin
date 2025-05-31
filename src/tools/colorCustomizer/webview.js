@@ -884,8 +884,8 @@ function updateThemeList(builtIn, custom) {
   builtInGroup.label = 'Built-in Themes';
   builtIn.forEach(theme => {
     const option = document.createElement('option');
-    option.value = theme;
-    option.textContent = theme;
+    option.value = theme.key;
+    option.textContent = theme.name;
     builtInGroup.appendChild(option);
   });
   select.appendChild(builtInGroup);
@@ -895,8 +895,8 @@ function updateThemeList(builtIn, custom) {
     customGroup.label = 'Custom Themes';
     custom.forEach(theme => {
       const option = document.createElement('option');
-      option.value = theme;
-      option.textContent = theme;
+      option.value = theme.key;
+      option.textContent = theme.name;
       customGroup.appendChild(option);
     });
     select.appendChild(customGroup);
