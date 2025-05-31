@@ -296,7 +296,7 @@ export class ColorCustomizerPanel {
       colors = mergeWithDefaults(savedColors);
     } else {
       // No saved colors, check if we have a selected theme
-      const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'light');
+      const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'default');
       const theme = COLOR_THEMES[selectedTheme];
       if (theme) {
         colors = mergeWithDefaults(theme.colors);
@@ -403,7 +403,7 @@ export class ColorCustomizerPanel {
           }
         } else {
           // No custom themes left, fall back to first built-in theme
-          nextTheme = builtInThemes[0] || 'light';
+          nextTheme = builtInThemes[0] || 'default';
         }
 
         // Apply the next theme
@@ -504,7 +504,7 @@ export class ColorCustomizerPanel {
   private _update() {
     const webview = this._panel.webview;
     this._panel.title = 'Guard Tag Color Customizer';
-    const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'light');
+    const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'default');
     this._panel.webview.html = ColorCustomizerHtmlBuilder.getHtmlForWebview(webview, selectedTheme, this._cm);
 
     setTimeout(async () => {
@@ -512,9 +512,9 @@ export class ColorCustomizerPanel {
 
       let selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, '');
 
-      // If no theme is selected, default to 'light'
+      // If no theme is selected, default to 'default'
       if (!selectedTheme) {
-        selectedTheme = 'light';
+        selectedTheme = 'default';
       }
 
       // Apply the theme to ensure colors and dropdown are in sync

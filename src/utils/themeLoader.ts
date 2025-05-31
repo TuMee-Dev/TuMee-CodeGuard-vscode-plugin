@@ -8,18 +8,12 @@ import type { GuardColors, PermissionColorConfig } from '../tools/colorCustomize
 import { MixPattern } from '../types/mixPatterns';
 
 export interface ThemeConfig {
-  displayName: string;
-  permissions: Record<string, {
-    color: string;
-    transparency: number;
-    enabled?: boolean;
-  }>;
-  mixPattern?: string;
+  name: string;
+  colors: GuardColors;
 }
 
 export interface ThemesConfiguration {
   version: string;
-  defaultMixPattern?: string;
   themes: Record<string, ThemeConfig>;
 }
 
@@ -62,34 +56,6 @@ export function loadThemeConfiguration(): ThemesConfiguration {
   }
 }
 
-/**
- * Convert theme config to GuardColors format
- */
-function convertThemeToGuardColors(themeId: string, theme: ThemeConfig, defaultMixPattern: string): { name: string; colors: GuardColors } {
-  const permissions: Record<string, PermissionColorConfig> = {};
-
-  // Convert each permission
-  for (const [permId, config] of Object.entries(theme.permissions)) {
-    permissions[permId] = {
-      enabled: config.enabled !== false, // Default to true if not specified
-      color: config.color,
-      transparency: config.transparency,
-      borderOpacity: 1.0, // Default border opacity
-      minimapColor: config.color // Default minimap color to main color
-    };
-  }
-
-  const colors: GuardColors = {
-    permissions: permissions as any, // Type assertion needed due to specific permission keys
-    borderBarEnabled: true,
-    mixPattern: (theme.mixPattern as MixPattern) || (defaultMixPattern as MixPattern) || MixPattern.HUMAN_BORDER
-  };
-
-  return {
-    name: theme.displayName || themeId,
-    colors
-  };
-}
 
 /**
  * Get all themes in COLOR_THEMES format
@@ -102,12 +68,9 @@ export function getColorThemes(): Record<string, { name: string; colors: GuardCo
   const config = loadThemeConfiguration();
   resolvedThemes = {};
 
+  // Themes are already in the correct format, just pass them through
   for (const [themeId, theme] of Object.entries(config.themes)) {
-    resolvedThemes[themeId] = convertThemeToGuardColors(
-      themeId,
-      theme,
-      config.defaultMixPattern || 'humanBorder'
-    );
+    resolvedThemes[themeId] = theme;
   }
 
   return resolvedThemes;

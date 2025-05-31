@@ -2,151 +2,210 @@
   "$schema": "./themes.schema.json",
   "description": "Theme definitions for TuMee VSCode Plugin",
   "version": "1.0.0",
-  "defaultMixPattern": "humanBorder",
   "themes": {
+    "default": {
+      "name": "Default",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#db1a1a", "transparency": 0.05, "borderOpacity": 0.5, "minimapColor": "#db1a1a", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#fafd4e", "transparency": 0.1, "borderOpacity": 1.0, "minimapColor": "#fafd4e", "enabled": false, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#db61d7", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#db61d7", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#0000ff", "transparency": 0.1, "borderOpacity": 1.0, "minimapColor": "#0000ff", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#ad1f49", "transparency": 0.18, "borderOpacity": 1.0, "minimapColor": "#ad1f49", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#ae00ff", "transparency": 0.7, "borderOpacity": 1.0, "minimapColor": "#ae00ff", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#00ced1", "transparency": 0.1, "borderOpacity": 1.0, "minimapColor": "#00ced1", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#8f00d1", "transparency": 0.25, "borderOpacity": 0.6, "minimapColor": "#ee3f20", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
+      }
+    },
     "light": {
-      "displayName": "Light",
-      "permissions": {
-        "aiWrite": { "color": "#FFA500", "transparency": 0.2, "highlightEntireLine": false },
-        "aiRead": { "color": "#808080", "transparency": 0.15, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#90EE90", "transparency": 0.2, "highlightEntireLine": false },
-        "humanWrite": { "color": "#0000FF", "transparency": 0.2, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#D3D3D3", "transparency": 0.3, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#FF0000", "transparency": 0.25, "highlightEntireLine": false },
-        "contextRead": { "color": "#00CED1", "transparency": 0.15, "highlightEntireLine": true },
-        "contextWrite": { "color": "#1E90FF", "transparency": 0.15, "highlightEntireLine": true }
+      "name": "Light",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#FFA500", "transparency": 0.2, "borderOpacity": 1.0, "minimapColor": "#FFA500", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#808080", "transparency": 0.15, "borderOpacity": 1.0, "minimapColor": "#808080", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#90EE90", "transparency": 0.2, "borderOpacity": 1.0, "minimapColor": "#90EE90", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#0000FF", "transparency": 0.2, "borderOpacity": 1.0, "minimapColor": "#0000FF", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#D3D3D3", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#D3D3D3", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#FF0000", "transparency": 0.25, "borderOpacity": 1.0, "minimapColor": "#FF0000", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#00CED1", "transparency": 0.15, "borderOpacity": 1.0, "minimapColor": "#00CED1", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#1E90FF", "transparency": 0.15, "borderOpacity": 1.0, "minimapColor": "#1E90FF", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "dark": {
-      "displayName": "Dark",
-      "permissions": {
-        "aiWrite": { "color": "#FF8C00", "transparency": 0.4, "highlightEntireLine": false },
-        "aiRead": { "color": "#696969", "transparency": 0.3, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#32CD32", "transparency": 0.35, "highlightEntireLine": false },
-        "humanWrite": { "color": "#4169E1", "transparency": 0.4, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#A9A9A9", "transparency": 0.5, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#DC143C", "transparency": 0.4, "highlightEntireLine": false },
-        "contextRead": { "color": "#20B2AA", "transparency": 0.3, "highlightEntireLine": true },
-        "contextWrite": { "color": "#4682B4", "transparency": 0.3, "highlightEntireLine": true }
+      "name": "Dark",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#FF8C00", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#FF8C00", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#696969", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#696969", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#32CD32", "transparency": 0.35, "borderOpacity": 1.0, "minimapColor": "#32CD32", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#4169E1", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#4169E1", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#A9A9A9", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#A9A9A9", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#DC143C", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#DC143C", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#20B2AA", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#20B2AA", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#4682B4", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#4682B4", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "highContrast": {
-      "displayName": "High Contrast",
-      "permissions": {
-        "aiWrite": { "color": "#FFFF00", "transparency": 1.0, "highlightEntireLine": false },
-        "aiRead": { "color": "#C0C0C0", "transparency": 1.0, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#00FF00", "transparency": 1.0, "highlightEntireLine": false },
-        "humanWrite": { "color": "#0000FF", "transparency": 1.0, "highlightEntireLine": false },
-        "humanRead": { "color": "#808080", "transparency": 1.0, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#FF0000", "transparency": 1.0, "highlightEntireLine": false },
-        "contextRead": { "color": "#00FFFF", "transparency": 1.0, "highlightEntireLine": true },
-        "contextWrite": { "color": "#FF00FF", "transparency": 1.0, "highlightEntireLine": true }
+      "name": "High Contrast",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#FFFF00", "transparency": 1.0, "borderOpacity": 1.0, "minimapColor": "#FFFF00", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#C0C0C0", "transparency": 1.0, "borderOpacity": 1.0, "minimapColor": "#C0C0C0", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#00FF00", "transparency": 1.0, "borderOpacity": 1.0, "minimapColor": "#00FF00", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#0000FF", "transparency": 1.0, "borderOpacity": 1.0, "minimapColor": "#0000FF", "enabled": true, "highlightEntireLine": false },
+          "humanRead": { "color": "#808080", "transparency": 1.0, "borderOpacity": 1.0, "minimapColor": "#808080", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#FF0000", "transparency": 1.0, "borderOpacity": 1.0, "minimapColor": "#FF0000", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#00FFFF", "transparency": 1.0, "borderOpacity": 1.0, "minimapColor": "#00FFFF", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#FF00FF", "transparency": 1.0, "borderOpacity": 1.0, "minimapColor": "#FF00FF", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "colorblind": {
-      "displayName": "Colorblind Friendly",
-      "permissions": {
-        "aiWrite": { "color": "#E69F00", "transparency": 0.4, "highlightEntireLine": false },
-        "aiRead": { "color": "#999999", "transparency": 0.3, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#009E73", "transparency": 0.4, "highlightEntireLine": false },
-        "humanWrite": { "color": "#0072B2", "transparency": 0.4, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#CC79A7", "transparency": 0.5, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#D55E00", "transparency": 0.4, "highlightEntireLine": false },
-        "contextRead": { "color": "#56B4E9", "transparency": 0.3, "highlightEntireLine": true },
-        "contextWrite": { "color": "#F0E442", "transparency": 0.3, "highlightEntireLine": true }
+      "name": "Colorblind Friendly",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#E69F00", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#E69F00", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#999999", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#999999", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#009E73", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#009E73", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#0072B2", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#0072B2", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#CC79A7", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#CC79A7", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#D55E00", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#D55E00", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#56B4E9", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#56B4E9", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#F0E442", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#F0E442", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "ocean": {
-      "displayName": "Ocean",
-      "permissions": {
-        "aiWrite": { "color": "#00CED1", "transparency": 0.4, "highlightEntireLine": false },
-        "aiRead": { "color": "#4682B4", "transparency": 0.3, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#20B2AA", "transparency": 0.4, "highlightEntireLine": false },
-        "humanWrite": { "color": "#1E90FF", "transparency": 0.4, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#87CEEB", "transparency": 0.5, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#000080", "transparency": 0.4, "highlightEntireLine": false },
-        "contextRead": { "color": "#48D1CC", "transparency": 0.3, "highlightEntireLine": true },
-        "contextWrite": { "color": "#00BFFF", "transparency": 0.3, "highlightEntireLine": true }
+      "name": "Ocean",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#00CED1", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#00CED1", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#4682B4", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#4682B4", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#20B2AA", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#20B2AA", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#1E90FF", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#1E90FF", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#87CEEB", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#87CEEB", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#000080", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#000080", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#48D1CC", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#48D1CC", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#00BFFF", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#00BFFF", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "sunset": {
-      "displayName": "Sunset",
-      "permissions": {
-        "aiWrite": { "color": "#FF6347", "transparency": 0.4, "highlightEntireLine": false },
-        "aiRead": { "color": "#FFA07A", "transparency": 0.3, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#FFD700", "transparency": 0.4, "highlightEntireLine": false },
-        "humanWrite": { "color": "#FF1493", "transparency": 0.4, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#FF69B4", "transparency": 0.5, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#8B0000", "transparency": 0.4, "highlightEntireLine": false },
-        "contextRead": { "color": "#FF8C00", "transparency": 0.3, "highlightEntireLine": true },
-        "contextWrite": { "color": "#FFA500", "transparency": 0.3, "highlightEntireLine": true }
+      "name": "Sunset",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#FF6347", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#FF6347", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#FFA07A", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#FFA07A", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#FFD700", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#FFD700", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#FF1493", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#FF1493", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#FF69B4", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#FF69B4", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#8B0000", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#8B0000", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#FF8C00", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#FF8C00", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#FFA500", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#FFA500", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "matrix": {
-      "displayName": "Matrix",
-      "permissions": {
-        "aiWrite": { "color": "#00FF00", "transparency": 0.5, "highlightEntireLine": false },
-        "aiRead": { "color": "#32CD32", "transparency": 0.4, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#008000", "transparency": 0.5, "highlightEntireLine": false },
-        "humanWrite": { "color": "#00FF00", "transparency": 0.4, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#90EE90", "transparency": 0.5, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#006400", "transparency": 0.5, "highlightEntireLine": false },
-        "contextRead": { "color": "#228B22", "transparency": 0.4, "highlightEntireLine": true },
-        "contextWrite": { "color": "#00FA9A", "transparency": 0.4, "highlightEntireLine": true }
+      "name": "Matrix",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#00FF00", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#00FF00", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#32CD32", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#32CD32", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#008000", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#008000", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#00FF00", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#00FF00", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#90EE90", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#90EE90", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#006400", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#006400", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#228B22", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#228B22", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#00FA9A", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#00FA9A", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "pastel": {
-      "displayName": "Pastel",
-      "permissions": {
-        "aiWrite": { "color": "#FFB3BA", "transparency": 0.5, "highlightEntireLine": false },
-        "aiRead": { "color": "#FFDFBA", "transparency": 0.4, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#FFFFBA", "transparency": 0.5, "highlightEntireLine": false },
-        "humanWrite": { "color": "#BAFFC9", "transparency": 0.5, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#BAE1FF", "transparency": 0.6, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#C9BAFF", "transparency": 0.5, "highlightEntireLine": false },
-        "contextRead": { "color": "#FFBAEB", "transparency": 0.4, "highlightEntireLine": true },
-        "contextWrite": { "color": "#BAFFDA", "transparency": 0.4, "highlightEntireLine": true }
+      "name": "Pastel",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#FFB3BA", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#FFB3BA", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#FFDFBA", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#FFDFBA", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#FFFFBA", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#FFFFBA", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#BAFFC9", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#BAFFC9", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#BAE1FF", "transparency": 0.6, "borderOpacity": 1.0, "minimapColor": "#BAE1FF", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#C9BAFF", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#C9BAFF", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#FFBAEB", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#FFBAEB", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#BAFFDA", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#BAFFDA", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "neon": {
-      "displayName": "Neon",
-      "permissions": {
-        "aiWrite": { "color": "#FF073A", "transparency": 0.6, "highlightEntireLine": false },
-        "aiRead": { "color": "#FF0099", "transparency": 0.5, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#F0F600", "transparency": 0.6, "highlightEntireLine": false },
-        "humanWrite": { "color": "#00FFFF", "transparency": 0.6, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#FF00FF", "transparency": 0.7, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#0033FF", "transparency": 0.6, "highlightEntireLine": false },
-        "contextRead": { "color": "#00FF00", "transparency": 0.5, "highlightEntireLine": true },
-        "contextWrite": { "color": "#FFFF00", "transparency": 0.5, "highlightEntireLine": true }
+      "name": "Neon",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#FF073A", "transparency": 0.6, "borderOpacity": 1.0, "minimapColor": "#FF073A", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#FF0099", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#FF0099", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#F0F600", "transparency": 0.6, "borderOpacity": 1.0, "minimapColor": "#F0F600", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#00FFFF", "transparency": 0.6, "borderOpacity": 1.0, "minimapColor": "#00FFFF", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#FF00FF", "transparency": 0.7, "borderOpacity": 1.0, "minimapColor": "#FF00FF", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#0033FF", "transparency": 0.6, "borderOpacity": 1.0, "minimapColor": "#0033FF", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#00FF00", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#00FF00", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#FFFF00", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#FFFF00", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "earth": {
-      "displayName": "Earth Tones",
-      "permissions": {
-        "aiWrite": { "color": "#8B4513", "transparency": 0.4, "highlightEntireLine": false },
-        "aiRead": { "color": "#A0522D", "transparency": 0.3, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#DEB887", "transparency": 0.4, "highlightEntireLine": false },
-        "humanWrite": { "color": "#228B22", "transparency": 0.4, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#D2691E", "transparency": 0.5, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#800000", "transparency": 0.4, "highlightEntireLine": false },
-        "contextRead": { "color": "#BDB76B", "transparency": 0.3, "highlightEntireLine": true },
-        "contextWrite": { "color": "#8FBC8F", "transparency": 0.3, "highlightEntireLine": true }
+      "name": "Earth Tones",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#8B4513", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#8B4513", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#A0522D", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#A0522D", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#DEB887", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#DEB887", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#228B22", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#228B22", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#D2691E", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#D2691E", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#800000", "transparency": 0.4, "borderOpacity": 1.0, "minimapColor": "#800000", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#BDB76B", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#BDB76B", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#8FBC8F", "transparency": 0.3, "borderOpacity": 1.0, "minimapColor": "#8FBC8F", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "humanBorder"
       }
     },
     "cyberpunk": {
-      "displayName": "Cyberpunk",
-      "permissions": {
-        "aiWrite": { "color": "#FF0080", "transparency": 0.7, "highlightEntireLine": false },
-        "aiRead": { "color": "#00D9FF", "transparency": 0.6, "highlightEntireLine": false },
-        "aiNoAccess": { "color": "#FFD300", "transparency": 0.7, "highlightEntireLine": false },
-        "humanWrite": { "color": "#FF0080", "transparency": 0.5, "enabled": false, "highlightEntireLine": false },
-        "humanRead": { "color": "#00D9FF", "transparency": 0.6, "highlightEntireLine": false },
-        "humanNoAccess": { "color": "#FF3131", "transparency": 0.5, "highlightEntireLine": false },
-        "contextRead": { "color": "#9D00FF", "transparency": 0.5, "highlightEntireLine": true },
-        "contextWrite": { "color": "#00FF88", "transparency": 0.5, "highlightEntireLine": true }
-      },
-      "mixPattern": "average"
+      "name": "Cyberpunk",
+      "colors": {
+        "permissions": {
+          "aiWrite": { "color": "#FF0080", "transparency": 0.7, "borderOpacity": 1.0, "minimapColor": "#FF0080", "enabled": true, "highlightEntireLine": false },
+          "aiRead": { "color": "#00D9FF", "transparency": 0.6, "borderOpacity": 1.0, "minimapColor": "#00D9FF", "enabled": true, "highlightEntireLine": false },
+          "aiNoAccess": { "color": "#FFD300", "transparency": 0.7, "borderOpacity": 1.0, "minimapColor": "#FFD300", "enabled": true, "highlightEntireLine": false },
+          "humanWrite": { "color": "#FF0080", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#FF0080", "enabled": false, "highlightEntireLine": false },
+          "humanRead": { "color": "#00D9FF", "transparency": 0.6, "borderOpacity": 1.0, "minimapColor": "#00D9FF", "enabled": true, "highlightEntireLine": false },
+          "humanNoAccess": { "color": "#FF3131", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#FF3131", "enabled": true, "highlightEntireLine": false },
+          "contextRead": { "color": "#9D00FF", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#9D00FF", "enabled": true, "highlightEntireLine": true },
+          "contextWrite": { "color": "#00FF88", "transparency": 0.5, "borderOpacity": 1.0, "minimapColor": "#00FF88", "enabled": true, "highlightEntireLine": true }
+        },
+        "borderBarEnabled": true,
+        "mixPattern": "average"
+      }
     }
   }
 }
