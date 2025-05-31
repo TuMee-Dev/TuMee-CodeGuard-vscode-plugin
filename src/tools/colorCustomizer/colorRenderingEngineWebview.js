@@ -147,52 +147,90 @@ function createColorRenderingEngine(colors) {
      * Apply mix pattern for overlapping permissions
      */
     applyMixPattern: function(pattern, config) {
+      // Use shared logic to determine colors
+      const bgSource = this.getBackgroundColorSource(pattern);
+      const borderSource = this.getBorderColorSource(pattern);
+      
+      let backgroundColor;
+      let opacity;
+      let borderColor;
+      let borderOpacity;
+      
+      // Determine background color and opacity
+      switch (bgSource) {
+        case 'ai':
+          backgroundColor = config.aiColor;
+          opacity = config.aiOpacity;
+          borderOpacity = config.aiOpacity;
+          break;
+        case 'human':
+          backgroundColor = config.humanColor;
+          opacity = config.humanOpacity;
+          borderOpacity = config.humanOpacity;
+          break;
+        case 'blend':
+          backgroundColor = this.blendColors(config.aiColor, config.humanColor);
+          opacity = (config.aiOpacity + config.humanOpacity) / 2;
+          borderOpacity = opacity;
+          break;
+      }
+      
+      // Determine border color if needed
+      switch (borderSource) {
+        case 'ai':
+          borderColor = config.aiColor;
+          borderOpacity = config.aiOpacity;
+          break;
+        case 'human':
+          borderColor = config.humanColor;
+          borderOpacity = config.humanOpacity;
+          break;
+      }
+      
+      const result = {
+        backgroundColor: backgroundColor,
+        opacity: opacity,
+        borderOpacity: borderOpacity
+      };
+      
+      if (borderColor) {
+        result.borderColor = borderColor;
+      }
+      
+      return result;
+    },
+    
+    /**
+     * Get background color source based on pattern (shared logic)
+     */
+    getBackgroundColorSource: function(pattern) {
       switch (pattern) {
-        case 'average':
-          const blendedColor = this.blendColors(config.aiColor, config.humanColor);
-          const avgOpacity = (config.aiOpacity + config.humanOpacity) / 2;
-          return {
-            backgroundColor: blendedColor,
-            opacity: avgOpacity,
-            borderOpacity: avgOpacity
-          };
-
-        case 'humanPriority':
-          return {
-            backgroundColor: config.humanColor,
-            opacity: config.humanOpacity,
-            borderOpacity: config.humanOpacity
-          };
-
-        case 'aiPriority':
-          return {
-            backgroundColor: config.aiColor,
-            opacity: config.aiOpacity,
-            borderOpacity: config.aiOpacity
-          };
-
         case 'aiBorder':
-          return {
-            backgroundColor: config.humanColor,
-            borderColor: config.aiColor,
-            opacity: config.humanOpacity,
-            borderOpacity: config.aiOpacity
-          };
-
+          return 'human';
         case 'humanBorder':
-          return {
-            backgroundColor: config.aiColor,
-            borderColor: config.humanColor,
-            opacity: config.aiOpacity,
-            borderOpacity: config.humanOpacity
-          };
-
+          return 'ai';
+        case 'aiPriority':
+          return 'ai';
+        case 'humanPriority':
+          return 'human';
+        case 'average':
+          return 'blend';
         default:
-          return {
-            backgroundColor: this.blendColors(config.aiColor, config.humanColor),
-            opacity: (config.aiOpacity + config.humanOpacity) / 2,
-            borderOpacity: (config.aiOpacity + config.humanOpacity) / 2
-          };
+          return 'ai';
+      }
+    },
+    
+    /**
+     * Get border color source based on pattern (shared logic)
+     */
+    getBorderColorSource: function(pattern) {
+      switch (pattern) {
+        case 'aiBorder':
+          return 'ai';
+        case 'humanBorder':
+          return 'human';
+        default:
+          return 'none';
       }
     },
 
@@ -219,15 +257,15 @@ function createColorRenderingEngine(colors) {
      * Determine highlightEntireLine setting for mixed permissions
      */
     getHighlightEntireLineForMix: function(mixPattern, aiConfig, humanConfig) {
-      switch (mixPattern) {
-        case 'humanPriority':
-        case 'humanBorder':
-          return humanConfig.highlightEntireLine || false;
-        case 'aiPriority':
-        case 'aiBorder':
+      const bgSource = this.getBackgroundColorSource(mixPattern);
+      
+      switch (bgSource) {
+        case 'ai':
           return aiConfig.highlightEntireLine || false;
-        default:
-          // For average pattern, use AI's setting as default
+        case 'human':
+          return humanConfig.highlightEntireLine || false;
+        case 'blend':
+          // For blend/average, use AI's setting as default
           return aiConfig.highlightEntireLine || false;
       }
     },

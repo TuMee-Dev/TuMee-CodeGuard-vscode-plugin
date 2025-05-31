@@ -3,9 +3,10 @@
 
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
+const webpack = require('webpack');
 
 /**@type {import('webpack').Configuration}*/
-const config = {
+const extensionConfig = {
   target: 'node',
   mode: 'none',
   entry: './src/extension.ts',
@@ -56,4 +57,40 @@ const config = {
   ]
 };
 
-module.exports = config;
+/**@type {import('webpack').Configuration}*/
+const cliConfig = {
+  target: 'node',
+  mode: 'none',
+  entry: './src/cli/visualguard.ts',
+  output: {
+    path: path.resolve(__dirname, 'dist/cli'),
+    filename: 'visualguard.js',
+    libraryTarget: 'commonjs2'
+  },
+  devtool: 'nosources-source-map',
+  resolve: {
+    extensions: ['.ts', '.js'],
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+      'vscode': path.resolve(__dirname, 'src/cli/vscode-mock.ts')
+    }
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: 'ts-loader'
+          }
+        ]
+      }
+    ]
+  },
+  plugins: [
+    new webpack.BannerPlugin({ banner: '#!/usr/bin/env node', raw: true })
+  ]
+};
+
+module.exports = [extensionConfig, cliConfig];
