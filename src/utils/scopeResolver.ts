@@ -4,6 +4,10 @@ import { getLanguageScopeMappings } from './languageScopeLoader';
 import { resolveSemanticWithTreeSitter, type ScopeBoundary } from './treeSitterScopeResolver';
 import { resolveSemanticWithRegex } from './regexScopeResolver';
 
+// Import core module
+import { resolveSemanticScope as coreResolveSemanticScope } from '../core';
+import { VSCodeDocumentAdapter, VSCodeExtensionContextAdapter } from '../vscode/documentAdapter';
+
 // Re-export ScopeBoundary type
 export type { ScopeBoundary } from './treeSitterScopeResolver';
 
@@ -56,4 +60,30 @@ export async function resolveSemantic(
 
   // Only use regex for languages without tree-sitter support
   return resolveSemanticWithRegex(document, line, scope);
+}
+
+/**
+ * Alternative resolver using the new core module (for testing/migration)
+ */
+export async function resolveSemanticWithCore(
+  document: vscode.TextDocument,
+  line: number,
+  scope: string,
+  _addScopes?: string[],
+  _removeScopes?: string[]
+): Promise<ScopeBoundary | null> {
+  if (!extensionContext) {
+    throw new Error(`[TreeSitter] Extension context not initialized for ${document.languageId}`);
+  }
+
+  try {
+    const docAdapter = new VSCodeDocumentAdapter(document);
+    const contextAdapter = new VSCodeExtensionContextAdapter(extensionContext);
+    
+    return await coreResolveSemanticScope(docAdapter, line, scope, contextAdapter, _addScopes, _removeScopes);
+  } catch (error) {
+    // For now, fall back to regex if core module fails
+    console.warn(`Core module failed for ${document.languageId}:`, error);
+    return resolveSemanticWithRegex(document, line, scope);
+  }
 }
