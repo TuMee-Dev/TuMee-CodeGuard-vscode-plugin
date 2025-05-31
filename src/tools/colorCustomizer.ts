@@ -306,7 +306,19 @@ export class ColorCustomizerPanel {
     } else {
       // No saved colors, check if we have a selected theme
       const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'default');
-      const theme = COLOR_THEMES[selectedTheme];
+      const themeKey = selectedTheme.toLowerCase();
+      
+      // Check built-in themes first
+      let theme = COLOR_THEMES[themeKey];
+      
+      // If not found, check custom themes
+      if (!theme) {
+        const customThemes = this._getCustomThemes();
+        if (customThemes[themeKey]) {
+          theme = customThemes[themeKey];
+        }
+      }
+      
       if (theme) {
         colors = mergeWithDefaults(theme.colors);
       } else {

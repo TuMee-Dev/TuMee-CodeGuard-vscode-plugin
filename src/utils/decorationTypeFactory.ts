@@ -81,16 +81,18 @@ export class DecorationTypeFactory {
     const selectedTheme = cm.get(CONFIG_KEYS.SELECTED_THEME, '');
 
     if (selectedTheme) {
+      const themeKey = selectedTheme.toLowerCase();
+      
       // Check if it's a built-in theme
-      const builtInTheme = COLOR_THEMES[selectedTheme];
+      const builtInTheme = COLOR_THEMES[themeKey];
       if (builtInTheme) {
         return builtInTheme.colors;
       }
 
-      // Check custom themes
-      const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, GuardColors>);
-      if (customThemes[selectedTheme]) {
-        return customThemes[selectedTheme];
+      // Check custom themes - they have the same format as built-in themes
+      const customThemes = cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, { name: string; colors: GuardColors }>);
+      if (customThemes[themeKey]) {
+        return customThemes[themeKey].colors;
       }
     }
 
