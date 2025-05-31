@@ -172,30 +172,30 @@
               "properties": {
                 "write": {
                   "type": "number",
-                  "default": 1.0,
+                  "default": 1,
                   "minimum": 0,
                   "maximum": 1,
                   "description": "Transparency multiplier for AI write permission"
                 },
                 "read": {
                   "type": "number",
-                  "default": 1.0,
+                  "default": 1,
                   "minimum": 0,
                   "maximum": 1,
                   "description": "Transparency multiplier for AI read permission"
                 },
                 "noAccess": {
                   "type": "number",
-                  "default": 1.0,
+                  "default": 1,
                   "minimum": 0,
                   "maximum": 1,
                   "description": "Transparency multiplier for AI no access"
                 }
               },
               "default": {
-                "write": 1.0,
-                "read": 1.0,
-                "noAccess": 1.0
+                "write": 1,
+                "read": 1,
+                "noAccess": 1
               }
             },
             "humanTransparencyLevels": {
@@ -218,7 +218,7 @@
                 },
                 "noAccess": {
                   "type": "number",
-                  "default": 1.0,
+                  "default": 1,
                   "minimum": 0,
                   "maximum": 1,
                   "description": "Transparency multiplier for human no access"
@@ -227,7 +227,7 @@
               "default": {
                 "write": 0.3,
                 "read": 0.6,
-                "noAccess": 1.0
+                "noAccess": 1
               }
             },
             "useAiColorAsBase": {
@@ -322,14 +322,14 @@
             "contextWrite": "#1E90FF",
             "opacity": 0.3,
             "aiTransparencyLevels": {
-              "write": 1.0,
-              "read": 1.0,
-              "noAccess": 1.0
+              "write": 1,
+              "read": 1,
+              "noAccess": 1
             },
             "humanTransparencyLevels": {
               "write": 0.3,
               "read": 0.6,
-              "noAccess": 1.0
+              "noAccess": 1
             },
             "useAiColorAsBase": true
           }
@@ -687,6 +687,7 @@
     "@typescript-eslint/parser": "^6.21.0",
     "copy-webpack-plugin": "^13.0.0",
     "eslint": "^8.57.0",
+    "jsdom": "^26.1.0",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5",
