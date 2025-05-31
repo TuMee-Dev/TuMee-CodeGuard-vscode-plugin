@@ -72,7 +72,10 @@ export async function parseGuardTagsCore(
   const configAdapter = new VSCodeConfigurationAdapter(config);
   const loggerAdapter = new VSCodeLoggerAdapter(logger);
   
-  return await coreParseGuardTags(docAdapter, lines, configAdapter, undefined, loggerAdapter);
+  // Need to get the extension context for semantic resolution
+  const extensionContext = (global as any).extensionContext;
+  
+  return await coreParseGuardTags(docAdapter, lines, configAdapter, extensionContext, loggerAdapter);
 }
 
 /**

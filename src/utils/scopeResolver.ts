@@ -13,6 +13,8 @@ let extensionContext: vscode.ExtensionContext | null = null;
  */
 export function initializeScopeResolver(context: vscode.ExtensionContext): void {
   extensionContext = context;
+  // Store globally for use by guardProcessorCore
+  (global as any).extensionContext = context;
   // Don't initialize tree-sitter yet - it will be initialized on first use
 }
 

@@ -516,9 +516,9 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
         DebugLogger.log(`[Extension] Line ${lineNumber}: permissions=${JSON.stringify(perm.permissions)}, isContext=${JSON.stringify(perm.isContext)}`);
       }
 
-      // Filter out 'context' as a permission value - it should only be tracked in isContext
-      const effectiveAiPerm = aiPerm === 'context' ? defaults.ai : aiPerm;
-      const effectiveHumanPerm = humanPerm === 'context' ? defaults.human : humanPerm;
+      // Filter out 'context' and 'contextWrite' as permission values - they should only be tracked in isContext
+      const effectiveAiPerm = (aiPerm === 'context' || aiPerm === 'contextWrite') ? 'w' : aiPerm;
+      const effectiveHumanPerm = (humanPerm === 'context' || humanPerm === 'contextWrite') ? 'w' : humanPerm;
 
       // Get decoration type based on permissions
       const decorationType = getDecorationType(effectiveAiPerm, effectiveHumanPerm, aiContext, humanContext);
