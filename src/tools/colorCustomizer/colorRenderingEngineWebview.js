@@ -57,6 +57,20 @@ function createColorRenderingEngine(colors) {
 
       const config = colors.permissions[configKey];
       
+      // Debug logging for context permissions
+      if (permission === 'context' || permission === 'contextWrite') {
+        console.log('getSinglePermissionColor debug:', {
+          type,
+          permission,
+          configKey,
+          config: config ? { color: config.color, enabled: config.enabled } : 'undefined',
+          allContextColors: {
+            contextRead: colors.permissions.contextRead ? colors.permissions.contextRead.color : 'missing',
+            contextWrite: colors.permissions.contextWrite ? colors.permissions.contextWrite.color : 'missing'
+          }
+        });
+      }
+      
       if (!config || !config.enabled) {
         return {
           opacity: 0,
@@ -65,13 +79,20 @@ function createColorRenderingEngine(colors) {
         };
       }
 
-      return {
+      const result = {
         backgroundColor: config.color,
         borderColor: config.minimapColor || config.color,
         opacity: config.transparency,
         borderOpacity: config.borderOpacity || 1.0,
         highlightEntireLine: config.highlightEntireLine || false
       };
+      
+      // Debug: log what color we're returning for context permissions
+      if (permission === 'context' || permission === 'contextWrite') {
+        console.log(`Returning color for ${permission}:`, result.backgroundColor);
+      }
+      
+      return result;
     },
 
     /**
@@ -276,6 +297,11 @@ function applyColorResultToLine(line, content, border, result, borderBarEnabled)
     const rgb = hexToRgb(result.backgroundColor);
     if (rgb) {
       const bgColorRgba = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + result.opacity + ')';
+      
+      // Debug: log what color is being applied
+      if (line.id && (line.textContent.includes('context:w') || line.id === 'line51')) {
+        console.log(`Applying color to ${line.id}:`, result.backgroundColor, '→', bgColorRgba);
+      }
       
       if (result.highlightEntireLine) {
         // Apply background to entire line

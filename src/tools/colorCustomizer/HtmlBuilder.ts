@@ -271,13 +271,14 @@ export class ColorCustomizerHtmlBuilder {
       const jsonPath = path.join(__dirname, 'resources', 'preview-lines.json');
       const jsonContent = fs.readFileSync(jsonPath, 'utf8');
       const data = JSON.parse(jsonContent);
-      return data.lines || [];
+      // Return only the content lines, not the hardcoded permissions
+      return data.lines.map((line: any) => ({ content: line.content })) || [];
     } catch (error) {
       console.error('Failed to load preview lines:', error);
       // Return minimal fallback data
       return [
-        { content: '// Failed to load preview data', ai: null, human: null },
-        { content: '// Check resources/preview-lines.json', ai: null, human: null }
+        { content: '// Failed to load preview data' },
+        { content: '// Check resources/preview-lines.json' }
       ];
     }
   }

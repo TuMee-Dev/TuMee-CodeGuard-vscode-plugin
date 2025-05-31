@@ -200,13 +200,127 @@ function updatePreview() {
   const defaultAiWrite = document.getElementById('defaultAiWrite');
   const defaultHumanWrite = document.getElementById('defaultHumanWrite');
   
-  const defaultAi = (defaultAiWrite && defaultAiWrite.checked) ? 'write' : 'read';
-  const defaultHuman = (defaultHumanWrite && defaultHumanWrite.checked) ? 'write' : 'read';
+  const defaults = {
+    ai: (defaultAiWrite && defaultAiWrite.checked) ? 'write' : 'read',
+    human: (defaultHumanWrite && defaultHumanWrite.checked) ? 'write' : 'read'
+  };
   
-  PREVIEW_LINES.forEach((config, index) => {
-    // Apply defaults only to lines where BOTH permissions are null
-    const aiPerm = (config.ai === null && config.human === null) ? defaultAi : config.ai;
-    const humanPerm = (config.ai === null && config.human === null) ? defaultHuman : config.human;
+  // Use real guard parsing instead of hardcoded permissions
+  const activeGuards = { ai: null, human: null };
+  
+  PREVIEW_LINES.forEach((line, index) => {
+    const content = line.content || '';
+    const parsed = window.GuardParser.parseGuardTag(content);
+    
+    // Debug line 51 specifically
+    if (index === 50) {
+      console.log('Line 51 content:', content, 'Parsed:', parsed);
+    }
+    
+    // Update active guards based on parsed tags
+    if (parsed) {
+      // Handle AI guards (both regular and context)
+      if (parsed.aiPermission || parsed.aiIsContext) {
+        activeGuards.ai = {
+          permission: parsed.aiPermission === 'contextWrite' ? 'contextWrite' :
+                     parsed.aiIsContext ? 'context' :
+                     parsed.aiPermission === 'r' ? 'read' : 
+                     parsed.aiPermission === 'w' ? 'write' : 
+                     parsed.aiPermission === 'n' ? 'noAccess' : parsed.aiPermission,
+          scope: parsed.scope || 'block', // Default to block scope, not file
+          lineCount: parsed.lineCount,
+          startLine: index,
+          isContext: parsed.aiIsContext || false
+        };
+      }
+      // Handle Human guards (both regular and context)
+      if (parsed.humanPermission || parsed.humanIsContext) {
+        activeGuards.human = {
+          permission: parsed.humanPermission === 'contextWrite' ? 'contextWrite' :
+                     parsed.humanIsContext ? 'context' :
+                     parsed.humanPermission === 'r' ? 'read' : 
+                     parsed.humanPermission === 'w' ? 'write' : 
+                     parsed.humanPermission === 'n' ? 'noAccess' : parsed.humanPermission,
+          scope: parsed.scope || 'block', // Default to block scope, not file
+          lineCount: parsed.lineCount,
+          startLine: index,
+          isContext: parsed.humanIsContext || false
+        };
+      }
+    }
+    
+    // Determine current permissions
+    let aiPerm = defaults.ai;
+    let humanPerm = defaults.human;
+    
+    // Apply active guards based on scope type
+    ['ai', 'human'].forEach(target => {
+      const guard = activeGuards[target];
+      if (!guard) return;
+      
+      // Handle line count guards
+      if (guard.lineCount) {
+        if (index >= guard.startLine + guard.lineCount) {
+          activeGuards[target] = null;
+        } else if (target === 'ai') {
+          aiPerm = guard.permission;
+        } else {
+          humanPerm = guard.permission;
+        }
+        return;
+      }
+      
+      // Handle block scope
+      if (guard.scope === 'block') {
+        // Block scope only applies to the next non-empty code block
+        let inBlock = false;
+        let blockEnded = false;
+        
+        // Check if we're still in the block
+        for (let j = guard.startLine + 1; j <= index; j++) {
+          const checkLine = PREVIEW_LINES[j];
+          const checkContent = (checkLine.content || '').trim();
+          
+          // Skip initial empty lines
+          if (!inBlock && checkContent === '') continue;
+          
+          // First non-empty line starts the block
+          if (!inBlock && checkContent !== '') {
+            inBlock = true;
+          }
+          
+          // Empty line after being in block ends it
+          if (inBlock && checkContent === '') {
+            blockEnded = true;
+            break;
+          }
+          
+          // Another guard tag ends current block
+          if (inBlock && checkContent.includes('@guard:')) {
+            blockEnded = true;
+            break;
+          }
+        }
+        
+        if (blockEnded || (index > guard.startLine && !inBlock)) {
+          activeGuards[target] = null;
+        } else if (index === guard.startLine || inBlock) {
+          if (target === 'ai') {
+            aiPerm = guard.permission;
+          } else {
+            humanPerm = guard.permission;
+          }
+        }
+      }
+      // File scope continues indefinitely
+      else if (guard.scope === 'file') {
+        if (target === 'ai') {
+          aiPerm = guard.permission;
+        } else {
+          humanPerm = guard.permission;
+        }
+      }
+    });
     
     updateLine(index + 1, aiPerm, humanPerm);
   });
@@ -298,6 +412,20 @@ function updateLine(lineNum, aiPerm, humanPerm) {
   if (!border) return;
   
   const colors = getColors();
+  
+  // Check if contextRead and contextWrite are the same object
+  if (aiPerm === 'contextWrite' || humanPerm === 'contextWrite') {
+    const lineContent = document.getElementById('line' + lineNum)?.textContent || '';
+    console.log('Line ' + lineNum + ' checking colors:', {
+      lineContent: lineContent.trim(),
+      aiPerm,
+      contextReadColor: colors.permissions.contextRead?.color,
+      contextWriteColor: colors.permissions.contextWrite?.color,
+      contextReadEnabled: colors.permissions.contextRead?.enabled,
+      contextWriteEnabled: colors.permissions.contextWrite?.enabled
+    });
+  }
+  
   const engine = createColorRenderingEngine(colors);
   
   const result = engine.getColorForPermission({
@@ -399,7 +527,13 @@ function updateAllColors(colors) {
     }
     
     const colorInput = document.getElementById(key + '-color');
-    if (colorInput) colorInput.value = config.color;
+    if (colorInput) {
+      colorInput.value = config.color;
+      // Debug logging for context colors
+      if (key === 'contextRead' || key === 'contextWrite') {
+        console.log(`Setting ${key} color to:`, config.color);
+      }
+    }
     
     const minimapInput = document.getElementById(key + '-minimapColor');
     if (minimapInput && config.minimapColor) {
@@ -733,7 +867,7 @@ function updatePreviewForPermission(permission) {
     'humanRead': 'line29',
     'humanNoAccess': 'line35',
     'contextRead': 'line41',
-    'contextWrite': 'line47'
+    'contextWrite': 'line51'
   };
   
   targetLine = document.getElementById(lineMap[permission]);
@@ -861,7 +995,7 @@ function findPreviewLineForPermission(permissionId) {
   const searchMap = {
     'aiWrite': 'ai:w', 'aiRead': 'ai:r', 'aiNoAccess': 'ai:n',
     'humanWrite': 'human:w', 'humanRead': 'human:r', 'humanNoAccess': 'human:n',
-    'contextRead': 'context:r', 'contextWrite': 'context:w'
+    'contextRead': ':context', 'contextWrite': ':context:w'
   };
   
   const searchTerm = searchMap[permissionId];

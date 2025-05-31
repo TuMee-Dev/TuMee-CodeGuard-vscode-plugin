@@ -1,11 +1,6 @@
 // @guard:hu:r @guard:ai:w
 // API Key Manager Example - Demonstrates all guard tag colors
 
-// @guard:ai:r,human:r
-const sharedData = await loadSharedConfiguration();
-const settings = parseSettings(sharedData);
-console.log("Both AI and human can read this");
-
 // @guard:ai:r @guard:human:r
 const sharedData1 = await loadSharedConfiguration();
 const settings1 = parseSettings(sharedData1);

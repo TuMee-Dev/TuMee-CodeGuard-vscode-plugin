@@ -18,6 +18,10 @@ export function getWebviewStyles(): string {
 }
 
 export function getWebviewJavaScript(previewLines: any[]): string {
+  // Read the guard parser for webview
+  const guardParserPath = path.join(__dirname, 'tools', 'colorCustomizer', 'webviewGuardParser.js');
+  const guardParserContent = fs.readFileSync(guardParserPath, 'utf8');
+
   // Read the shared color rendering engine for webview
   const enginePath = path.join(__dirname, 'tools', 'colorCustomizer', 'colorRenderingEngineWebview.js');
   const engineContent = fs.readFileSync(enginePath, 'utf8');
@@ -26,8 +30,8 @@ export function getWebviewJavaScript(previewLines: any[]): string {
   const jsPath = path.join(__dirname, 'tools', 'colorCustomizer', 'webview.js');
   const jsContent = fs.readFileSync(jsPath, 'utf8');
 
-  // Combine the engine and webview code
-  const combinedJs = engineContent + '\n\n' + jsContent;
+  // Combine everything - guard parser first so parseGuardTag is available
+  const combinedJs = guardParserContent + '\n\n' + engineContent + '\n\n' + jsContent;
 
   // Replace the PREVIEW_LINES placeholder with actual data
   return combinedJs.replace('__PREVIEW_LINES_PLACEHOLDER__', JSON.stringify(previewLines));
