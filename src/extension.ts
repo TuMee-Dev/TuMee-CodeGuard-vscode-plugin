@@ -1,7 +1,7 @@
 // The final extension.ts file with thoroughly verified line count handling
 
 import type * as vscode from 'vscode';
-import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, type StatusBarItem, window, workspace, commands, ThemeColor, Position, Range, StatusBarAlignment } from 'vscode';
+import { type Disposable, type ExtensionContext, type TextEditorDecorationType, type TextDocument, window, workspace, commands, Position, Range } from 'vscode';
 import type { FileCustomizationProvider } from '@/tools/file-customization-provider';
 import { registerFileDecorationProvider } from '@/tools/file-customization-provider';
 import { registerContextMenu } from '@/tools/register-context-menu';
@@ -22,11 +22,11 @@ import { backgroundProcessor } from '@/utils/backgroundProcessor';
 import { registerValidationCommands } from '@/utils/validationMode';
 import { DecorationTypeFactory } from '@/utils/decorationTypeFactory';
 import { configManager, CONFIG_KEYS } from '@/utils/configurationManager';
+import { createStatusBarItem, updateStatusBarItem } from '@/utils/statusBar';
 
 let disposables: Disposable[] = [];
 // Map of decoration types for all permission combinations
 const decorationTypes: Map<string, TextEditorDecorationType> = new Map();
-let statusBarItem: StatusBarItem;
 
 // Debounce timer for decoration updates
 let decorationUpdateTimer: NodeJS.Timeout | undefined;
@@ -255,7 +255,8 @@ export async function activate(context: ExtensionContext) {
       initializeCodeDecorations(context);
 
       // Create status bar item
-      createStatusBarItem(context);
+      const statusBarDisposables = createStatusBarItem(context);
+      disposables.push(...statusBarDisposables);
 
       // Validate configuration on startup
       validateConfiguration();
@@ -574,131 +575,11 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
   }
 }
 
-/**
- * Creates the status bar item that shows the current AI access level
- * @param context The extension context
- */
-function createStatusBarItem(_context: ExtensionContext) {
-  statusBarItem = window.createStatusBarItem(StatusBarAlignment.Right, 100);
-  statusBarItem.command = 'tumee-vscode-plugin.toggleAIAccess';
-
-  // Add command to toggle AI access level
-  const toggleDisposable = commands.registerCommand('tumee-vscode-plugin.toggleAIAccess', () => {
-    const items = [
-      { label: 'AI Read-Only', permission: 'r' },
-      { label: 'AI Write Access', permission: 'w' },
-      { label: 'AI No Access', permission: 'n' }
-    ];
-
-    void window.showQuickPick(items, {
-      placeHolder: 'Select AI Access Level'
-    }).then(item => {
-      if (item) {
-        void commands.executeCommand(`tumee-vscode-plugin.setAI${item.permission === 'r' ? 'ReadOnly' : item.permission === 'w' ? 'Write' : 'NoAccess'}`);
-      }
-    });
-  });
-
-  disposables.push(statusBarItem, toggleDisposable);
-  statusBarItem.show();
-}
-
-/**
- * Updates the status bar item to show the current AI access level
- * @param document The active document
- */
-async function updateStatusBarItem(document: TextDocument) {
-  try {
-    if (!document || !statusBarItem) return;
-
-    // Get the text at the current cursor position
-    const activeEditor = window.activeTextEditor;
-    if (!activeEditor) {
-      statusBarItem.text = '$(shield) AI: Unknown';
-      return;
-    }
-
-    const text = document.getText();
-    if (!text) {
-      statusBarItem.text = '$(shield) AI: Default';
-      return;
-    }
-
-    // Scan the document to find the current AI access level at cursor
-    const cursorPosition = activeEditor.selection.active;
-    const cursorLine = cursorPosition.line;
-
-    const lines = text.split(UTILITY_PATTERNS.LINE_SPLIT);
-    let currentAccess = 'Default';
-    const lineCount: number | undefined = undefined;
-
-    // Use shared functions to parse guard tags
-    let guardTags: GuardTag[] = [];
-    let linePermissions = new Map<number, LinePermission>();
-
-    try {
-      guardTags = await parseGuardTags(document, lines);
-      linePermissions = getLinePermissions(document, guardTags);
-    } catch (error) {
-      errorHandler.handleError(
-        error instanceof Error ? error : new Error(String(error)),
-        {
-          operation: 'parseGuardTags.statusBar',
-          details: { document: document.fileName }
-        }
-      );
-      statusBarItem.text = '$(shield) AI: Error';
-      return;
-    }
-
-    // Get the permission at the cursor line
-    const cursorPermission = linePermissions.get(cursorLine + 1); // 1-based
-
-    // Show AI permissions in the status bar
-    if (cursorPermission && cursorPermission.permissions.ai) {
-      const aiPerm = cursorPermission.permissions.ai;
-      currentAccess =
-        aiPerm === 'r' ? 'Read-Only' :
-          aiPerm === 'w' ? 'Write' :
-            aiPerm === 'n' ? 'No Access' :
-              aiPerm === 'context' ? 'Context' : 'Default';
-    }
-
-    // Set status bar text with line count if present
-    const lineCountText = lineCount ? ` (${String(lineCount)} lines)` : '';
-    statusBarItem.text = `$(shield) AI: ${currentAccess}${lineCountText}`;
-
-    // Set color based on permission
-    if (currentAccess === 'Read-Only') {
-      statusBarItem.color = new ThemeColor('editor.foreground');
-    } else if (currentAccess === 'Write') {
-      statusBarItem.color = new ThemeColor('errorForeground');
-    } else if (currentAccess === 'No Access') {
-      statusBarItem.color = new ThemeColor('editorInfo.foreground');
-    } else if (currentAccess === 'Context') {
-      statusBarItem.color = new ThemeColor('textLink.foreground');
-    }
-  } catch (error) {
-    errorHandler.handleError(
-      error instanceof Error ? error : new Error(String(error)),
-      {
-        operation: 'updateStatusBarItem',
-        details: { document: document.fileName }
-      }
-    );
-    statusBarItem.text = '$(shield) AI: Error';
-  }
-}
-
 export function deactivate(): void {
   for (const disposable of disposables) {
     disposable.dispose();
   }
   disposables = [];
-
-  if (statusBarItem) {
-    statusBarItem.dispose();
-  }
 
   // Dispose ACL cache
   disposeACLCache();

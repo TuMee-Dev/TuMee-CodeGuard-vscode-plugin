@@ -539,8 +539,18 @@
         "category": "TuMee Guard Tags"
       },
       {
-        "command": "tumee-vscode-plugin.toggleAIAccess",
-        "title": "Toggle AI Access Level",
+        "command": "tumee-vscode-plugin.showGuardInfo",
+        "title": "Show CodeGuard Info",
+        "category": "TuMee Guard Tags"
+      },
+      {
+        "command": "tumee-vscode-plugin.showGuardTagsReference",
+        "title": "Show Guard Tags Reference",
+        "category": "TuMee Guard Tags"
+      },
+      {
+        "command": "tumee-vscode-plugin.showCliMissing",
+        "title": "Show CLI Installation Help",
         "category": "TuMee Guard Tags"
       },
       {
