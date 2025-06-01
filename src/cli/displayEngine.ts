@@ -444,9 +444,9 @@ export async function displayFile(filePath: string, options: { color?: boolean; 
       }
       
       // Apply colors
+      const lineContent = highlightEntireLine ? lines[i].padEnd(maxLineLength, ' ') : lines[i];
+      
       if (bgColor && bgColor !== ANSI.dim) {
-        const lineContent = highlightEntireLine ? lines[i].padEnd(maxLineLength, ' ') : lines[i];
-        
         // Format: line# [perms]|content (where | is the colored border char)
         if (borderColor && bgColor && borderColor !== bgColor) {
           // Different colors for border and background
@@ -459,8 +459,8 @@ export async function displayFile(filePath: string, options: { color?: boolean; 
           console.log(`${lineNumStr} ${permBlock}${borderColor}${borderChar}${ANSI.reset} ${lineContent}`);
         }
       } else {
-        // Default state - no colors
-        console.log(`${lineNumStr} ${permBlock} ${lines[i]}`);
+        // Default state - no colors but still respect highlightEntireLine setting
+        console.log(`${lineNumStr} ${permBlock} ${lineContent}`);
       }
     } else {
       console.log(`${lineNumStr} ${permBlock} ${lines[i]}`);
