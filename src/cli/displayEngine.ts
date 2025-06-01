@@ -302,14 +302,39 @@ export async function displayFile(filePath: string, options: { color?: boolean; 
           const node = findNodeAtPosition(tree, lineNum - 1);
           if (node) {
             nodeType = node.type;
+            // Clean up node type names for display
+            if (nodeType.endsWith('_declaration')) {
+              nodeType = nodeType.replace('_declaration', '');
+            }
+            if (nodeType.endsWith('_definition')) {
+              nodeType = nodeType.replace('_definition', '');
+            }
+            if (nodeType.endsWith('_expression')) {
+              nodeType = nodeType.replace('_expression', '');
+            }
+            if (nodeType.endsWith('_operator')) {
+              nodeType = nodeType.replace('_operator', '');
+            }
+            if (nodeType.endsWith('_statement')) {
+              nodeType = nodeType.replace('_statement', '');
+            }
+            if (nodeType === 'statement_block') {
+              nodeType = 'statement';
+            }
+            if (nodeType === 'class_body') {
+              nodeType = 'body';
+            }
+            if (nodeType.startsWith('import_')) {
+              nodeType = 'import';
+            }
           }
         }
       } catch (error) {
         nodeType = 'error';
       }
-      // Clean format: {nodeType}[AI:x HU:y  ] with 18 char width for nodeType
+      // Clean format: {nodeType}[AI:x HU:y  ] with 12 char width for nodeType
       // THIS IS DISPLAY ONLY - does not affect permissions
-      const truncatedNodeType = nodeType.substring(0, 18).padEnd(18, ' ');
+      const truncatedNodeType = nodeType.substring(0, 12).padEnd(12, ' ');
       permBlock = `{${truncatedNodeType}}[AI:${aiPerm} HU:${humanPerm} ${contextMarker}]`;
     }
     

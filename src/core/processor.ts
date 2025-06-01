@@ -168,8 +168,8 @@ export async function parseGuardTagsCore(
                 const tree = await parseDocument(extensionContext, document);
                 if (tree) {
                   const node = findNodeAtPosition(tree, currentLine);
-                  if (node && node.type === 'program') {
-                    // Hit program scope, stop here
+                  if (node && (node.type === 'program' || node.type === 'module')) {
+                    // Hit program/module scope, stop here
                     break;
                   } else if (node && (node.type === 'object' || node.type === 'lexical_declaration')) {
                     // Still part of the same semantic block, continue

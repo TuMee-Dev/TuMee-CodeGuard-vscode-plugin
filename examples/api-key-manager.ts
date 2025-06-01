@@ -27,6 +27,7 @@ const OAUTH_TOKENS = {
     github: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     google: 'ya29.a0ARrdaM_xxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     microsoft: 'EwBwA8l6BAAURSN_xxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    
 };
 
 // @guard:human:r
