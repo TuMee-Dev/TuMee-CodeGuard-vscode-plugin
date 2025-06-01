@@ -72,7 +72,7 @@ async function startCliWorker(): Promise<void> {
 
   updateStatusBarForWorkerStatus('starting');
 
-  cliWorker = new CLIWorker();
+  cliWorker = CLIWorker.getInstance();
 
   // Set up event handlers
   cliWorker.on('exit', handleWorkerExit);

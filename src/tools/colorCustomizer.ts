@@ -4,7 +4,7 @@ import type { MixPattern } from '../types/mixPatterns';
 import { DEFAULT_MIX_PATTERN } from '../types/mixPatterns';
 import { getColorThemes } from '../utils/themeLoader';
 import { configManager, CONFIG_KEYS } from '../utils/configurationManager';
-import { CLIWorker } from '../utils/cliWorker';
+import { CLIWorker, ThemeResponse, CreateThemeResponse, ExportThemeResponse, ImportThemeResponse, SetThemeResponse } from '../utils/cliWorker';
 
 export interface PermissionColorConfig {
   enabled: boolean;                // Whether to use own color or other's
@@ -286,7 +286,8 @@ export class ColorCustomizerPanel {
     try {
       const response = await this._cliWorker.sendRequest('getThemes', {});
       if (response.status === 'success' && response.result) {
-        return response.result.custom || {};
+        const themeResponse = response.result as ThemeResponse;
+        return themeResponse.custom || {};
       }
     } catch (error) {
       console.error('Failed to get themes from CLI:', error);
@@ -300,7 +301,8 @@ export class ColorCustomizerPanel {
     try {
       const response = await this._cliWorker.sendRequest('getThemes', {});
       if (response.status === 'success' && response.result) {
-        return response.result.builtIn || {};
+        const themeResponse = response.result as ThemeResponse;
+        return themeResponse.builtIn || {};
       }
     } catch (error) {
       console.error('Failed to get built-in themes from CLI:', error);
@@ -423,19 +425,22 @@ export class ColorCustomizerPanel {
         themeId: themeKey
       });
 
-      if (response.status === 'success' && response.result?.colors) {
-        this._currentTheme = themeName;
-        
-        // Determine if this is a built-in theme
-        this._isSystemTheme = !!COLOR_THEMES[themeKey];
+      if (response.status === 'success' && response.result) {
+        const setThemeResponse = response.result as SetThemeResponse;
+        if (setThemeResponse.colors) {
+          this._currentTheme = themeName;
+          
+          // Determine if this is a built-in theme
+          this._isSystemTheme = !!COLOR_THEMES[themeKey];
 
-        // Update colors from CLI response
-        const mergedColors = mergeWithDefaults(response.result.colors);
-        await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
-        await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
+          // Update colors from CLI response
+          const mergedColors = mergeWithDefaults(setThemeResponse.colors);
+          await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
+          await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
 
-        this._postMessage('updateColors', { colors: mergedColors });
-        this._postMessage('setThemeType', { isSystem: this._isSystemTheme });
+          this._postMessage('updateColors', { colors: mergedColors });
+          this._postMessage('setThemeType', { isSystem: this._isSystemTheme });
+        }
       } else {
         this._showError(`Failed to apply theme: ${response.error || 'Unknown error'}`);
       }
@@ -480,7 +485,8 @@ export class ColorCustomizerPanel {
       });
 
       if (response.status === 'success') {
-        const themeId = response.result?.themeId || name.toLowerCase();
+        const createResponse = response.result as CreateThemeResponse;
+        const themeId = createResponse.themeId || name.toLowerCase();
         
         // Update local state
         this._currentTheme = name;
@@ -561,7 +567,8 @@ export class ColorCustomizerPanel {
       // Determine next theme to select (only custom themes can be deleted)
       let nextTheme = '';
       if (this._currentTheme === name) {
-        const builtInThemes = this._getBuiltInThemes();
+        const builtInThemes = await this._getBuiltInThemes();
+        const builtInThemeKeys = Object.keys(builtInThemes);
         const originalCustomThemes = Object.keys(customThemes);
         const remainingCustomThemes = Object.keys(updatedThemes);
 
@@ -581,7 +588,7 @@ export class ColorCustomizerPanel {
           }
         } else {
           // No custom themes left, fall back to first built-in theme
-          nextTheme = builtInThemes[0] || 'default';
+          nextTheme = builtInThemeKeys[0] || 'default';
         }
 
         // Apply the next theme
@@ -628,8 +635,9 @@ export class ColorCustomizerPanel {
         themeId: currentThemeId
       });
 
-      if (response.status === 'success' && response.result?.exportData) {
-        const json = JSON.stringify(response.result.exportData, null, 2);
+      if (response.status === 'success' && response.result) {
+        const exportResponse = response.result as ExportThemeResponse;
+        const json = JSON.stringify(exportResponse.exportData, null, 2);
         void vscode.env.clipboard.writeText(json);
         this._showInfo('Theme copied to clipboard as JSON!');
       } else {
@@ -672,8 +680,9 @@ export class ColorCustomizerPanel {
             exportData: exportData
           });
 
-          if (response.status === 'success') {
-            const themeId = response.result?.themeId;
+          if (response.status === 'success' && response.result) {
+            const importResponse = response.result as ImportThemeResponse;
+            const themeId = importResponse.themeId;
             if (themeId) {
               await this._applyTheme(themeId);
               await this._sendThemeList();

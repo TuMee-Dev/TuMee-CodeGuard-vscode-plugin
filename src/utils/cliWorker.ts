@@ -49,10 +49,41 @@ export interface ParseResult {
   documentVersion: number;
 }
 
+export interface ThemeResponse {
+  builtIn: Record<string, { name: string; colors: any }>;
+  custom: Record<string, { name: string; colors: any }>;
+}
+
+export interface CreateThemeResponse {
+  themeId: string;
+  message: string;
+}
+
+export interface ExportThemeResponse {
+  name: string;
+  exportData: {
+    name: string;
+    colors: any;
+    exportedAt: string;
+    version: string;
+  };
+}
+
+export interface ImportThemeResponse {
+  themeId: string;
+  message: string;
+}
+
+export interface SetThemeResponse {
+  message: string;
+  colors: any;
+}
+
 /**
  * CLI Worker class that manages persistent connection to CodeGuard CLI
  */
 export class CLIWorker extends EventEmitter {
+  private static instance?: CLIWorker;
   private process?: ChildProcess;
   private buffer = '';
   private pendingRequests = new Map<string, {
@@ -75,8 +106,18 @@ export class CLIWorker extends EventEmitter {
     return configManager().get('cliWorkerStartupTimeout', 5000);
   }
 
-  constructor() {
+  private constructor() {
     super();
+  }
+
+  /**
+   * Get singleton instance
+   */
+  static getInstance(): CLIWorker {
+    if (!CLIWorker.instance) {
+      CLIWorker.instance = new CLIWorker();
+    }
+    return CLIWorker.instance;
   }
 
   /**
@@ -241,7 +282,7 @@ export class CLIWorker extends EventEmitter {
   /**
    * Send a request to the CLI worker
    */
-  private async sendRequest(command: string, payload?: object): Promise<CLIResponse> {
+  async sendRequest(command: string, payload?: object): Promise<CLIResponse> {
     if (!this.isWorkerReady()) {
       throw new Error('CLI worker is not ready');
     }
