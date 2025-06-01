@@ -7,11 +7,18 @@ import { registerFileDecorationProvider } from '@/tools/file-customization-provi
 import { registerContextMenu } from '@/tools/register-context-menu';
 import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
 import { firstTimeRun } from '@/utils';
-import { parseGuardTags, getLinePermissions, markLinesModified, getDefaultPermissions } from '@/utils/guardProcessor';
-import { MARKDOWN_GUARD_TAG_REGEX, GUARD_TAG_REGEX } from '@/utils/acl';
+import { 
+  parseGuardTags, 
+  getLinePermissions, 
+  markLinesModified, 
+  getDefaultPermissions,
+  initializeCliProcessor,
+  shutdownCliProcessor,
+  getCliWorker,
+  handleDocumentChange as handleCliDocumentChange
+} from '@/utils/guardProcessor';
 import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTypes';
 import { errorHandler } from '@/utils/errorHandler';
-import { initializeScopeResolver } from '@/utils/scopeResolver';
 import { UTILITY_PATTERNS } from '@/utils/regexCache';
 import { registerColorCustomizerCommand } from '@/tools/colorCustomizer';
 import { disposeACLCache } from '@/utils/aclCache';
@@ -43,8 +50,7 @@ const decorationCache = new WeakMap<TextDocument, DecorationRanges>();
 function initializeExtension(context: ExtensionContext): void {
   disposables = [];
 
-  // Initialize scope resolver context (but don't wait for tree-sitter)
-  initializeScopeResolver(context);
+  // CLI worker handles all parsing - no local scope resolver needed
 
   // Run first-time setup if needed
   firstTimeRun(context);
@@ -121,6 +127,9 @@ function setupEventHandlers(context: ExtensionContext): void {
     workspace.onDidChangeTextDocument(event => {
       const activeEditor = window.activeTextEditor;
       if (activeEditor && event.document === activeEditor.document) {
+        // Use CLI document change handler
+        handleCliDocumentChange(event);
+        // Also trigger decoration update
         handleDocumentChange(event);
       }
     })
@@ -251,21 +260,27 @@ export async function activate(context: ExtensionContext) {
 
       registerCommands(context, provider);
 
+      // Initialize CLI processor FIRST - everything depends on this
+      const cliInitialized = await initializeCliProcessor();
+      
       // Create decorations for code regions
       initializeCodeDecorations(context);
 
-      // Create status bar item
-      const statusBarDisposables = createStatusBarItem(context);
+      // Create status bar item with CLI worker reference
+      const cliWorker = getCliWorker();
+      const statusBarDisposables = createStatusBarItem(context, cliWorker);
       disposables.push(...statusBarDisposables);
 
       // Validate configuration on startup
       validateConfiguration();
 
-      // Set up event handlers
+      // Set up event handlers (includes CLI document change handling)
       setupEventHandlers(context);
 
-      // Initialize current editor
-      initializeActiveEditor();
+      // Initialize current editor only if CLI is ready
+      if (cliInitialized) {
+        initializeActiveEditor();
+      }
     }
   } catch (error) {
     errorHandler.handleError(
@@ -432,18 +447,7 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
     // Check if the document has any guard tags - if not, clear decorations and exit
     const isMarkdown = document.languageId === 'markdown';
-    let hasGuardTags = false;
-
-    if (isMarkdown) {
-      hasGuardTags = MARKDOWN_GUARD_TAG_REGEX.test(text);
-    } else {
-      hasGuardTags = GUARD_TAG_REGEX.test(text);
-    }
-
-    if (!hasGuardTags) {
-      clearDecorations();
-      return;
-    }
+    // CLI worker handles guard tag detection - no need for pre-filtering
 
     // Use shared functions to parse guard tags and compute line permissions
     let guardTags: GuardTag[] = [];
@@ -576,6 +580,9 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 }
 
 export function deactivate(): void {
+  // Shutdown CLI processor FIRST
+  void shutdownCliProcessor();
+
   for (const disposable of disposables) {
     disposable.dispose();
   }

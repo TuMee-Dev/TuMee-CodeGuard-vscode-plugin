@@ -106,6 +106,28 @@
           "description": "Enable verbose debug logging for guard processing",
           "default": false
         },
+        "tumee-vscode-plugin.cliWorkerTimeout": {
+          "title": "CLI Worker Request Timeout",
+          "type": "number",
+          "description": "Timeout in milliseconds for CLI worker requests (5-30 seconds)",
+          "default": 10000,
+          "minimum": 5000,
+          "maximum": 30000
+        },
+        "tumee-vscode-plugin.cliWorkerStartupTimeout": {
+          "title": "CLI Worker Startup Timeout",
+          "type": "number",
+          "description": "Timeout in milliseconds for CLI worker startup (2-10 seconds)",
+          "default": 5000,
+          "minimum": 2000,
+          "maximum": 10000
+        },
+        "tumee-vscode-plugin.cliWorkerAutoRestart": {
+          "title": "Auto-restart CLI Worker",
+          "type": "boolean",
+          "description": "Automatically restart CLI worker if it crashes",
+          "default": true
+        },
         "tumee-vscode-plugin.guardColors": {
           "type": "object",
           "title": "Guard Tag Colors",
@@ -684,19 +706,13 @@
     "typecheck": "tsc --noEmit",
     "test": "node ./tests/integration.test.js",
     "test:old": "node ./tests/line-count/focused-fix.js",
-    "test:tree-sitter": "node ./tests/tree-sitter-direct-test.js",
-    "test:parser": "ts-node ./tests/cli-parser-test.ts",
-    "test:tree-sitter:diff": "node ./tests/tree-sitter-vs-regex-test.js",
-    "test:tree-sitter:all": "npm run test:tree-sitter && npm run test:tree-sitter:diff",
     "precommit": "npm run lint && npm run typecheck && npm run test"
   },
   "devDependencies": {
-    "@assemblyscript/loader": "^0.28.1",
     "@types/node": "^20.17.46",
     "@types/vscode": "^1.100.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
-    "assemblyscript": "^0.28.1",
     "copy-webpack-plugin": "^13.0.0",
     "eslint": "^8.57.0",
     "jsdom": "^26.1.0",
@@ -707,7 +723,6 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "commander": "^11.0.0",
-    "web-tree-sitter": "^0.25.4"
+    "commander": "^11.0.0"
   }
 }

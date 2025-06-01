@@ -1,14 +1,18 @@
 import { type StatusBarItem, type TextDocument, type ExtensionContext, type Disposable, window, commands, StatusBarAlignment, ThemeColor } from 'vscode';
 import { isCliAvailable } from './acl';
+import type { CLIWorker, CLIVersionInfo } from './cliWorker';
 
 let statusBarItem: StatusBarItem;
+let cliWorker: CLIWorker | undefined;
 
 /**
  * Creates the status bar item that shows the CodeGuard CLI status
  * @param context The extension context
+ * @param worker The CLI worker instance
  * @returns Disposable for cleanup
  */
-export function createStatusBarItem(context: ExtensionContext): Disposable[] {
+export function createStatusBarItem(context: ExtensionContext, worker?: CLIWorker): Disposable[] {
+  cliWorker = worker;
   statusBarItem = window.createStatusBarItem(StatusBarAlignment.Right, 100);
   statusBarItem.command = 'tumee-vscode-plugin.showGuardInfo';
 
@@ -48,21 +52,98 @@ export async function updateStatusBarItem(document: TextDocument): Promise<void>
   try {
     if (!statusBarItem) return;
 
-    const cliAvailable = await isCliAvailable();
-
-    if (cliAvailable) {
-      statusBarItem.text = '$(shield) CodeGuard';
-      statusBarItem.color = new ThemeColor('charts.green'); // Green shield when CLI available
-      statusBarItem.tooltip = 'CodeGuard CLI is available. Click for guard tags reference.';
+    // Check CLI worker status first
+    if (cliWorker) {
+      await updateStatusBarWithWorker();
     } else {
-      statusBarItem.text = '$(shield) CodeGuard';
-      statusBarItem.color = new ThemeColor('charts.red'); // Red shield when CLI missing
-      statusBarItem.tooltip = 'CodeGuard CLI not found. Click for installation instructions.';
+      // Fallback to basic CLI availability check
+      await updateStatusBarBasic();
     }
   } catch (error) {
     statusBarItem.text = '$(shield) CodeGuard';
     statusBarItem.color = new ThemeColor('charts.red');
-    statusBarItem.tooltip = 'Error checking CodeGuard CLI availability.';
+    statusBarItem.tooltip = 'Error checking CodeGuard CLI status.';
+  }
+}
+
+/**
+ * Update status bar using CLI worker information
+ */
+async function updateStatusBarWithWorker(): Promise<void> {
+  if (!cliWorker || !statusBarItem) return;
+
+  if (cliWorker.isWorkerReady()) {
+    // Worker is running - check version compatibility
+    try {
+      const versionInfo = await cliWorker.checkVersion();
+      
+      if (versionInfo.compatible) {
+        // Green: CLI available and compatible
+        statusBarItem.text = '$(shield) CodeGuard';
+        statusBarItem.color = new ThemeColor('charts.green');
+        statusBarItem.tooltip = `CodeGuard CLI v${versionInfo.version} ready. Click for guard tags reference.`;
+      } else {
+        // Yellow: CLI available but older version
+        statusBarItem.text = '$(shield) CodeGuard';
+        statusBarItem.color = new ThemeColor('charts.yellow');
+        statusBarItem.tooltip = `CodeGuard CLI v${versionInfo.version} (outdated, requires v${versionInfo.minCompatible}+). Some features may not work.`;
+      }
+    } catch (error) {
+      // Worker exists but version check failed
+      statusBarItem.text = '$(shield) CodeGuard';
+      statusBarItem.color = new ThemeColor('charts.red');
+      statusBarItem.tooltip = 'CodeGuard CLI worker error. Click for troubleshooting.';
+    }
+  } else {
+    // Worker not ready (crashed or starting)
+    statusBarItem.text = '$(shield) CodeGuard';
+    statusBarItem.color = new ThemeColor('charts.red');
+    statusBarItem.tooltip = 'CodeGuard CLI worker not available. Click for installation instructions.';
+  }
+}
+
+/**
+ * Update status bar with basic CLI availability check
+ */
+async function updateStatusBarBasic(): Promise<void> {
+  if (!statusBarItem) return;
+
+  const cliAvailable = await isCliAvailable();
+
+  if (cliAvailable) {
+    statusBarItem.text = '$(shield) CodeGuard';
+    statusBarItem.color = new ThemeColor('charts.green');
+    statusBarItem.tooltip = 'CodeGuard CLI detected but worker not initialized. Click for guard tags reference.';
+  } else {
+    statusBarItem.text = '$(shield) CodeGuard';
+    statusBarItem.color = new ThemeColor('charts.red');
+    statusBarItem.tooltip = 'CodeGuard CLI not found. Click for installation instructions.';
+  }
+}
+
+/**
+ * Update status bar when CLI worker status changes
+ */
+export function updateStatusBarForWorkerStatus(status: 'ready' | 'error' | 'crashed' | 'starting'): void {
+  if (!statusBarItem) return;
+
+  switch (status) {
+    case 'ready':
+      statusBarItem.text = '$(shield) CodeGuard';
+      statusBarItem.color = new ThemeColor('charts.green');
+      statusBarItem.tooltip = 'CodeGuard CLI worker ready. Click for guard tags reference.';
+      break;
+    case 'starting':
+      statusBarItem.text = '$(shield) CodeGuard';
+      statusBarItem.color = new ThemeColor('charts.yellow');
+      statusBarItem.tooltip = 'CodeGuard CLI worker starting...';
+      break;
+    case 'error':
+    case 'crashed':
+      statusBarItem.text = '$(shield) CodeGuard';
+      statusBarItem.color = new ThemeColor('charts.red');
+      statusBarItem.tooltip = 'CodeGuard CLI worker failed. Click for troubleshooting.';
+      break;
   }
 }
 

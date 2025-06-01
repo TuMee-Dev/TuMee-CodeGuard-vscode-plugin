@@ -8,7 +8,7 @@ import { GuardColors } from '../colorCustomizer';
 import { COLOR_THEMES } from '../colorCustomizer';
 import { getWebviewStyles, getWebviewJavaScript } from './webviewContent';
 import { CONFIG_KEYS } from '../../utils/configurationManager';
-import { parseGuardTag } from '../../utils/acl';
+// parseGuardTag removed - CLI only
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -272,10 +272,10 @@ export class ColorCustomizerHtmlBuilder {
       const jsonPath = path.join(__dirname, 'resources', 'preview-lines.json');
       const jsonContent = fs.readFileSync(jsonPath, 'utf8');
       const data = JSON.parse(jsonContent);
-      // Return lines with content and pre-parsed guard data using the real parseGuardTag function
+      // Return lines with content only - CLI handles parsing
       return data.lines.map((line: any) => ({ 
         content: line.content,
-        parsed: parseGuardTag(line.content)
+        parsed: null // CLI handles parsing
       })) || [];
     } catch (error) {
       console.error('Failed to load preview lines:', error);

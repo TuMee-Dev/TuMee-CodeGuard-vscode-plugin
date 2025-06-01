@@ -3,7 +3,7 @@ import { exec as execCallback } from 'child_process';
 import { Uri, workspace } from 'vscode';
 import type { ACLStatus } from '@/types';
 import { cleanPath } from '.';
-import { parseGuardTag as coreParseGuardTag } from '../core';
+// Removed local parsing - CLI only
 import { GUARD_TAG_PATTERNS, normalizePermission, normalizeScope } from './regexCache';
 import { getConfig, CONFIG_KEYS } from './configurationManager';
 
@@ -56,7 +56,7 @@ export const MARKDOWN_GUARD_TAG_REGEX = GUARD_TAG_PATTERNS.MARKDOWN_GUARD_TAG;
  * Returns the parsed guard tag information supporting ALL specification formats
  * Delegates to core module for platform-agnostic parsing
  */
-export const parseGuardTag = coreParseGuardTag;
+// parseGuardTag removed - CLI only
 
 /**
  * Executes the CodeGuard CLI to get the ACL status for a given path
