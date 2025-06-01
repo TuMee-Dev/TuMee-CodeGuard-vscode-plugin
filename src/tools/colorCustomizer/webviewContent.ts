@@ -40,7 +40,7 @@ if (window.GuardParser && window.GuardParser.setPatternSource) {
 `;
 
   // Combine everything - guard parser first, then pattern initialization, then engine and webview
-  const combinedJs = guardParserContent + '\n\n' + patternInitialization + '\n\n' + engineContent + '\n\n' + jsContent;
+  const combinedJs = `${guardParserContent  }\n\n${  patternInitialization  }\n\n${  engineContent  }\n\n${  jsContent}`;
 
   // Replace the PREVIEW_LINES placeholder with actual data
   return combinedJs.replace('__PREVIEW_LINES_PLACEHOLDER__', JSON.stringify(previewLines));

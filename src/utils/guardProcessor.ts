@@ -5,7 +5,7 @@
 
 import type * as vscode from 'vscode';
 import type { GuardTag, LinePermission } from '../types/guardTypes';
-import { 
+import {
   parseGuardTags as parseGuardTagsCli,
   getLinePermissions as getLinePermissionsCli,
   clearScopeCache as clearScopeCacheCli,

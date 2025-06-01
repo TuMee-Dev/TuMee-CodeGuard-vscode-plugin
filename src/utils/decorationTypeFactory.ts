@@ -82,7 +82,7 @@ export class DecorationTypeFactory {
 
     if (selectedTheme) {
       const themeKey = selectedTheme.toLowerCase();
-      
+
       // Check if it's a built-in theme
       const builtInTheme = COLOR_THEMES[themeKey];
       if (builtInTheme) {

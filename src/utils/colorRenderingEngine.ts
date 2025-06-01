@@ -3,7 +3,7 @@
  * Eliminates duplication between webview preview, VSCode decorations, and CLI rendering
  */
 
-import { GuardColors, PermissionColorConfig } from '../tools/colorCustomizer';
+import type { GuardColors, PermissionColorConfig } from '../tools/colorCustomizer';
 import { MixPattern } from '../types/mixPatterns';
 import { hexToRgba, rgbToHex } from './colorUtils';
 
@@ -70,7 +70,7 @@ export class ColorRenderingEngine {
    */
   private getSinglePermissionColor(type: 'ai' | 'human', permission: string): ColorResult {
     let configKey: string;
-    
+
     if (permission === 'context') {
       configKey = 'contextRead';
     } else if (permission === 'contextWrite') {
@@ -80,7 +80,7 @@ export class ColorRenderingEngine {
     }
 
     const config = this.colors.permissions[configKey as keyof typeof this.colors.permissions];
-    
+
     if (!config || !config.enabled) {
       return {
         opacity: 0,
@@ -104,7 +104,7 @@ export class ColorRenderingEngine {
   private getMixedPermissionColor(aiPerm: string, humanPerm: string): ColorResult {
     const aiConfigKey = this.getConfigKey('ai', aiPerm);
     const humanConfigKey = this.getConfigKey('human', humanPerm);
-    
+
     const aiConfig = this.colors.permissions[aiConfigKey as keyof typeof this.colors.permissions];
     const humanConfig = this.colors.permissions[humanConfigKey as keyof typeof this.colors.permissions];
 

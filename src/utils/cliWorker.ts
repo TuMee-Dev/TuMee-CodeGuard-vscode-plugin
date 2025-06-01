@@ -89,7 +89,7 @@ export class CLIWorker extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       const cliPath = getAclCliPath();
-      
+
       try {
         this.process = spawn(cliPath, ['--worker-mode'], {
           stdio: ['pipe', 'pipe', 'pipe'],
@@ -141,7 +141,7 @@ export class CLIWorker extends EventEmitter {
     // Force kill if still running
     if (this.process && !this.process.killed) {
       this.process.kill('SIGTERM');
-      
+
       // Force kill after 2 seconds
       setTimeout(() => {
         if (this.process && !this.process.killed) {
@@ -176,7 +176,7 @@ export class CLIWorker extends EventEmitter {
     content: string
   ): Promise<ParseResult> {
     this.currentDocumentVersion++;
-    
+
     const response = await this.sendRequest('setDocument', {
       fileName,
       languageId,
@@ -257,8 +257,8 @@ export class CLIWorker extends EventEmitter {
 
       this.pendingRequests.set(id, { resolve, reject, timeout });
 
-      const message = JSON.stringify(request) + '\n\n';
-      
+      const message = `${JSON.stringify(request)  }\n\n`;
+
       if (!this.process?.stdin?.write(message)) {
         this.pendingRequests.delete(id);
         clearTimeout(timeout);
@@ -365,13 +365,13 @@ export class CLIWorker extends EventEmitter {
    */
   private handleProcessExit(code: number | null, signal: string | null): void {
     this.cleanup();
-    
-    const message = signal 
+
+    const message = signal
       ? `CLI worker killed by signal: ${signal}`
       : `CLI worker exited with code: ${code}`;
 
     this.emit('exit', { code, signal, message });
-    
+
     errorHandler.handleError(
       new Error(message),
       { operation: 'cliWorker.exit', details: { code, signal } }
@@ -384,7 +384,7 @@ export class CLIWorker extends EventEmitter {
   private handleProcessError(error: Error): void {
     this.cleanup();
     this.emit('error', error);
-    
+
     errorHandler.handleError(
       error,
       { operation: 'cliWorker.processError' }

@@ -16,28 +16,28 @@ export interface MixPatternColors {
  */
 export function getBackgroundColorSource(pattern: MixPattern | string): 'ai' | 'human' | 'blend' {
   const normalizedPattern = typeof pattern === 'string' ? pattern : MixPattern[pattern];
-  
+
   switch (normalizedPattern) {
     case 'aiBorder':
     case MixPattern.AI_BORDER:
       return 'human'; // Human background with AI border
-      
+
     case 'humanBorder':
     case MixPattern.HUMAN_BORDER:
       return 'ai'; // AI background with human border
-      
+
     case 'aiPriority':
     case MixPattern.AI_PRIORITY:
       return 'ai';
-      
+
     case 'humanPriority':
     case MixPattern.HUMAN_PRIORITY:
       return 'human';
-      
+
     case 'average':
     case MixPattern.AVERAGE:
       return 'blend';
-      
+
     default:
       return 'ai'; // Default to AI color
   }
@@ -49,16 +49,16 @@ export function getBackgroundColorSource(pattern: MixPattern | string): 'ai' | '
  */
 export function getBorderColorSource(pattern: MixPattern | string): 'ai' | 'human' | 'none' {
   const normalizedPattern = typeof pattern === 'string' ? pattern : MixPattern[pattern];
-  
+
   switch (normalizedPattern) {
     case 'aiBorder':
     case MixPattern.AI_BORDER:
       return 'ai'; // AI border
-      
+
     case 'humanBorder':
     case MixPattern.HUMAN_BORDER:
       return 'human'; // Human border
-      
+
     default:
       return 'none'; // No special border for other patterns
   }
@@ -75,10 +75,10 @@ export function applyMixPattern<T>(
 ): { backgroundColor: T; borderColor?: T } {
   const bgSource = getBackgroundColorSource(pattern);
   const borderSource = getBorderColorSource(pattern);
-  
+
   let backgroundColor: T;
   let borderColor: T | undefined;
-  
+
   // Determine background color
   switch (bgSource) {
     case 'ai':
@@ -96,7 +96,7 @@ export function applyMixPattern<T>(
       }
       break;
   }
-  
+
   // Determine border color
   switch (borderSource) {
     case 'ai':
@@ -109,7 +109,7 @@ export function applyMixPattern<T>(
       borderColor = undefined;
       break;
   }
-  
+
   return { backgroundColor, borderColor };
 }
 
@@ -122,7 +122,7 @@ export function getHighlightEntireLineForMix(
   humanHighlight: boolean
 ): boolean {
   const bgSource = getBackgroundColorSource(pattern);
-  
+
   switch (bgSource) {
     case 'ai':
       return aiHighlight;

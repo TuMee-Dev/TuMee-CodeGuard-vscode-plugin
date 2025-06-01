@@ -31,7 +31,7 @@ export class DocumentStateManager {
     };
 
     // Check if this is actually a new document
-    const isNewDocument = !this.currentDocument || 
+    const isNewDocument = !this.currentDocument ||
       this.currentDocument.fileName !== newState.fileName ||
       this.currentDocument.languageId !== newState.languageId;
 
@@ -211,7 +211,7 @@ export class DocumentStateManager {
         // Multi-line change
         const firstLine = lines[change.startLine];
         const lastLine = lines[change.endLine];
-        
+
         const newContent = firstLine.substring(0, change.startChar) +
                           change.newText +
                           lastLine.substring(change.endChar);
@@ -246,7 +246,7 @@ export class DocumentStateManager {
   } {
     // Convert linePermissions array to Map (1-based line numbers)
     const linePermissionsMap = new Map<number, LinePermission>();
-    
+
     for (const permission of result.linePermissions) {
       linePermissionsMap.set(permission.line, permission);
     }

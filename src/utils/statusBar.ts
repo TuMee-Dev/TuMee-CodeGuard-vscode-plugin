@@ -76,7 +76,7 @@ async function updateStatusBarWithWorker(): Promise<void> {
     // Worker is running - check version compatibility
     try {
       const versionInfo = await cliWorker.checkVersion();
-      
+
       if (versionInfo.compatible) {
         // Green: CLI available and compatible
         statusBarItem.text = '$(shield) CodeGuard';

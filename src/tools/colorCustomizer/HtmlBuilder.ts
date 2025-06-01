@@ -3,7 +3,7 @@
  * Handles all HTML template generation and formatting
  */
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { GuardColors } from '../colorCustomizer';
 import { COLOR_THEMES } from '../colorCustomizer';
 import { getWebviewStyles, getWebviewJavaScript } from './webviewContent';
@@ -76,7 +76,7 @@ export class ColorCustomizerHtmlBuilder {
                         <div class="theme-controls">
                             <select id="themeSelect" onchange="applyPreset(this.value)" style="width: 45%;">
                                 ${Object.keys(COLOR_THEMES).map(key =>
-      `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
+    `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
                             </select>
                             <select id="mixPatternSelect" onchange="updateMixPattern(this.value)" style="width: 45%; margin-left: 5px;">
                                 <option value="aiBorder">AI Border</option>
@@ -273,7 +273,7 @@ export class ColorCustomizerHtmlBuilder {
       const jsonContent = fs.readFileSync(jsonPath, 'utf8');
       const data = JSON.parse(jsonContent);
       // Return lines with content only - CLI handles parsing
-      return data.lines.map((line: any) => ({ 
+      return data.lines.map((line: any) => ({
         content: line.content,
         parsed: null // CLI handles parsing
       })) || [];

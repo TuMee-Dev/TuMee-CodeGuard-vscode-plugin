@@ -46,7 +46,7 @@ const WORKER_RESTART_DELAY = 1000; // ms - fixed delay
 export async function initializeCliProcessor(): Promise<boolean> {
   try {
     documentStateManager = new DocumentStateManager();
-    
+
     // Try to start CLI worker
     await startCliWorker();
     return true;
@@ -80,7 +80,7 @@ async function startCliWorker(): Promise<void> {
 
   try {
     const startupInfo = await cliWorker.start();
-    
+
     // Check version compatibility
     const versionInfo = await cliWorker.checkVersion();
     if (!versionInfo.compatible) {
@@ -91,7 +91,7 @@ async function startCliWorker(): Promise<void> {
     }
 
     updateStatusBarForWorkerStatus('ready');
-    
+
   } catch (error) {
     updateStatusBarForWorkerStatus('error');
     throw error;
@@ -103,7 +103,7 @@ async function startCliWorker(): Promise<void> {
  */
 function handleWorkerExit(info: { code: number | null; signal: string | null; message: string }): void {
   updateStatusBarForWorkerStatus('crashed');
-  
+
   // Attempt to restart worker after delay if auto-restart is enabled
   if (getAutoRestart()) {
     setTimeout(() => {
@@ -117,7 +117,7 @@ function handleWorkerExit(info: { code: number | null; signal: string | null; me
  */
 function handleWorkerError(error: Error): void {
   updateStatusBarForWorkerStatus('error');
-  
+
   errorHandler.handleError(error, {
     operation: 'cliWorker.error',
     userFriendlyMessage: 'CodeGuard CLI worker encountered an error'
@@ -268,7 +268,7 @@ async function processDocumentChange(event: vscode.TextDocumentChangeEvent): Pro
 
   try {
     const changes = documentStateManager.updateDocument(event);
-    
+
     if (changes === null) {
       // Document switch or other scenario requiring full document resend
       const docInfo = documentStateManager.getDocumentInfo();
@@ -279,7 +279,7 @@ async function processDocumentChange(event: vscode.TextDocumentChangeEvent): Pro
           docInfo.content
         );
         documentStateManager.updateParseResult(result);
-        
+
         // Trigger decoration update
         triggerDecorationUpdate(event.document);
       }
@@ -310,7 +310,7 @@ async function processDocumentChange(event: vscode.TextDocumentChangeEvent): Pro
     // Send delta to CLI worker
     const result = await cliWorker.applyDelta(changes);
     documentStateManager.updateParseResult(result);
-    
+
     // Trigger decoration update
     triggerDecorationUpdate(event.document);
 
@@ -401,7 +401,7 @@ export async function refreshCurrentDocument(document: vscode.TextDocument): Pro
   // Force document refresh by setting it again
   documentStateManager.setDocument(document);
   const docInfo = documentStateManager.getDocumentInfo();
-  
+
   if (docInfo) {
     const result = await cliWorker.setDocument(
       docInfo.fileName,

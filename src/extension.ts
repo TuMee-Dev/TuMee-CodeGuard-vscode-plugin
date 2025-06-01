@@ -7,10 +7,10 @@ import { registerFileDecorationProvider } from '@/tools/file-customization-provi
 import { registerContextMenu } from '@/tools/register-context-menu';
 import { registerGuardTagCommands } from '@/tools/contextMenu/setGuardTags';
 import { firstTimeRun } from '@/utils';
-import { 
-  parseGuardTags, 
-  getLinePermissions, 
-  markLinesModified, 
+import {
+  parseGuardTags,
+  getLinePermissions,
+  markLinesModified,
   getDefaultPermissions,
   initializeCliProcessor,
   shutdownCliProcessor,
@@ -262,7 +262,7 @@ export async function activate(context: ExtensionContext) {
 
       // Initialize CLI processor FIRST - everything depends on this
       const cliInitialized = await initializeCliProcessor();
-      
+
       // Create decorations for code regions
       initializeCodeDecorations(context);
 

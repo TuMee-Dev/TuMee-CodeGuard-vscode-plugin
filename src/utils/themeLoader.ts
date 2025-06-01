@@ -56,7 +56,6 @@ export function loadThemeConfiguration(): ThemesConfiguration {
   }
 }
 
-
 /**
  * Get all themes in COLOR_THEMES format
  */
