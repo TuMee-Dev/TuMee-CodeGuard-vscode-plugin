@@ -99,6 +99,7 @@ interface CLIResponse {
   "command": "setDocument",
   "payload": {
     "fileName": "src/app.ts",
+    "languageId": "typescript",
     "content": "// @guard:ai:r\nfunction hello() {\n  return 'world';\n}",
     "version": 1
   }
@@ -359,7 +360,7 @@ $ codeguard --worker-mode
 ## Implementation Notes
 
 1. **Use existing parser logic** - Reuse current CodeGuard parsing core, just expose via worker mode
-2. **Language detection** - Use fileName extension for language detection
+2. **Language detection** - Use VSCode's `languageId` field from document (more accurate than file extensions)
 3. **Tree-sitter integration** - Maintain current tree-sitter capabilities for scope resolution
 4. **Configuration** - Use default configuration; worker mode doesn't need config file support
 5. **Logging** - Minimal logging; errors should be returned via protocol, not logged to files
