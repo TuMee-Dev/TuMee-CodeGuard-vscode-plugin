@@ -8,6 +8,8 @@ import type { GuardTag, LinePermission, ICoreConfiguration, IDocument, GuardStac
 import { parseGuardTag } from './guardParser';
 import { GuardProcessingError, ErrorSeverity, type ILogger, consoleLogger } from './errorHandler';
 import { isLineAComment } from './commentDetector';
+import { parseDocument, findNodeAtPosition } from './parser';
+import * as path from 'path';
 import { 
   popGuardWithContextCleanup,
   removeInterruptedContextGuards,
@@ -139,7 +141,6 @@ export async function parseGuardTagsCore(
         } else {
           // Use semantic scope resolution for block and other scopes
           const scope = guardTag.scope || 'block';
-          
           // For block scopes, use statement-by-statement resolution
           // This gives the expected behavior: consecutive lines until blank line or next guard
           if (scope === 'block') {
@@ -149,18 +150,35 @@ export async function parseGuardTagsCore(
             // Get lines as text
             const allLines = document.text.split('\n');
             
-            // Scan forward to find the end of the statement block
+            // Scan forward to find the end of the statement block using tree-sitter
             for (let currentLine = startLineNumber - 1; currentLine < allLines.length; currentLine++) {
               const lineText = allLines[currentLine].trim();
-              
-              // Stop at blank lines
-              if (lineText === '') {
-                break;
-              }
               
               // Stop at guard tags
               if (lineText.includes('@guard:')) {
                 break;
+              }
+              
+              // Check tree-sitter node type for this line to determine if it's part of the block
+              if (!extensionContext) {
+                throw new Error('FATAL: extensionContext is required for tree-sitter scope resolution');
+              }
+              
+              try {
+                const tree = await parseDocument(extensionContext, document);
+                if (tree) {
+                  const node = findNodeAtPosition(tree, currentLine);
+                  if (node && node.type === 'program') {
+                    // Hit program scope, stop here
+                    break;
+                  } else if (node && (node.type === 'object' || node.type === 'lexical_declaration')) {
+                    // Still part of the same semantic block, continue
+                    endLineNumber = currentLine + 1;
+                    continue;
+                  }
+                }
+              } catch (error) {
+                throw new Error(`FATAL: Tree-sitter failed: ${error}`);
               }
               
               // Include this line in the block
