@@ -214,7 +214,7 @@ async function buildValidationPackage(
     guard_regions: guardRegions,
     line_coverage: lineCoverage,
     validation_metadata: {
-      parser_used: 'tree-sitter',
+      parser_used: 'cli',
       language: language,
       encoding: 'utf-8',
       supports_overlapping: true

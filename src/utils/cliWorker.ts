@@ -96,7 +96,7 @@ export class CLIWorker extends EventEmitter {
   private isReady = false;
   private startupInfo?: CLIStartupInfo;
 
-  private readonly MIN_CLI_VERSION = '1.2.0';
+  private readonly MIN_CLI_VERSION = '0.3.0';
 
   private get REQUEST_TIMEOUT(): number {
     return configManager().get('cliWorkerTimeout', 10000);
@@ -264,7 +264,32 @@ export class CLIWorker extends EventEmitter {
       throw new Error(`CLI version check failed: ${response.error}`);
     }
 
-    return response.result as CLIVersionInfo;
+    const versionInfo = response.result as CLIVersionInfo;
+    
+    // Enforce minimum version requirement
+    if (!this.isVersionCompatible(versionInfo.version, this.MIN_CLI_VERSION)) {
+      throw new Error(`CLI version ${versionInfo.version} is below minimum required version ${this.MIN_CLI_VERSION}`);
+    }
+
+    return versionInfo;
+  }
+
+  /**
+   * Check if CLI version meets minimum requirements
+   */
+  private isVersionCompatible(currentVersion: string, minVersion: string): boolean {
+    const current = currentVersion.split('.').map(Number);
+    const min = minVersion.split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(current.length, min.length); i++) {
+      const currentPart = current[i] || 0;
+      const minPart = min[i] || 0;
+      
+      if (currentPart > minPart) return true;
+      if (currentPart < minPart) return false;
+    }
+    
+    return true; // Equal versions are compatible
   }
 
   /**
@@ -442,7 +467,7 @@ export class CLIWorker extends EventEmitter {
     this.currentDocumentVersion = 0;
 
     // Reject all pending requests
-    for (const [id, pending] of this.pendingRequests) {
+    for (const [_id, pending] of this.pendingRequests) {
       clearTimeout(pending.timeout);
       pending.reject(new Error('CLI worker stopped'));
     }
