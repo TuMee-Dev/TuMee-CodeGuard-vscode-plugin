@@ -1,124 +1,14 @@
 import * as vscode from 'vscode';
 import { ColorCustomizerHtmlBuilder } from './colorCustomizer/HtmlBuilder';
-import type { MixPattern } from '../types/mixPatterns';
-import { DEFAULT_MIX_PATTERN } from '../types/mixPatterns';
-import { getColorThemes } from '../utils/rendering/themeLoader';
 import { configManager, CONFIG_KEYS } from '../utils/config/configurationManager';
-import { CLIWorker, ThemeResponse, CreateThemeResponse, ExportThemeResponse, ImportThemeResponse, SetThemeResponse } from '../utils/cli/cliWorker';
-
-export interface PermissionColorConfig {
-  enabled: boolean;                // Whether to use own color or other's
-  color: string;                   // Base color
-  transparency: number;            // Transparency level (0-1)
-  borderOpacity?: number;          // Optional border opacity (0-1)
-  minimapColor?: string;           // Optional custom minimap color
-  highlightEntireLine?: boolean;   // Highlight entire line (true) or just text (false)
-}
-
-export interface GuardColors {
-  // Per-permission configurations
-  permissions: {
-    aiWrite: PermissionColorConfig;
-    aiRead: PermissionColorConfig;
-    aiNoAccess: PermissionColorConfig;
-    humanWrite: PermissionColorConfig;
-    humanRead: PermissionColorConfig;
-    humanNoAccess: PermissionColorConfig;
-    contextRead: PermissionColorConfig;
-    contextWrite: PermissionColorConfig;
-  };
-
-  // Global border bar toggle only
-  borderBarEnabled: boolean;       // Enable border bar
-
-  // Highlight entire line including whitespace (vs text only)
-  highlightEntireLine?: boolean;   // Default false for backward compatibility
-
-  // Mix pattern for when both AI and human permissions are non-default
-  mixPattern?: MixPattern;
-
-  // Optional custom colors for specific combinations
-  combinations?: {
-    aiRead_humanRead?: string;
-    aiRead_humanWrite?: string;
-    aiRead_humanNoAccess?: string;
-    aiWrite_humanRead?: string;
-    aiWrite_humanWrite?: string;
-    aiWrite_humanNoAccess?: string;
-    aiNoAccess_humanRead?: string;
-    aiNoAccess_humanWrite?: string;
-    aiNoAccess_humanNoAccess?: string;
-    aiReadContext_humanRead?: string;
-    aiReadContext_humanWrite?: string;
-    aiReadContext_humanNoAccess?: string;
-    aiWriteContext_humanRead?: string;
-    aiWriteContext_humanWrite?: string;
-    aiWriteContext_humanNoAccess?: string;
-  };
-}
-
-// Get themes from external configuration
-export const COLOR_THEMES = getColorThemes();
-
-// Default colors (Light theme)
-export const DEFAULT_COLORS: GuardColors = {
-  permissions: {
-    aiWrite: { enabled: true, color: '#FFA500', transparency: 0.2 },
-    aiRead: { enabled: true, color: '#808080', transparency: 0.15 },
-    aiNoAccess: { enabled: true, color: '#90EE90', transparency: 0.2 },
-    humanWrite: { enabled: false, color: '#0000FF', transparency: 0.2 },
-    humanRead: { enabled: true, color: '#D3D3D3', transparency: 0.3 },
-    humanNoAccess: { enabled: true, color: '#FF0000', transparency: 0.25 },
-    contextRead: { enabled: true, color: '#00CED1', transparency: 0.15 },
-    contextWrite: { enabled: true, color: '#1E90FF', transparency: 0.15 }
-  },
-  borderBarEnabled: true,
-  highlightEntireLine: false,  // Default to false for backward compatibility
-  mixPattern: DEFAULT_MIX_PATTERN
-};
-
-// Export themes for CLI usage
-export function getBuiltInThemes(): Record<string, any> {
-  const themes: Record<string, any> = {};
-  // Convert COLOR_THEMES back to the format expected by CLI
-  Object.entries(COLOR_THEMES).forEach(([name, theme]) => {
-    themes[name] = {
-      name,
-      permissions: theme.colors.permissions,
-      borderBarEnabled: theme.colors.borderBarEnabled,
-      mixPattern: theme.colors.mixPattern
-    };
-  });
-  return themes;
-}
-
-// Helper function to merge colors with defaults
-function mergeWithDefaults(colors: Partial<GuardColors> | undefined): GuardColors {
-  const merged = JSON.parse(JSON.stringify(DEFAULT_COLORS)) as GuardColors;
-
-  if (colors?.permissions) {
-    Object.keys(colors.permissions).forEach(key => {
-      const permKey = key as keyof GuardColors['permissions'];
-      if (merged.permissions[permKey] && colors.permissions && colors.permissions[permKey]) {
-        Object.assign(merged.permissions[permKey], colors.permissions[permKey]);
-      }
-    });
-  }
-
-  if (colors?.borderBarEnabled !== undefined) {
-    merged.borderBarEnabled = colors.borderBarEnabled;
-  }
-
-  if (colors?.mixPattern !== undefined) {
-    merged.mixPattern = colors.mixPattern;
-  }
-
-  if (colors?.combinations) {
-    merged.combinations = colors.combinations;
-  }
-
-  return merged;
-}
+import type { ThemeResponse, CreateThemeResponse, ExportThemeResponse, ImportThemeResponse, SetThemeResponse } from '../utils/cli/cliWorker';
+import { CLIWorker } from '../utils/cli/cliWorker';
+import type { GuardColors } from './colorCustomizer/ColorConfigTypes';
+import {
+  COLOR_THEMES,
+  DEFAULT_COLORS,
+  mergeWithDefaults
+} from './colorCustomizer/ColorConfigTypes';
 
 export class ColorCustomizerPanel {
   public static currentPanel: ColorCustomizerPanel | undefined;
@@ -201,7 +91,7 @@ export class ColorCustomizerPanel {
             await this._importTheme();
             return;
           case 'requestThemeList':
-            this._sendThemeList();
+            void this._sendThemeList();
             return;
           case 'saveDefaultPermissions':
             await this._saveDefaultPermissions(message.defaultAiWrite || false, message.defaultHumanWrite || false);
@@ -234,14 +124,14 @@ export class ColorCustomizerPanel {
       // Check if migration has already been done
       const migrationKey = 'tumee-vscode-plugin.themesMigrated';
       const alreadyMigrated = this._cm.get(migrationKey, false);
-      
+
       if (alreadyMigrated) {
         return;
       }
 
       // Get existing custom themes from VSCode configuration
       const existingCustomThemes = this._cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, { name: string; colors: GuardColors }>);
-      
+
       if (Object.keys(existingCustomThemes).length === 0) {
         // No themes to migrate, mark as done
         await this._cm.update(migrationKey, true);
@@ -250,7 +140,7 @@ export class ColorCustomizerPanel {
 
       // Try to migrate themes via CLI
       let migratedCount = 0;
-      for (const [themeId, themeData] of Object.entries(existingCustomThemes)) {
+      for (const [_themeId, themeData] of Object.entries(existingCustomThemes)) {
         try {
           const response = await this._cliWorker.sendRequest('createTheme', {
             name: themeData.name,
@@ -269,14 +159,14 @@ export class ColorCustomizerPanel {
 
       if (migratedCount > 0) {
         console.log(`Successfully migrated ${migratedCount} custom themes to CLI storage`);
-        
+
         // Clear the old VSCode configuration after successful migration
         await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, {});
       }
 
       // Mark migration as completed regardless of success
       await this._cm.update(migrationKey, true);
-      
+
     } catch (error) {
       console.error('Theme migration failed:', error);
     }
@@ -418,7 +308,7 @@ export class ColorCustomizerPanel {
 
   private async _applyTheme(themeName: string) {
     const themeKey = themeName.toLowerCase();
-    
+
     try {
       // Use CLI to set current theme
       const response = await this._cliWorker.sendRequest('setCurrentTheme', {
@@ -429,12 +319,12 @@ export class ColorCustomizerPanel {
         const setThemeResponse = response.result as SetThemeResponse;
         if (setThemeResponse.colors) {
           this._currentTheme = themeName;
-          
+
           // Determine if this is a built-in theme
           this._isSystemTheme = !!COLOR_THEMES[themeKey];
 
           // Update colors from CLI response
-          const mergedColors = mergeWithDefaults(setThemeResponse.colors);
+          const mergedColors = mergeWithDefaults(setThemeResponse.colors as Partial<GuardColors>);
           await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
           await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
 
@@ -446,7 +336,7 @@ export class ColorCustomizerPanel {
       }
     } catch (error) {
       console.error('Failed to apply theme via CLI:', error);
-      
+
       // Fallback to local theme application
       let theme = COLOR_THEMES[themeKey];
       this._isSystemTheme = !!theme;
@@ -486,23 +376,23 @@ export class ColorCustomizerPanel {
 
       if (response.status === 'success') {
         const createResponse = response.result as CreateThemeResponse;
-        const themeId = createResponse.themeId || name.toLowerCase();
-        
+        const _themeId = createResponse.themeId || name.toLowerCase();
+
         // Update local state
         this._currentTheme = name;
         this._isSystemTheme = false;
 
         // Set as current theme
-        await this._cliWorker.sendRequest('setCurrentTheme', {
-          themeId: themeId
+        void this._cliWorker.sendRequest('setCurrentTheme', {
+          themeId: _themeId
         });
 
         this._showInfo(`Theme '${name}' saved successfully!`);
-        await this._sendThemeList();
+        void this._sendThemeList();
 
         // Update the dropdown selection
         setTimeout(() => {
-          this._postMessage('setSelectedTheme', { theme: themeId });
+          this._postMessage('setSelectedTheme', { theme: _themeId });
           this._postMessage('setThemeType', { isSystem: false });
         }, 100);
       } else {
@@ -511,7 +401,7 @@ export class ColorCustomizerPanel {
     } catch (error) {
       console.error('Failed to create theme via CLI:', error);
       this._showError(`Failed to create theme: ${error instanceof Error ? error.message : 'CLI unavailable'}`);
-      
+
       // Fallback to local storage for backwards compatibility
       const customThemes = await this._getCustomThemes();
       const themeKey = name.toLowerCase();
@@ -525,7 +415,7 @@ export class ColorCustomizerPanel {
       this._currentTheme = name;
       this._isSystemTheme = false;
       this._showInfo(`Theme '${name}' saved locally!`);
-      await this._sendThemeList();
+      void this._sendThemeList();
     }
   }
 
@@ -604,7 +494,7 @@ export class ColorCustomizerPanel {
       this._showInfo(`Theme '${name}' deleted successfully!`);
 
       // Send the theme list update first
-      this._sendThemeList();
+      void this._sendThemeList();
 
       // Then send the deletion notification with a slight delay to ensure theme list is processed
       setTimeout(() => {
@@ -630,7 +520,7 @@ export class ColorCustomizerPanel {
     try {
       // Get current theme ID from state
       const currentThemeId = this._currentTheme.toLowerCase() || 'current';
-      
+
       const response = await this._cliWorker.sendRequest('exportTheme', {
         themeId: currentThemeId
       });
@@ -670,7 +560,7 @@ export class ColorCustomizerPanel {
         return;
       }
 
-      const exportData = JSON.parse(json);
+      const exportData = JSON.parse(json) as any;
 
       // Check if it's a proper export format or just colors
       if (exportData.exportedAt && exportData.version && exportData.colors) {
@@ -684,8 +574,8 @@ export class ColorCustomizerPanel {
             const importResponse = response.result as ImportThemeResponse;
             const themeId = importResponse.themeId;
             if (themeId) {
-              await this._applyTheme(themeId);
-              await this._sendThemeList();
+              void this._applyTheme(themeId);
+              void this._sendThemeList();
             }
             this._showInfo('Theme imported successfully!');
           } else {
@@ -694,13 +584,13 @@ export class ColorCustomizerPanel {
         } catch (error) {
           console.error('Failed to import theme via CLI:', error);
           // Fallback to local import
-          const mergedColors = mergeWithDefaults(exportData.colors);
+          const mergedColors = mergeWithDefaults(exportData.colors as Partial<GuardColors>);
           this._postMessage('updateColors', { colors: mergedColors });
           this._showInfo('Theme imported locally from clipboard!');
         }
-      } else if (exportData.permissions) {
+      } else if (exportData.permissions as any) {
         // This is just GuardColors format (legacy)
-        const mergedColors = mergeWithDefaults(exportData);
+        const mergedColors = mergeWithDefaults(exportData as Partial<GuardColors>);
         this._postMessage('updateColors', { colors: mergedColors });
         this._showInfo('Theme colors applied from clipboard!');
       } else {
@@ -778,8 +668,8 @@ export class ColorCustomizerPanel {
     const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'default');
     this._panel.webview.html = ColorCustomizerHtmlBuilder.getHtmlForWebview(webview, selectedTheme, this._cm);
 
-    setTimeout(async () => {
-      await this._sendThemeList();
+    setTimeout(() => {
+      void this._sendThemeList();
 
       let selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, '');
 
@@ -789,7 +679,7 @@ export class ColorCustomizerPanel {
       }
 
       // Apply the theme to ensure colors and dropdown are in sync
-      await this._applyTheme(selectedTheme);
+      void this._applyTheme(selectedTheme);
 
       this._postMessage('setSelectedTheme', { theme: selectedTheme });
 

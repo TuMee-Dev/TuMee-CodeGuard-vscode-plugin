@@ -3,7 +3,7 @@
  * Eliminates duplication between webview preview, VSCode decorations, and CLI rendering
  */
 
-import type { GuardColors, PermissionColorConfig } from '../../tools/colorCustomizer';
+import type { GuardColors, PermissionColorConfig } from '../../tools/colorCustomizer/ColorConfigTypes';
 import { MixPattern } from '../../types/mixPatterns';
 import { hexToRgba, rgbToHex } from './colorUtils';
 

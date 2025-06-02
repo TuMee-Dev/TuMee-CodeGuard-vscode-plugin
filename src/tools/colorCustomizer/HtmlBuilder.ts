@@ -4,8 +4,7 @@
  */
 
 import type * as vscode from 'vscode';
-import { GuardColors } from '../colorCustomizer';
-import { COLOR_THEMES } from '../colorCustomizer';
+import { GuardColors, COLOR_THEMES } from './ColorConfigTypes';
 import { getWebviewStyles, getWebviewJavaScript } from './webviewContent';
 import { CONFIG_KEYS } from '../../utils/config/configurationManager';
 // parseGuardTag removed - CLI only
