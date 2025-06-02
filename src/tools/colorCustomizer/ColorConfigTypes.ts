@@ -74,15 +74,13 @@ export const DEFAULT_COLORS: GuardColors = {
 };
 
 // Export themes for CLI usage
-export function getBuiltInThemes(): Record<string, any> {
-  const themes: Record<string, any> = {};
+export function getBuiltInThemes(): Record<string, { name: string; colors: GuardColors }> {
+  const themes: Record<string, { name: string; colors: GuardColors }> = {};
   // Convert COLOR_THEMES back to the format expected by CLI
   Object.entries(COLOR_THEMES).forEach(([name, theme]) => {
     themes[name] = {
-      name,
-      permissions: theme.colors.permissions,
-      borderBarEnabled: theme.colors.borderBarEnabled,
-      mixPattern: theme.colors.mixPattern
+      name: theme.name,
+      colors: theme.colors
     };
   });
   return themes;

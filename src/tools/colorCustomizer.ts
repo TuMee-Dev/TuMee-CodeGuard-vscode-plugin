@@ -482,7 +482,12 @@ export class ColorCustomizerPanel {
         return;
       }
 
-      const exportData = JSON.parse(json) as { exportedAt?: string; version?: string; colors?: GuardColors; permissions?: any };
+      const exportData = JSON.parse(json) as {
+        exportedAt?: string;
+        version?: string;
+        colors?: GuardColors;
+        permissions?: GuardColors['permissions'];
+      };
 
       // Check if it's a proper export format or just colors
       if (exportData.exportedAt && exportData.version && exportData.colors) {
