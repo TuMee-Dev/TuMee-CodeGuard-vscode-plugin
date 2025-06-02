@@ -16,7 +16,6 @@ export class ColorCustomizerPanel {
   public static readonly viewType = 'guardTagColorCustomizer';
 
   private readonly _panel: vscode.WebviewPanel;
-  private readonly _extensionUri: vscode.Uri;
   private readonly _context: vscode.ExtensionContext;
   private readonly _cm = configManager();
   private readonly _cliWorker: CLIWorker;
@@ -50,7 +49,6 @@ export class ColorCustomizerPanel {
 
   private constructor(panel: vscode.WebviewPanel, context: vscode.ExtensionContext) {
     this._panel = panel;
-    this._extensionUri = context.extensionUri;
     this._context = context;
     this._cliWorker = CLIWorker.getInstance();
 
@@ -241,7 +239,7 @@ export class ColorCustomizerPanel {
       try {
         const response = await this._cliWorker.sendRequest('getCurrentTheme', {});
         if (response.status === 'success' && response.result) {
-          const currentTheme = response.result as any;
+          const currentTheme = response.result as { colors: GuardColors };
           colors = mergeWithDefaults(currentTheme.colors);
         } else {
           colors = DEFAULT_COLORS;
@@ -483,14 +481,14 @@ export class ColorCustomizerPanel {
         return;
       }
 
-      const exportData = JSON.parse(json);
+      const exportData = JSON.parse(json) as { exportedAt?: string; version?: string; colors?: GuardColors; permissions?: any };
 
       // Check if it's a proper export format or just colors
       if (exportData.exportedAt && exportData.version && exportData.colors) {
         // This is a proper CLI export format
         try {
           const response = await this._cliWorker.sendRequest('importTheme', {
-            exportData: exportData
+            exportData
           });
 
           if (response.status === 'success' && response.result) {
@@ -598,7 +596,7 @@ export class ColorCustomizerPanel {
         try {
           const response = await this._cliWorker.sendRequest('getCurrentTheme', {});
           if (response.status === 'success' && response.result) {
-            const currentTheme = response.result as any;
+            const currentTheme = response.result as { selectedTheme?: string };
             selectedTheme = currentTheme.selectedTheme || 'default';
           }
         } catch (error) {
