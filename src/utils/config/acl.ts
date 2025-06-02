@@ -4,7 +4,7 @@ import { Uri, workspace } from 'vscode';
 import type { ACLStatus } from '@/types';
 import { cleanPath } from '../core';
 // Removed local parsing - CLI only
-import { GUARD_TAG_PATTERNS, normalizePermission, normalizeScope } from '../cache/regexCache';
+import { GUARD_TAG_PATTERNS } from '../cache/regexCache';
 import { getConfig, CONFIG_KEYS } from './configurationManager';
 
 const exec = promisify(execCallback);

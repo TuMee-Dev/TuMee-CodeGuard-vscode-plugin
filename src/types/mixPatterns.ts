@@ -49,11 +49,11 @@ export const DEFAULT_MIX_PATTERN = MixPattern.HUMAN_BORDER;
  */
 export function stringToMixPattern(value: string): MixPattern {
   // Direct enum value lookup
-  const enumValue = Object.values(MixPattern).find(pattern => pattern === value);
+  const enumValue = Object.values(MixPattern).find(pattern => pattern as string === value);
   if (enumValue) {
     return enumValue as MixPattern;
   }
-  
+
   // Fallback to default
   return DEFAULT_MIX_PATTERN;
 }

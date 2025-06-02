@@ -401,7 +401,7 @@ export class CLIWorker extends EventEmitter {
    */
   private processMessage(message: string): void {
     try {
-      const data = JSON.parse(message);
+      const data = JSON.parse(message) as { type?: string; id?: string };
 
       // Handle startup handshake
       if (data.type === 'startup') {

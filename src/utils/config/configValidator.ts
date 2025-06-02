@@ -212,7 +212,7 @@ export class ConfigValidator {
     const cm = configManager();
 
     for (const [key, rules] of Object.entries(CONFIG_RULES)) {
-      const value = cm.get(key as any);
+      const value = cm.get(key);
 
       // Check if required
       if (rules.required && (value === undefined || value === null)) {
