@@ -110,7 +110,9 @@ class ConfigurationManager {
    */
   get<K extends ConfigKey>(key: K): ConfigurationTypes[K];
   get<K extends ConfigKey>(key: K, defaultValue: ConfigurationTypes[K]): ConfigurationTypes[K];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get<T = any>(key: string, defaultValue?: T): T;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get(key: string, defaultValue?: any): any {
     const config = workspace.getConfiguration(this.namespace);
     // Your solution: explicitly handle the any from VSCode's API
@@ -128,6 +130,7 @@ class ConfigurationManager {
     value: ConfigurationTypes[K],
     global?: boolean
   ): Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async update<T = any>(
     key: string,
     value: T,
@@ -135,6 +138,7 @@ class ConfigurationManager {
   ): Promise<void>;
   async update(
     key: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any,
     global: boolean = true
   ): Promise<void> {
