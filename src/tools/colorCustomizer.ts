@@ -168,7 +168,6 @@ export class ColorCustomizerPanel {
         const themeKey = themeName.toLowerCase();
         this._currentTheme = themeName;
         this._isSystemTheme = false;
-        await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
 
         // Update the dropdown in the webview - use lowercase key to match dropdown value
         this._postMessage('setSelectedTheme', { theme: themeKey });
@@ -180,28 +179,35 @@ export class ColorCustomizerPanel {
 
     // If we have a current custom theme and not applying from theme selector
     if (this._currentTheme && !this._isSystemTheme && !fromTheme) {
-      const customThemes = await this._getCustomThemes();
-      const themeKey = this._currentTheme.toLowerCase();
-      if (customThemes[themeKey]) {
-        // Keep the same structure with name field
-        customThemes[themeKey] = {
-          name: customThemes[themeKey].name || this._currentTheme,
+      try {
+        // Update theme via CLI
+        const response = await this._cliWorker.sendRequest('updateTheme', {
+          themeId: this._currentTheme.toLowerCase(),
+          name: this._currentTheme,
           colors: colors
-        };
-        await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
+        });
 
-        // If this is the currently selected theme, update guardColorsComplete too
-        const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, '');
-        if (selectedTheme === this._currentTheme) {
+        if (response.status === 'success') {
+          // Update local configuration  
           await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
-        }
+          
+          // Refresh decorations
+          const decorationManager = getDecorationManager();
+          if (decorationManager) {
+            decorationManager.handleColorConfigurationChange(this._context);
+          }
 
-        this._showInfo(`Theme '${this._currentTheme}' updated successfully!`);
+          this._showInfo(`Theme '${this._currentTheme}' updated successfully!`);
+        } else {
+          this._showError(`Failed to update theme: ${response.error || 'Unknown error'}`);
+        }
+      } catch (error) {
+        console.error('Failed to update theme via CLI:', error);
+        this._showError(`Failed to update theme: ${error instanceof Error ? error.message : 'CLI unavailable'}`);
       }
       // Don't send colors back - webview already has current values
     } else if (!fromTheme) {
       await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
-      await this._cm.update(CONFIG_KEYS.SELECTED_THEME, '');
       
       // Refresh all editor decorations immediately
       const decorationManager = getDecorationManager();
@@ -270,8 +276,7 @@ export class ColorCustomizerPanel {
           // Update colors from CLI response
           const mergedColors = mergeWithDefaults(setThemeResponse.colors as Partial<GuardColors>);
           await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
-          await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
-
+  
           // Refresh all editor decorations immediately
           const decorationManager = getDecorationManager();
           if (decorationManager) {
@@ -309,7 +314,6 @@ export class ColorCustomizerPanel {
         // Update colors without showing notification
         const mergedColors = mergeWithDefaults(theme.colors);
         await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
-        await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
 
         this._postMessage('updateColors', { colors: mergedColors });
         this._postMessage('setThemeType', { isSystem: this._isSystemTheme });
@@ -326,23 +330,19 @@ export class ColorCustomizerPanel {
 
       if (response.status === 'success') {
         const createResponse = response.result as CreateThemeResponse;
-        const _themeId = createResponse.themeId || name.toLowerCase();
+        const themeId = createResponse.themeId || name.toLowerCase();
 
-        // Update local state
-        this._currentTheme = name;
-        this._isSystemTheme = false;
-
-        // Set as current theme
-        void this._cliWorker.sendRequest('setCurrentTheme', {
-          themeId: _themeId
-        });
+        // Apply the new theme (this updates configuration and state)
+        await this._applyTheme(themeId);
 
         this._showInfo(`Theme '${name}' saved successfully!`);
+        
+        // Send updated theme list and set selection
         void this._sendThemeList();
-
+        
         // Update the dropdown selection
         setTimeout(() => {
-          this._postMessage('setSelectedTheme', { theme: _themeId });
+          this._postMessage('setSelectedTheme', { theme: themeId });
           this._postMessage('setThemeType', { isSystem: false });
         }, 100);
       } else {
@@ -351,21 +351,6 @@ export class ColorCustomizerPanel {
     } catch (error) {
       console.error('Failed to create theme via CLI:', error);
       this._showError(`Failed to create theme: ${error instanceof Error ? error.message : 'CLI unavailable'}`);
-
-      // Fallback to local storage for backwards compatibility
-      const customThemes = await this._getCustomThemes();
-      const themeKey = name.toLowerCase();
-      customThemes[themeKey] = {
-        name: name,
-        colors: colors
-      };
-      await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, customThemes);
-      await this._cm.update(CONFIG_KEYS.SELECTED_THEME, name);
-
-      this._currentTheme = name;
-      this._isSystemTheme = false;
-      this._showInfo(`Theme '${name}' saved locally!`);
-      void this._sendThemeList();
     }
   }
 
@@ -389,73 +374,62 @@ export class ColorCustomizerPanel {
         return;
       }
 
-      const customThemes = await this._getCustomThemes();
-
-      // Create a shallow copy to avoid proxy issues
-      const updatedThemes = { ...customThemes };
       const themeKey = name.toLowerCase();
 
-      // Handle legacy themes that might have wrong casing in the key
-      if (!customThemes[themeKey] && customThemes[name]) {
-        delete updatedThemes[name];
-      } else {
-        delete updatedThemes[themeKey];
-      }
-
-      await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, updatedThemes);
-
-      // Determine next theme to select (only custom themes can be deleted)
-      let nextTheme = '';
-      if (this._currentTheme === name) {
-        const builtInThemes = await this._getBuiltInThemes();
-        const builtInThemeKeys = Object.keys(builtInThemes);
-        const originalCustomThemes = Object.keys(customThemes);
-        const remainingCustomThemes = Object.keys(updatedThemes);
-
-        if (remainingCustomThemes.length > 0) {
-          // Still have custom themes - select the closest one by position
-          // Use lowercase key for comparison since themes are stored with lowercase keys
-          const deletedIndex = originalCustomThemes.indexOf(themeKey);
-          const nextIndex = Math.min(deletedIndex, remainingCustomThemes.length - 1);
-
-          // Get the theme that should be at this position after deletion
-          const targetTheme = originalCustomThemes.filter(t => t !== themeKey)[nextIndex];
-          if (targetTheme && remainingCustomThemes.includes(targetTheme)) {
-            nextTheme = targetTheme;
-          } else {
-            // Fallback to first remaining custom theme
-            nextTheme = remainingCustomThemes[0];
-          }
-        } else {
-          // No custom themes left, fall back to first built-in theme
-          nextTheme = builtInThemeKeys[0] || 'default';
-        }
-
-        // Apply the next theme
-        if (nextTheme) {
-          await this._applyTheme(nextTheme);
-        } else {
-          this._currentTheme = '';
-          this._isSystemTheme = false;
-          await this._cm.update(CONFIG_KEYS.SELECTED_THEME, '');
-        }
-      }
-
-      this._showInfo(`Theme '${name}' deleted successfully!`);
-
-      // Send the theme list update first
-      void this._sendThemeList();
-
-      // Then send the deletion notification with a slight delay to ensure theme list is processed
-      setTimeout(() => {
-        // Include whether the next theme is a system theme
-        const isNextThemeSystem = nextTheme && !!COLOR_THEMES[nextTheme.toLowerCase()];
-        this._postMessage('themeDeleted', {
-          deletedTheme: name,
-          nextTheme,
-          isSystemTheme: isNextThemeSystem
+      try {
+        // Delete theme via CLI
+        const response = await this._cliWorker.sendRequest('deleteTheme', {
+          themeId: themeKey
         });
-      }, 50);
+
+        if (response.status === 'success') {
+          // Determine next theme to select
+          let nextTheme = '';
+          if (this._currentTheme === name) {
+            // Get fresh theme lists after deletion
+            const builtInThemes = await this._getBuiltInThemes();
+            const customThemes = await this._getCustomThemes();
+            const builtInThemeKeys = Object.keys(builtInThemes);
+
+            if (Object.keys(customThemes).length > 0) {
+              // Still have custom themes - select the first one
+              nextTheme = Object.keys(customThemes)[0];
+            } else {
+              // No custom themes left, fall back to first built-in theme
+              nextTheme = builtInThemeKeys[0] || 'default';
+            }
+
+            // Apply the next theme
+            if (nextTheme) {
+              await this._applyTheme(nextTheme);
+            } else {
+              this._currentTheme = '';
+              this._isSystemTheme = false;
+                    }
+          }
+
+          this._showInfo(`Theme '${name}' deleted successfully!`);
+
+          // Send the updated theme list (this will remove the deleted theme from dropdown)
+          void this._sendThemeList();
+
+          // Then send the deletion notification
+          setTimeout(() => {
+            // Include whether the next theme is a system theme
+            const isNextThemeSystem = nextTheme && !!COLOR_THEMES[nextTheme.toLowerCase()];
+            this._postMessage('themeDeleted', {
+              deletedTheme: name,
+              nextTheme,
+              isSystemTheme: isNextThemeSystem
+            });
+          }, 100);
+        } else {
+          this._showError(`Failed to delete theme: ${response.error || 'Unknown error'}`);
+        }
+      } catch (error) {
+        console.error('Failed to delete theme via CLI:', error);
+        this._showError(`Failed to delete theme: ${error instanceof Error ? error.message : 'CLI unavailable'}`);
+      }
     } finally {
       this._isDeleting = false;
     }
@@ -615,17 +589,21 @@ export class ColorCustomizerPanel {
   private _update() {
     const webview = this._panel.webview;
     this._panel.title = 'Guard Tag Color Customizer';
-    const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'default');
-    this._panel.webview.html = ColorCustomizerHtmlBuilder.getHtmlForWebview(webview, selectedTheme, this._cm);
+    this._panel.webview.html = ColorCustomizerHtmlBuilder.getHtmlForWebview(webview, '', this._cm);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       void this._sendThemeList();
 
-      let selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, '');
-
-      // If no theme is selected, default to 'default'
-      if (!selectedTheme) {
-        selectedTheme = 'default';
+      // Get current theme from CLI (authoritative source)
+      let selectedTheme = 'default';
+      try {
+        const response = await this._cliWorker.sendRequest('getCurrentTheme', {});
+        if (response.status === 'success' && response.result) {
+          const currentTheme = response.result as any;
+          selectedTheme = currentTheme.selectedTheme || 'default';
+        }
+      } catch (error) {
+        console.error('Failed to get current theme from CLI:', error);
       }
 
       // Apply the theme to ensure colors and dropdown are in sync

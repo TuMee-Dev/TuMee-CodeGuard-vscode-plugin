@@ -357,24 +357,6 @@
             "useAiColorAsBase": true
           }
         },
-        "tumee-vscode-plugin.customThemes": {
-          "type": "object",
-          "title": "Custom Color Themes",
-          "description": "User-defined color themes for guard tags",
-          "default": {},
-          "patternProperties": {
-            ".*": {
-              "type": "object",
-              "description": "A custom theme configuration"
-            }
-          }
-        },
-        "tumee-vscode-plugin.selectedTheme": {
-          "type": "string",
-          "title": "Selected Theme",
-          "description": "The currently selected guard tag color theme",
-          "default": ""
-        },
         "tumee-vscode-plugin.guardColorsComplete": {
           "type": "object",
           "title": "Complete Guard Tag Colors",

@@ -13,10 +13,8 @@ import { getExtensionWithOptionalName } from '../core';
 export const CONFIG_KEYS = {
   // Color and decoration settings
   CURRENT_THEME: 'currentTheme',
-  CUSTOM_THEMES: 'customThemes',
   CODE_DECORATION_OPACITY: 'codeDecorationOpacity',
   GUARD_COLORS_COMPLETE: 'guardColorsComplete',
-  SELECTED_THEME: 'selectedTheme',
   DEFAULT_AI_WRITE: 'defaultAiWrite',
   DEFAULT_HUMAN_WRITE: 'defaultHumanWrite',
 
@@ -47,10 +45,8 @@ export type ConfigKey = typeof CONFIG_KEYS[keyof typeof CONFIG_KEYS];
  */
 interface ConfigurationTypes {
   [CONFIG_KEYS.CURRENT_THEME]: string;
-  [CONFIG_KEYS.CUSTOM_THEMES]: Record<string, any>;
   [CONFIG_KEYS.CODE_DECORATION_OPACITY]: number;
   [CONFIG_KEYS.GUARD_COLORS_COMPLETE]: any;
-  [CONFIG_KEYS.SELECTED_THEME]: string;
   [CONFIG_KEYS.DEFAULT_AI_WRITE]: boolean;
   [CONFIG_KEYS.DEFAULT_HUMAN_WRITE]: boolean;
   [CONFIG_KEYS.ENABLE_DEBUG_LOGGING]: boolean;
