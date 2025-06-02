@@ -16,9 +16,7 @@ export const firstTimeRun = (context: ExtensionContext): void => {
   const hasRun = context.globalState.get('hasRun');
   if (!hasRun) {
     void context.globalState.update('hasRun', true);
-    void window.showInformationMessage(
-      'TuMee File and Folder Customization is now active. Right-click on a file or folder to customize it.'
-    );
+    // Extension is active - no notification needed
   }
 };
 
