@@ -1,6 +1,6 @@
 import type { OutputChannel } from 'vscode';
 import { window } from 'vscode';
-import { getConfig, configManager, CONFIG_KEYS } from './configurationManager';
+import { getConfig, configManager, CONFIG_KEYS } from '../config/configurationManager';
 
 interface PerformanceMetric {
   operation: string;

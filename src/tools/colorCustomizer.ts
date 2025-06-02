@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import { ColorCustomizerHtmlBuilder } from './colorCustomizer/HtmlBuilder';
 import type { MixPattern } from '../types/mixPatterns';
 import { DEFAULT_MIX_PATTERN } from '../types/mixPatterns';
-import { getColorThemes } from '../utils/themeLoader';
-import { configManager, CONFIG_KEYS } from '../utils/configurationManager';
-import { CLIWorker, ThemeResponse, CreateThemeResponse, ExportThemeResponse, ImportThemeResponse, SetThemeResponse } from '../utils/cliWorker';
+import { getColorThemes } from '../utils/rendering/themeLoader';
+import { configManager, CONFIG_KEYS } from '../utils/config/configurationManager';
+import { CLIWorker, ThemeResponse, CreateThemeResponse, ExportThemeResponse, ImportThemeResponse, SetThemeResponse } from '../utils/cli/cliWorker';
 
 export interface PermissionColorConfig {
   enabled: boolean;                // Whether to use own color or other's

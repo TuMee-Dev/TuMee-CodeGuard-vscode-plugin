@@ -4,8 +4,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { GuardColors, PermissionColorConfig } from '../tools/colorCustomizer';
-import { MixPattern } from '../types/mixPatterns';
+import type { GuardColors, PermissionColorConfig } from '../../tools/colorCustomizer';
+import { MixPattern } from '../../types/mixPatterns';
 
 export interface ThemeConfig {
   name: string;

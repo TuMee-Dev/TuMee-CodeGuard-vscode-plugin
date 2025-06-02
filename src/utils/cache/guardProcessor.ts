@@ -4,7 +4,7 @@
  */
 
 import type * as vscode from 'vscode';
-import type { GuardTag, LinePermission } from '../types/guardTypes';
+import type { GuardTag, LinePermission } from '../../types/guardTypes';
 import {
   parseGuardTags as parseGuardTagsCli,
   getLinePermissions as getLinePermissionsCli,
@@ -16,8 +16,8 @@ import {
   getCliWorker,
   isCliProcessorReady,
   refreshCurrentDocument
-} from './guardProcessorCli';
-import { validateDocument } from './errorHandler';
+} from '../cli/guardProcessorCli';
+import { validateDocument } from '../validation/errorHandler';
 
 // Re-export CLI processor functions - these are the ONLY parsing functions allowed
 export {

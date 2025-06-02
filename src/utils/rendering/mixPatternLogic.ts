@@ -3,7 +3,7 @@
  * This centralizes the logic used by CLI, webview, and other components
  */
 
-import { MixPattern } from '../types/mixPatterns';
+import { MixPattern } from '../../types/mixPatterns';
 
 export interface MixPatternColors {
   aiColor: any;

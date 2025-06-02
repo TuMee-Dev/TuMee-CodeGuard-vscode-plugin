@@ -1,4 +1,4 @@
-import { MixPattern } from '../types/mixPatterns';
+import { MixPattern } from '../../types/mixPatterns';
 import { hexToRgba, rgbToHex } from './colorUtils';
 
 export interface ColorConfig {

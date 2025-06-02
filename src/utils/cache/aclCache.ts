@@ -1,7 +1,7 @@
 import * as path from 'path';
 import type { FileSystemWatcher } from 'vscode';
 import { workspace, Uri, RelativePattern } from 'vscode';
-import { getAclStatus } from './acl';
+import { getAclStatus } from '../config/acl';
 import type { ACLStatus } from '@/types';
 
 interface CacheEntry {

@@ -1,7 +1,7 @@
 import type { ConfigurationChangeEvent } from 'vscode';
 import { window } from 'vscode';
-import { getExtensionWithOptionalName } from './index';
-import { errorHandler } from './errorHandler';
+import { getExtensionWithOptionalName } from '../core/index';
+import { errorHandler } from '../validation/errorHandler';
 import { configManager } from './configurationManager';
 
 interface ValidationResult {

@@ -1,9 +1,9 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import type { GuardTag, LinePermission } from '@/types/guardTypes';
-import { errorHandler } from './errorHandler';
-import { getAclCliPath } from './acl';
-import { configManager } from './configurationManager';
+import { errorHandler } from '../validation/errorHandler';
+import { getAclCliPath } from '../config/acl';
+import { configManager } from '../config/configurationManager';
 
 /**
  * CLI protocol interfaces matching the specification

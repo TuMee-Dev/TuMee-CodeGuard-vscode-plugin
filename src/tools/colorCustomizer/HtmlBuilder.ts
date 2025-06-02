@@ -7,7 +7,7 @@ import type * as vscode from 'vscode';
 import { GuardColors } from '../colorCustomizer';
 import { COLOR_THEMES } from '../colorCustomizer';
 import { getWebviewStyles, getWebviewJavaScript } from './webviewContent';
-import { CONFIG_KEYS } from '../../utils/configurationManager';
+import { CONFIG_KEYS } from '../../utils/config/configurationManager';
 // parseGuardTag removed - CLI only
 import * as fs from 'fs';
 import * as path from 'path';

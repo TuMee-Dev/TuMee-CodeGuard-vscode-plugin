@@ -15,21 +15,23 @@ import {
   initializeCliProcessor,
   shutdownCliProcessor,
   getCliWorker,
-  handleDocumentChange as handleCliDocumentChange
-} from '@/utils/guardProcessor';
+  handleDocumentChange as handleCliDocumentChange,
+  errorHandler,
+  UTILITY_PATTERNS,
+  disposeACLCache,
+  performanceMonitor,
+  configValidator,
+  DebugLogger,
+  backgroundProcessor,
+  registerValidationCommands,
+  DecorationTypeFactory,
+  configManager,
+  CONFIG_KEYS,
+  createStatusBarItem,
+  updateStatusBarItem
+} from '@/utils';
 import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTypes';
-import { errorHandler } from '@/utils/errorHandler';
-import { UTILITY_PATTERNS } from '@/utils/regexCache';
 import { registerColorCustomizerCommand } from '@/tools/colorCustomizer';
-import { disposeACLCache } from '@/utils/aclCache';
-import { performanceMonitor } from '@/utils/performanceMonitor';
-import { configValidator } from '@/utils/configValidator';
-import { DebugLogger } from '@/utils/debugLogger';
-import { backgroundProcessor } from '@/utils/backgroundProcessor';
-import { registerValidationCommands } from '@/utils/validationMode';
-import { DecorationTypeFactory } from '@/utils/decorationTypeFactory';
-import { configManager, CONFIG_KEYS } from '@/utils/configurationManager';
-import { createStatusBarItem, updateStatusBarItem } from '@/utils/statusBar';
 
 let disposables: Disposable[] = [];
 // Map of decoration types for all permission combinations

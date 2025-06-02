@@ -4,7 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { withErrorRethrow } from './errorWrapper';
+import { withErrorRethrow } from '../validation/errorWrapper';
 
 export interface TemplateReplacements {
   [key: string]: string | number | boolean;

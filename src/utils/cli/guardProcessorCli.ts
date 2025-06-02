@@ -3,12 +3,12 @@
  */
 
 import type * as vscode from 'vscode';
-import type { GuardTag, LinePermission } from '../types/guardTypes';
+import type { GuardTag, LinePermission } from '../../types/guardTypes';
 import { CLIWorker } from './cliWorker';
 import { DocumentStateManager } from './documentStateManager';
-import { errorHandler } from './errorHandler';
-import { updateStatusBarForWorkerStatus } from './statusBar';
-import { configManager } from './configurationManager';
+import { errorHandler } from '../validation/errorHandler';
+import { updateStatusBarForWorkerStatus } from '../ui/statusBar';
+import { configManager } from '../config/configurationManager';
 import { EventEmitter } from 'events';
 
 /**

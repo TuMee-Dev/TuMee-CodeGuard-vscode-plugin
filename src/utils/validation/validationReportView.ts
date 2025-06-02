@@ -26,7 +26,7 @@ import type {
   Discrepancy,
   ValidationStatistics
 } from '@/types/validationTypes';
-import { processTemplate } from './templateLoader';
+import { processTemplate } from '../rendering/templateLoader';
 
 let validationPanel: WebviewPanel | undefined;
 let errorDecorationType: TextEditorDecorationType;

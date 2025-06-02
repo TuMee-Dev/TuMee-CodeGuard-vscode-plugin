@@ -4,12 +4,12 @@
 
 import type { TextEditorDecorationType } from 'vscode';
 import { window } from 'vscode';
-import { DEFAULT_COLORS, COLOR_THEMES } from '../tools/colorCustomizer';
-import { MixPattern } from '../types/mixPatterns';
-import type { GuardColors } from '../types/colorTypes';
+import { DEFAULT_COLORS, COLOR_THEMES } from '../../tools/colorCustomizer';
+import { MixPattern } from '../../types/mixPatterns';
+import type { GuardColors } from '../../types/colorTypes';
 import { ColorRenderingEngine } from './colorRenderingEngine';
-import { DebugLogger } from './debugLogger';
-import { configManager, CONFIG_KEYS } from './configurationManager';
+import { DebugLogger } from '../ui/debugLogger';
+import { configManager, CONFIG_KEYS } from '../config/configurationManager';
 
 interface PermissionColorInfo {
   color: string;

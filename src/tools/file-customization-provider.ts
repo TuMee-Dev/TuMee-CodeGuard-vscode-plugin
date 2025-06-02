@@ -1,11 +1,7 @@
 import type { Event, ExtensionContext, FileDecorationProvider, Uri } from 'vscode';
 import { EventEmitter, FileDecoration, ThemeColor, extensions, window, workspace, commands } from 'vscode';
 import type { Change, ExtensionItem, GitAPIState, GitRepository } from '@/types';
-import { cleanPath, getExtensionWithOptionalName } from '@/utils';
-import { isCliAvailable, getAclCliPath } from '@/utils/acl';
-import { getACLCache } from '@/utils/aclCache';
-import { errorHandler } from '@/utils/errorHandler';
-import { configManager, CONFIG_KEYS } from '@/utils/configurationManager';
+import { cleanPath, getExtensionWithOptionalName, isCliAvailable, getAclCliPath, getACLCache, errorHandler, configManager, CONFIG_KEYS } from '@/utils';
 
 const GIT_EXTENSION_ID = 'vscode.git';
 const GIT_API_VERSION = 1;

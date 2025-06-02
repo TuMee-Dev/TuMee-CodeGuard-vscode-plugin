@@ -5,7 +5,7 @@
 
 import type { ConfigurationChangeEvent, Disposable } from 'vscode';
 import { workspace, EventEmitter } from 'vscode';
-import { getExtensionWithOptionalName } from '.';
+import { getExtensionWithOptionalName } from '../core';
 
 /**
  * Configuration keys used by the extension

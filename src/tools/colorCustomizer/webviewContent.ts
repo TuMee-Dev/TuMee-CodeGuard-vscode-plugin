@@ -5,7 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { GUARD_TAG_PATTERNS } from '../../utils/regexCache';
+import { GUARD_TAG_PATTERNS } from '../../utils/cache/regexCache';
 
 export function getWebviewStyles(): string {
   try {

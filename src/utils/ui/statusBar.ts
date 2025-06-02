@@ -1,6 +1,6 @@
 import { type StatusBarItem, type TextDocument, type ExtensionContext, type Disposable, window, commands, StatusBarAlignment, ThemeColor } from 'vscode';
-import { isCliAvailable } from './acl';
-import type { CLIWorker, CLIVersionInfo } from './cliWorker';
+import { isCliAvailable } from '../config/acl';
+import type { CLIWorker, CLIVersionInfo } from '../cli/cliWorker';
 
 let statusBarItem: StatusBarItem;
 let cliWorker: CLIWorker | undefined;

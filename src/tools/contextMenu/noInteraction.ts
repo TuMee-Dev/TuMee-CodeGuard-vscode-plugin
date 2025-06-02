@@ -1,6 +1,5 @@
 import { type Uri, commands } from 'vscode';
-import { clearAclStatus, getExtensionWithOptionalName, removeAllFromConfig, removePathFromConfig, setAclStatus, updateConfigForAll, cleanPath } from '@/utils';
-import { filterUris } from '@/utils/fs';
+import { clearAclStatus, getExtensionWithOptionalName, removeAllFromConfig, removePathFromConfig, setAclStatus, updateConfigForAll, cleanPath, filterUris } from '@/utils';
 import type { FileCustomizationProvider } from '@/tools/file-customization-provider';
 
 export const clearColor = (provider: FileCustomizationProvider) =>

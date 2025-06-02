@@ -3,7 +3,7 @@
  * Handles scope resolutions, modified line tracking, and cache invalidation
  */
 
-import type { ScopeBoundary } from '../types/guardTypes';
+import type { ScopeBoundary } from '../../types/guardTypes';
 
 /**
  * Document interface that matches what we need from vscode.TextDocument

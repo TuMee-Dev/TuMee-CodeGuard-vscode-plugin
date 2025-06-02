@@ -8,7 +8,7 @@ import { logError } from './errorHandler';
  * @param defaultValue Optional default value to return on error
  * @returns The operation result or default value if error occurs
  */
-export async function withErrorHandling<T>(
+export async function withErrorWrapper<T>(
   operation: () => Promise<T>,
   context: string,
   defaultValue?: T

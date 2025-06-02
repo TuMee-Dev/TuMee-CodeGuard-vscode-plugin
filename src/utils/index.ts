@@ -1,27 +1,47 @@
-import type { ExtensionContext } from 'vscode';
-import { window } from 'vscode';
-import { UTILITY_PATTERNS } from './regexCache';
+// Main utils re-exports for backward compatibility
+// Core utilities (fs, cleanPath, etc.)
+export * from './core/index';
 
-export const EXTENSION_NAME = 'tumee-vscode-plugin';
+// Configuration 
+export * from './config/configurationManager';
+export * from './config/configValidator';
+export * from './config/config';
+export * from './config/acl';
 
-export const getExtensionWithOptionalName = (name?: string): string => {
-  return name ? `${EXTENSION_NAME}.${name}` : EXTENSION_NAME;
-};
+// CLI
+export * from './cli/cliWorker';
+export * from './cli/documentStateManager';
 
-export const cleanPath = (path: string): string => {
-  return path.replace(UTILITY_PATTERNS.BACKSLASH, '/').replace(UTILITY_PATTERNS.TRAILING_SLASH, '');
-};
+// Cache
+export * from './cache/regexCache';
+export * from './cache/aclCache';
+// Remove guardCache direct export to avoid conflicts with guardProcessor
+// export * from './cache/guardCache';
+// Use guardProcessor as the main export point for guard functions
+export * from './cache/guardProcessor';
 
-export const firstTimeRun = (context: ExtensionContext): void => {
-  const hasRun = context.globalState.get('hasRun');
-  if (!hasRun) {
-    void context.globalState.update('hasRun', true);
-    void window.showInformationMessage(
-      'TuMee File and Folder Customization is now active. Right-click on a file or folder to customize it.'
-    );
-  }
-};
+// Rendering
+export * from './rendering/colorUtils';
+export * from './rendering/colorRenderingEngine';
+export * from './rendering/decorationTypeFactory';
+export * from './rendering/mixPatternLogic';
+export * from './rendering/mixPatternRenderer';
+export * from './rendering/themeLoader';
+export * from './rendering/templateLoader';
 
-export * from './config';
-export * from './fs';
-export * from './acl';
+// Validation
+export * from './validation/errorHandler';
+export * from './validation/errorWrapper';
+export * from './validation/validationMode';
+export * from './validation/validationReportView';
+
+// Performance
+export * from './performance/performanceMonitor';
+export * from './performance/backgroundProcessor';
+
+// UI
+export * from './ui/debugLogger';
+export * from './ui/statusBar';
+
+// Core (fs already exported by core/index)
+export * from './core/languageScopeLoader';

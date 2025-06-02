@@ -1,4 +1,4 @@
-import { configManager, CONFIG_KEYS } from './configurationManager';
+import { configManager, CONFIG_KEYS } from '../config/configurationManager';
 
 /**
  * Debug logger that only logs when debug logging is enabled

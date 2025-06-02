@@ -2,9 +2,9 @@ import { promisify } from 'util';
 import { exec as execCallback } from 'child_process';
 import { Uri, workspace } from 'vscode';
 import type { ACLStatus } from '@/types';
-import { cleanPath } from '.';
+import { cleanPath } from '../core';
 // Removed local parsing - CLI only
-import { GUARD_TAG_PATTERNS, normalizePermission, normalizeScope } from './regexCache';
+import { GUARD_TAG_PATTERNS, normalizePermission, normalizeScope } from '../cache/regexCache';
 import { getConfig, CONFIG_KEYS } from './configurationManager';
 
 const exec = promisify(execCallback);

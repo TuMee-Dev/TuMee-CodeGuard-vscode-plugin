@@ -1,7 +1,6 @@
 import type { Uri } from 'vscode';
 import { commands, window } from 'vscode';
-import { updateConfigForAll } from '@/utils/config';
-import { filterUris } from '@/utils/fs';
+import { updateConfigForAll, filterUris } from '@/utils';
 import type { FileCustomizationProvider } from '@/tools/file-customization-provider';
 import { cleanPath, getExtensionWithOptionalName } from '@/utils';
 
