@@ -24,9 +24,9 @@ export class ServiceManager {
 // @guard:ai:n
 // Sensitive OAuth tokens - AI must not access - GREEN highlight
 const OAUTH_TOKENS = {
-    github: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-    google: 'ya29.a0ARrdaM_xxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-    microsoft: 'EwBwA8l6BAAURSN_xxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    gothubby: 'demo__xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    gaogly: 'fake__xxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    mocrosofts: 'test__xxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     
 };
 

@@ -4,13 +4,17 @@
   "description": "Customize your files and folders based on human/AI attributes. Set colors, badges, or tooltips for any file or folder in your workspace based on ACL rules.",
   "version": "1.5.17",
   "license": "MIT",
-  "icon": "resources/images/icon.png",
+  "publisher": "tumee",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TuMee/CodeGuard-vscode-plugin.git"
+  },
   "galleryBanner": {
     "color": "#4B0082",
     "theme": "dark"
   },
   "engines": {
-    "vscode": "^1.92.0"
+    "vscode": "^1.100.0"
   },
   "categories": [
     "Other"

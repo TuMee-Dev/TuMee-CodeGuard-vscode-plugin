@@ -1,0 +1,38 @@
+# Development files
+.vscode/**
+.vscode-test/**
+src/**
+.gitignore
+.yarnrc
+vsc-extension-quickstart.md
+**/tsconfig.json
+**/.eslintrc.json
+**/*.map
+**/*.ts
+webpack.config.js
+
+# Tests and docs
+tests/**
+test-extension.sh
+docs/**
+backups/**
+.claude/**
+
+# Examples and scripts  
+examples/**
+scripts/**
+bin/**
+
+# Build artifacts
+node_modules/**
+**/*.js.map
+
+# Tree-sitter files (not used anymore)
+**/tree-sitter-wasm/**
+**/tree-sitter*.wasm
+**/web-tree-sitter/**
+
+# Keep only essential runtime files
+!dist/extension.js
+!dist/tools/**
+!dist/resources/**
