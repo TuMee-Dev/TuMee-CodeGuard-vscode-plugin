@@ -1,0 +1,23 @@
+{
+  "entry": [
+    "src/extension.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "!src/**/*.spec.ts"
+  ],
+  "ignore": [
+    "examples/**",
+    "tests/**",
+    "Plugin/**",
+    "backups/**",
+    "docs/**",
+    "node_modules/**",
+    ".vscode-test/**"
+  ],
+  "ignoreDependencies": [
+    "jsdom",
+    "ts-node"
+  ]
+}

@@ -444,6 +444,10 @@
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "typecheck": "tsc --noEmit",
+    "deadcode": "knip",
+    "deadcode:files": "knip --include files",
+    "deadcode:deps": "knip --include dependencies",
+    "deadcode:exports": "knip --include exports",
     "test": "node ./tests/integration.test.js",
     "test:old": "node ./tests/line-count/focused-fix.js",
     "precommit": "npm run lint && npm run typecheck && npm run test"
@@ -456,6 +460,7 @@
     "copy-webpack-plugin": "^13.0.0",
     "eslint": "^8.57.0",
     "jsdom": "^26.1.0",
+    "knip": "^5.59.1",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5",
