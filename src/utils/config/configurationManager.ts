@@ -41,6 +41,13 @@ export const CONFIG_KEYS = {
 export type ConfigKey = typeof CONFIG_KEYS[keyof typeof CONFIG_KEYS];
 
 /**
+ * Type guard to check if a string is a valid ConfigKey
+ */
+function isConfigKey(key: string): key is ConfigKey {
+  return Object.values(CONFIG_KEYS).includes(key as ConfigKey);
+}
+
+/**
  * Type-safe configuration interface
  */
 interface ConfigurationTypes {
@@ -96,9 +103,17 @@ class ConfigurationManager {
   get<K extends ConfigKey>(key: K): ConfigurationTypes[K];
   get<K extends ConfigKey>(key: K, defaultValue: ConfigurationTypes[K]): ConfigurationTypes[K];
   get<T = any>(key: string, defaultValue?: T): T;
-  get<T = any>(key: string | ConfigKey, defaultValue?: T): T | undefined {
+  get(key: string, defaultValue?: any): any {
     const config = workspace.getConfiguration(this.namespace);
-    return config.get<T>(key, defaultValue!);
+
+    // Try to use type-safe access if key matches a known ConfigKey
+    if (isConfigKey(key)) {
+      // TypeScript knows this is a ConfigKey now
+      return config.get(key, defaultValue);
+    }
+
+    // Fallback to dynamic access for unknown keys
+    return config.get(key, defaultValue);
   }
 
   /**
@@ -114,9 +129,9 @@ class ConfigurationManager {
     value: T,
     global?: boolean
   ): Promise<void>;
-  async update<T = any>(
-    key: string | ConfigKey,
-    value: T,
+  async update(
+    key: string,
+    value: any,
     global: boolean = true
   ): Promise<void> {
     const config = workspace.getConfiguration(this.namespace);
