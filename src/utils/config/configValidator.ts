@@ -101,7 +101,7 @@ const CONFIG_RULES: ConfigurationRules = {
         'contextRead', 'contextWrite',
         'opacity',
         // Transparency configuration
-        'aiTransparencyLevels', 'humanTransparencyLevels', 'useAiColorAsBase',
+        'aiTransparencyLevels', 'humanTransparencyLevels',
         // Legacy compatibility
         'humanReadOnly', 'context',
         // Permission combinations
@@ -138,10 +138,6 @@ const CONFIG_RULES: ConfigurationRules = {
                 }
               }
             }
-          }
-        } else if (key === 'useAiColorAsBase') {
-          if (typeof valueObj[key] !== 'boolean') {
-            result.errors.push('useAiColorAsBase must be a boolean');
           }
         } else {
           const color = valueObj[key] as string;
@@ -310,19 +306,6 @@ export class ConfigValidator {
     if (opacity !== undefined && (opacity < 0 || opacity > 1)) {
       await cm.update(CONFIG_KEYS.CODE_DECORATION_OPACITY, Math.max(0, Math.min(1, opacity)));
       changed = true;
-    }
-
-    // Fix guard colors opacity
-    const guardColors = cm.get(CONFIG_KEYS.GUARD_COLORS);
-    if (guardColors && guardColors.opacity !== undefined) {
-      if (guardColors.opacity < 0 || guardColors.opacity > 1) {
-        const updatedColors = {
-          ...guardColors,
-          opacity: Math.max(0, Math.min(1, guardColors.opacity))
-        };
-        await cm.update(CONFIG_KEYS.GUARD_COLORS, updatedColors);
-        changed = true;
-      }
     }
 
     // Fix numeric values out of range
