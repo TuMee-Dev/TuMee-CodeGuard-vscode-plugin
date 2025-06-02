@@ -11,19 +11,6 @@ import { ColorRenderingEngine } from './colorRenderingEngine';
 import { DebugLogger } from '../ui/debugLogger';
 import { configManager, CONFIG_KEYS } from '../config/configurationManager';
 
-interface PermissionColorInfo {
-  color: string;
-  opacity: number;
-  aiColor?: string;
-  humanColor?: string;
-  aiOpacity?: number;
-  humanOpacity?: number;
-  aiMinimapColor?: string;
-  humanMinimapColor?: string;
-  aiBorderOpacity?: number;
-  humanBorderOpacity?: number;
-  mixPattern?: MixPattern;
-}
 
 /**
  * Factory class for creating and managing decoration types
@@ -53,20 +40,17 @@ export class DecorationTypeFactory {
     } = this.processColorConfiguration(guardColorsComplete, opacity);
 
     const borderBarEnabled = guardColorsComplete?.borderBarEnabled !== false;
-    const highlightEntireLine = guardColorsComplete?.highlightEntireLine ?? false;
     const mixPattern = guardColorsComplete?.mixPattern || DEFAULT_COLORS.mixPattern || MixPattern.AVERAGE;
 
     // Create decoration types for all permission combinations
     this.createPermissionDecorations(
       colors,
-      opacity,
       permissionTransparencies,
       permissionBorderOpacities,
       permissionMinimapColors,
       permissionEnabledStates,
       permissionHighlightEntireLine,
       borderBarEnabled,
-      highlightEntireLine,
       mixPattern
     );
 
@@ -154,92 +138,18 @@ export class DecorationTypeFactory {
     };
   }
 
-  /**
-   * Get the color information for a permission combination
-   */
-  private getPermissionColor(
-    key: string,
-    colors: Record<string, string>,
-    opacity: number
-  ): PermissionColorInfo {
-    // Check if there's a custom color for this exact combination
-    const customColor = colors[key];
-    if (customColor && typeof customColor === 'string') {
-      return { color: customColor, opacity };
-    }
-
-    // Parse the permission key
-    const parts = key.split('_');
-    const aiPart = parts[0];
-    const humanPart = parts[1];
-
-    // Extract permissions
-    const aiPermission = aiPart.replace('Context', '').replace('ai', '').toLowerCase();
-    const humanPermission = humanPart.replace('human', '').toLowerCase();
-    const isContext = aiPart.includes('Context');
-
-    // Get base colors
-    const aiColors = {
-      write: colors.aiWrite,
-      read: colors.aiRead,
-      noaccess: colors.aiNoAccess
-    };
-    const humanColors = {
-      write: colors.humanWrite,
-      read: colors.humanRead,
-      noaccess: colors.humanNoAccess
-    };
-
-    // Debug log for no access combinations
-    if (key.includes('NoAccess')) {
-      DebugLogger.log(`[DEBUG] ${key}: aiNoAccess color = ${colors.aiNoAccess}, humanNoAccess color = ${colors.humanNoAccess}`);
-      DebugLogger.log('[DEBUG] Available colors:', colors);
-    }
-
-    const contextColors = {
-      write: colors.contextWrite,
-      read: colors.contextRead
-    };
-
-    let baseColor: string = '#000000'; // Default fallback color
-    let effectiveOpacity = opacity;
-
-    // Determine color based on context and permissions
-    if (isContext) {
-      baseColor = contextColors[aiPermission as keyof typeof contextColors] || contextColors.read || '#20B2AA';
-    } else if (aiPermission === 'noaccess' && humanPermission === 'noaccess') {
-      // Both no access - prioritize AI color
-      baseColor = aiColors.noaccess || '#DC143C';
-    } else if (aiPermission === 'noaccess') {
-      baseColor = aiColors.noaccess || '#DC143C';
-    } else if (humanPermission === 'noaccess') {
-      baseColor = humanColors.noaccess || '#228B22';
-    } else if (aiPermission === 'write') {
-      baseColor = aiColors.write || '#FFD700';
-    } else if (humanPermission === 'read') {
-      baseColor = humanColors.read || '#4169E1';
-    } else {
-      // Default case (ai:read, human:write) - use transparent
-      baseColor = '#000000';
-      effectiveOpacity = 0;
-    }
-
-    return { color: baseColor, opacity: effectiveOpacity };
-  }
 
   /**
    * Create decoration types for all permission combinations
    */
   private createPermissionDecorations(
     colors: Record<string, string>,
-    opacity: number,
     permissionTransparencies: Record<string, number>,
     permissionBorderOpacities: Record<string, number>,
     permissionMinimapColors: Record<string, string>,
     permissionEnabledStates: Record<string, boolean>,
     permissionHighlightEntireLine: Record<string, boolean>,
     borderBarEnabled: boolean,
-    globalHighlightEntireLine: boolean,
     mixPattern: MixPattern
   ): void {
     // Define all permission combinations
@@ -255,14 +165,12 @@ export class DecorationTypeFactory {
       this.createSingleDecorationTypeByKey(
         key,
         colors,
-        opacity,
         permissionTransparencies,
         permissionBorderOpacities,
         permissionMinimapColors,
         permissionEnabledStates,
         permissionHighlightEntireLine,
         borderBarEnabled,
-        globalHighlightEntireLine,
         mixPattern
       );
     }
@@ -274,14 +182,12 @@ export class DecorationTypeFactory {
   private createSingleDecorationTypeByKey(
     key: string,
     colors: Record<string, string>,
-    opacity: number,
     permissionTransparencies: Record<string, number>,
     permissionBorderOpacities: Record<string, number>,
     permissionMinimapColors: Record<string, string>,
     permissionEnabledStates: Record<string, boolean>,
     permissionHighlightEntireLine: Record<string, boolean>,
     borderBarEnabled: boolean,
-    globalHighlightEntireLine: boolean,
     mixPattern: MixPattern
   ): void {
     // For aiRead_humanWrite (default state), use no decoration

@@ -227,7 +227,7 @@ export function activate(context: ExtensionContext): void {
       decorationManager.initializeDecorations(context);
 
       // Create status bar item (it will update when CLI is ready)
-      const statusBarDisposables = createStatusBarItem(context, undefined); // Start with undefined worker
+      const statusBarDisposables = createStatusBarItem(undefined); // Start with undefined worker
       disposables.push(...statusBarDisposables);
 
       // Validate configuration on startup
