@@ -3,11 +3,11 @@
  * This centralizes the logic used by CLI, webview, and other components
  */
 
-import { MixPattern } from '../../types/mixPatterns';
+import { MixPattern, normalizeMixPattern } from '../../types/mixPatterns';
 
 export interface MixPatternColors {
-  aiColor: any;
-  humanColor: any;
+  aiColor: string;
+  humanColor: string;
 }
 
 /**
@@ -15,26 +15,21 @@ export interface MixPatternColors {
  * @returns 'ai' | 'human' | 'blend' - which color to use
  */
 export function getBackgroundColorSource(pattern: MixPattern | string): 'ai' | 'human' | 'blend' {
-  const normalizedPattern = typeof pattern === 'string' ? pattern : MixPattern[pattern];
+  const normalizedPattern = normalizeMixPattern(pattern);
 
   switch (normalizedPattern) {
-    case 'aiBorder':
     case MixPattern.AI_BORDER:
       return 'human'; // Human background with AI border
 
-    case 'humanBorder':
     case MixPattern.HUMAN_BORDER:
       return 'ai'; // AI background with human border
 
-    case 'aiPriority':
     case MixPattern.AI_PRIORITY:
       return 'ai';
 
-    case 'humanPriority':
     case MixPattern.HUMAN_PRIORITY:
       return 'human';
 
-    case 'average':
     case MixPattern.AVERAGE:
       return 'blend';
 
@@ -48,14 +43,12 @@ export function getBackgroundColorSource(pattern: MixPattern | string): 'ai' | '
  * @returns 'ai' | 'human' | 'none' - which color to use for border
  */
 export function getBorderColorSource(pattern: MixPattern | string): 'ai' | 'human' | 'none' {
-  const normalizedPattern = typeof pattern === 'string' ? pattern : MixPattern[pattern];
+  const normalizedPattern = normalizeMixPattern(pattern);
 
   switch (normalizedPattern) {
-    case 'aiBorder':
     case MixPattern.AI_BORDER:
       return 'ai'; // AI border
 
-    case 'humanBorder':
     case MixPattern.HUMAN_BORDER:
       return 'human'; // Human border
 
