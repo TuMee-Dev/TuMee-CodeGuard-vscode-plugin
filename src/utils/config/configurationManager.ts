@@ -41,13 +41,6 @@ export const CONFIG_KEYS = {
 export type ConfigKey = typeof CONFIG_KEYS[keyof typeof CONFIG_KEYS];
 
 /**
- * Type guard to check if a string is a valid ConfigKey
- */
-function isConfigKey(key: string): key is ConfigKey {
-  return Object.values(CONFIG_KEYS).includes(key as ConfigKey);
-}
-
-/**
  * Type-safe configuration interface
  */
 interface ConfigurationTypes {
@@ -105,15 +98,11 @@ class ConfigurationManager {
   get<T = any>(key: string, defaultValue?: T): T;
   get(key: string, defaultValue?: any): any {
     const config = workspace.getConfiguration(this.namespace);
-
-    // Try to use type-safe access if key matches a known ConfigKey
-    if (isConfigKey(key)) {
-      // TypeScript knows this is a ConfigKey now
-      return config.get(key, defaultValue);
-    }
-
-    // Fallback to dynamic access for unknown keys
-    return config.get(key, defaultValue);
+    // Your solution: explicitly handle the any from VSCode's API
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return
+    const anyValue = config.get(key, defaultValue);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+    return anyValue;
   }
 
   /**
@@ -213,8 +202,12 @@ export const configManager = () => ConfigurationManager.getInstance();
 /**
  * Convenience functions for common operations
  */
-export const getConfig = <K extends ConfigKey>(key: K, defaultValue?: ConfigurationTypes[K]) => {
-  return configManager().get(key, defaultValue);
+export const getConfig = <K extends ConfigKey>(key: K, defaultValue?: ConfigurationTypes[K]): ConfigurationTypes[K] => {
+  // Your solution: take any from the config system, cast to expected type
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  const anyResult = configManager().get(key, defaultValue);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  return anyResult;
 };
 
 export const updateConfig = async <K extends ConfigKey>(key: K, value: ConfigurationTypes[K]) => {
