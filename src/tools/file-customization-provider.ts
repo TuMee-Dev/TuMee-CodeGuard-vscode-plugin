@@ -171,7 +171,7 @@ export class FileCustomizationProvider implements FileDecorationProvider {
 
   public async getDecorationValue(uri: Uri): Promise<{ color?: ThemeColor; badge?: string; tooltip?: string } | null> {
     const cm = configManager();
-    const items = cm.get(CONFIG_KEYS.ITEMS, [] as ExtensionItem[]) as ExtensionItem[];
+    const items = cm.get(CONFIG_KEYS.ITEMS, [] as ExtensionItem[]);
     const ignoreChangedFiles = cm.get('colorChangedFiles', false);
 
     const isUriChanged = this.isUriChanged(uri, ignoreChangedFiles);

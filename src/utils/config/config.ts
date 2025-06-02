@@ -36,7 +36,7 @@ export const updateConfigItem = (
   const { provider } = opts;
 
   const cm = configManager();
-  const items = cm.get(CONFIG_KEYS.ITEMS, [] as Array<ExtensionItem>) as Array<ExtensionItem>;
+  const items = cm.get(CONFIG_KEYS.ITEMS, [] as Array<ExtensionItem>);
 
   const itemWithSamePath = items.findIndex((f) => f.path === item.path);
 
@@ -100,7 +100,7 @@ export const removePathFromConfig = (path: string, opts: { provider?: { fireOnCh
   const { provider } = opts;
 
   const cm = configManager();
-  const folders = cm.get(CONFIG_KEYS.ITEMS, [] as Array<ExtensionItem>) as Array<ExtensionItem>;
+  const folders = cm.get(CONFIG_KEYS.ITEMS, [] as Array<ExtensionItem>);
 
   const newFolders = folders.filter((f) => f.path !== path);
 
@@ -129,7 +129,7 @@ export const removeAllFromConfig = (opts: { provider?: { fireOnChange: () => voi
 
 export const getCustomizationForPath = (path: string): ExtensionItem | null => {
   const cm = configManager();
-  const items = cm.get(CONFIG_KEYS.ITEMS, [] as Array<ExtensionItem>) as Array<ExtensionItem>;
+  const items = cm.get(CONFIG_KEYS.ITEMS, [] as Array<ExtensionItem>);
 
   const item = items.find((f) => f.path === path);
 

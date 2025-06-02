@@ -6,6 +6,8 @@
 import type { ConfigurationChangeEvent, Disposable } from 'vscode';
 import { workspace, EventEmitter } from 'vscode';
 import { getExtensionWithOptionalName } from '../core';
+import type { ExtensionItem } from '@/types';
+import type { GuardColors } from '../../tools/colorCustomizer/ColorConfigTypes';
 
 /**
  * Configuration keys used by the extension
@@ -46,7 +48,7 @@ export type ConfigKey = typeof CONFIG_KEYS[keyof typeof CONFIG_KEYS];
 interface ConfigurationTypes {
   [CONFIG_KEYS.CURRENT_THEME]: string;
   [CONFIG_KEYS.CODE_DECORATION_OPACITY]: number;
-  [CONFIG_KEYS.GUARD_COLORS_COMPLETE]: any;
+  [CONFIG_KEYS.GUARD_COLORS_COMPLETE]: GuardColors;
   [CONFIG_KEYS.DEFAULT_AI_WRITE]: boolean;
   [CONFIG_KEYS.DEFAULT_HUMAN_WRITE]: boolean;
   [CONFIG_KEYS.ENABLE_DEBUG_LOGGING]: boolean;
@@ -56,7 +58,7 @@ interface ConfigurationTypes {
   [CONFIG_KEYS.ENABLE_CHUNKED_PROCESSING]: boolean;
   [CONFIG_KEYS.CHUNK_SIZE]: number;
   [CONFIG_KEYS.ACL_CLI_PATH]: string;
-  [CONFIG_KEYS.ITEMS]: Array<any>;
+  [CONFIG_KEYS.ITEMS]: Array<ExtensionItem>;
   [CONFIG_KEYS.ENABLE_VALIDATION_MODE]: boolean;
   [CONFIG_KEYS.VALIDATION_ON_SAVE]: boolean;
   [CONFIG_KEYS.VALIDATION_ON_TYPE]: boolean;
