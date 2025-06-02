@@ -141,7 +141,7 @@ export class DocumentDecorationManager {
       console.warn(`File too large for decoration (${text.length} bytes, max: ${maxFileSize}). Skipping.`);
       // Show warning to user
       void window.showWarningMessage(
-        `File too large for guard tag decorations (${Math.round(text.length / 1024)}KB). Increase max file size in settings if needed.`
+        `File "${document.fileName}" too large for guard tag decorations (${Math.round(text.length / 1024)}KB). Increase max file size in settings if needed.`
       );
       return;
     }

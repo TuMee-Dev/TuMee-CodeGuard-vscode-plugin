@@ -1,6 +1,6 @@
 import { type StatusBarItem, type TextDocument, type ExtensionContext, type Disposable, window, commands, StatusBarAlignment, ThemeColor } from 'vscode';
 import { isCliAvailable } from '../config/acl';
-import type { CLIWorker, CLIVersionInfo } from '../cli/cliWorker';
+import type { CLIWorker } from '../cli/cliWorker';
 
 let statusBarItem: StatusBarItem;
 let cliWorker: CLIWorker | undefined;
@@ -15,7 +15,7 @@ export function createStatusBarItem(context: ExtensionContext, worker?: CLIWorke
   cliWorker = worker;
   statusBarItem = window.createStatusBarItem(StatusBarAlignment.Right, 100);
   statusBarItem.command = 'tumee-vscode-plugin.showGuardInfo';
-  
+
   // Set initial state to show CLI is starting
   statusBarItem.text = '$(shield) CodeGuard';
   statusBarItem.color = new ThemeColor('charts.yellow');
@@ -61,7 +61,7 @@ export function updateCliWorkerReference(worker?: CLIWorker): void {
  * Updates the status bar item to show the CodeGuard CLI status
  * @param document The active document
  */
-export async function updateStatusBarItem(document: TextDocument): Promise<void> {
+export async function updateStatusBarItem(_document: TextDocument): Promise<void> {
   try {
     if (!statusBarItem) return;
 

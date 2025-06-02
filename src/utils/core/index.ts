@@ -1,5 +1,4 @@
 import type { ExtensionContext } from 'vscode';
-import { window } from 'vscode';
 import { UTILITY_PATTERNS } from '../cache/regexCache';
 
 export const EXTENSION_NAME = 'tumee-vscode-plugin';

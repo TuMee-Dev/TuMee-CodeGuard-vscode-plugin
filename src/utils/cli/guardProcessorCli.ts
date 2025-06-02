@@ -179,7 +179,7 @@ async function restartCliWorker(): Promise<void> {
     // Restart failures are expected during recovery - don't log as errors
     // Only log truly unexpected issues (not CLI worker availability)
     const errorMessage = error instanceof Error ? error.message : String(error);
-    if (!errorMessage.includes('CLI worker is not available') && 
+    if (!errorMessage.includes('CLI worker is not available') &&
         !errorMessage.includes('CLI worker is not ready') &&
         !errorMessage.includes('is not compatible')) {
       errorHandler.handleError(

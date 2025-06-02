@@ -3,22 +3,27 @@
  * Handles all HTML template generation and formatting
  */
 
-import type * as vscode from 'vscode';
-import { GuardColors, COLOR_THEMES } from './ColorConfigTypes';
+import { COLOR_THEMES } from './ColorConfigTypes';
 import { getWebviewStyles, getWebviewJavaScript } from './webviewContent';
-import { CONFIG_KEYS } from '../../utils/config/configurationManager';
 // parseGuardTag removed - CLI only
 import * as fs from 'fs';
 import * as path from 'path';
+
+interface PreviewLine {
+  content: string;
+  parsed?: null;
+}
+
+interface PreviewLinesData {
+  lines: Array<{ content: string }>;
+}
 
 export class ColorCustomizerHtmlBuilder {
   /**
    * Generate the complete HTML content for the webview
    */
   public static getHtmlForWebview(
-    webview: vscode.Webview,
-    selectedTheme: string,
-    configManager: { get: <T>(key: string, defaultValue?: T) => T }
+    selectedTheme: string
   ): string {
     // Use external module for CSS and JavaScript
     const css = getWebviewStyles();
@@ -54,7 +59,7 @@ export class ColorCustomizerHtmlBuilder {
     }).join('');
 
     const lineNumbers = Array.from({ length: previewLines.length }, (_, i) => `<div class="line-number">${i + 1}</div>`).join('');
-    const codeLines = previewLines.map((line: any, i: number) => this.generateCodeLine(i, line.content)).join('');
+    const codeLines = previewLines.map((line: PreviewLine, i: number) => this.generateCodeLine(i, line.content)).join('');
 
     return `<!DOCTYPE html>
     <html lang="en">
@@ -266,13 +271,13 @@ export class ColorCustomizerHtmlBuilder {
   /**
    * Load preview lines from JSON resource file
    */
-  private static loadPreviewLines(): any[] {
+  private static loadPreviewLines(): PreviewLine[] {
     try {
       const jsonPath = path.join(__dirname, 'resources', 'preview-lines.json');
       const jsonContent = fs.readFileSync(jsonPath, 'utf8');
-      const data = JSON.parse(jsonContent);
+      const data = JSON.parse(jsonContent) as PreviewLinesData;
       // Return lines with content only - CLI handles parsing
-      return data.lines.map((line: any) => ({
+      return data.lines.map((line: { content: string }) => ({
         content: line.content,
         parsed: null // CLI handles parsing
       })) || [];

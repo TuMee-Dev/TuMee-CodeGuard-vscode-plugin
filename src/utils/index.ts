@@ -2,7 +2,7 @@
 // Core utilities (fs, cleanPath, etc.)
 export * from './core/index';
 
-// Configuration 
+// Configuration
 export * from './config/configurationManager';
 export * from './config/configValidator';
 export * from './config/config';
@@ -29,7 +29,7 @@ export * from './rendering/mixPatternRenderer';
 export * from './rendering/themeLoader';
 export * from './rendering/templateLoader';
 
-// Error Handling  
+// Error Handling
 export * from './error/errorHandler';
 
 // Performance

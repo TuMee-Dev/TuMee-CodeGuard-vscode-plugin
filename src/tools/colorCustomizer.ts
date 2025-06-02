@@ -116,7 +116,6 @@ export class ColorCustomizerPanel {
     void vscode.window.showErrorMessage(message);
   }
 
-
   private async _getCustomThemes(): Promise<Record<string, { name: string; colors: GuardColors }>> {
     try {
       const response = await this._cliWorker.sendRequest('getThemes', {});
@@ -188,9 +187,9 @@ export class ColorCustomizerPanel {
         });
 
         if (response.status === 'success') {
-          // Update local configuration  
+          // Update local configuration
           await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
-          
+
           // Refresh decorations
           const decorationManager = getDecorationManager();
           if (decorationManager) {
@@ -208,24 +207,24 @@ export class ColorCustomizerPanel {
       // Don't send colors back - webview already has current values
     } else if (!fromTheme) {
       await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
-      
+
       // Refresh all editor decorations immediately
       const decorationManager = getDecorationManager();
       if (decorationManager) {
         decorationManager.handleColorConfigurationChange(this._context);
       }
-      
+
       this._showInfo('Guard tag colors saved successfully!');
     } else {
       // This is fromTheme = true case, update the config
       await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
-      
+
       // Refresh all editor decorations immediately
       const decorationManager = getDecorationManager();
       if (decorationManager) {
         decorationManager.handleColorConfigurationChange(this._context);
       }
-      
+
       // Send the new theme colors to update the UI
       this._postMessage('updateColors', { colors });
     }
@@ -270,13 +269,13 @@ export class ColorCustomizerPanel {
         if (setThemeResponse.colors) {
           this._currentTheme = themeName;
 
-          // Determine if this is a built-in theme  
+          // Determine if this is a built-in theme
           this._isSystemTheme = !!COLOR_THEMES[themeKey];
 
           // Update colors from CLI response
           const mergedColors = mergeWithDefaults(setThemeResponse.colors as Partial<GuardColors>);
           await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
-  
+
           // Refresh all editor decorations immediately
           const decorationManager = getDecorationManager();
           if (decorationManager) {
@@ -336,10 +335,10 @@ export class ColorCustomizerPanel {
         await this._applyTheme(themeId);
 
         this._showInfo(`Theme '${name}' saved successfully!`);
-        
+
         // Send updated theme list and set selection
         void this._sendThemeList();
-        
+
         // Update the dropdown selection
         setTimeout(() => {
           this._postMessage('setSelectedTheme', { theme: themeId });
@@ -405,7 +404,7 @@ export class ColorCustomizerPanel {
             } else {
               this._currentTheme = '';
               this._isSystemTheme = false;
-                    }
+            }
           }
 
           this._showInfo(`Theme '${name}' deleted successfully!`);
@@ -484,7 +483,7 @@ export class ColorCustomizerPanel {
         return;
       }
 
-      const exportData = JSON.parse(json) as any;
+      const exportData = JSON.parse(json);
 
       // Check if it's a proper export format or just colors
       if (exportData.exportedAt && exportData.version && exportData.colors) {
@@ -512,7 +511,7 @@ export class ColorCustomizerPanel {
           this._postMessage('updateColors', { colors: mergedColors });
           this._showInfo('Theme imported locally from clipboard!');
         }
-      } else if (exportData.permissions as any) {
+      } else if (exportData.permissions) {
         // This is just GuardColors format (legacy)
         const mergedColors = mergeWithDefaults(exportData as Partial<GuardColors>);
         this._postMessage('updateColors', { colors: mergedColors });
@@ -587,38 +586,39 @@ export class ColorCustomizerPanel {
   }
 
   private _update() {
-    const webview = this._panel.webview;
     this._panel.title = 'Guard Tag Color Customizer';
-    this._panel.webview.html = ColorCustomizerHtmlBuilder.getHtmlForWebview(webview, '', this._cm);
+    this._panel.webview.html = ColorCustomizerHtmlBuilder.getHtmlForWebview('');
 
-    setTimeout(async () => {
-      void this._sendThemeList();
+    setTimeout(() => {
+      void (async () => {
+        void this._sendThemeList();
 
-      // Get current theme from CLI (authoritative source)
-      let selectedTheme = 'default';
-      try {
-        const response = await this._cliWorker.sendRequest('getCurrentTheme', {});
-        if (response.status === 'success' && response.result) {
-          const currentTheme = response.result as any;
-          selectedTheme = currentTheme.selectedTheme || 'default';
+        // Get current theme from CLI (authoritative source)
+        let selectedTheme = 'default';
+        try {
+          const response = await this._cliWorker.sendRequest('getCurrentTheme', {});
+          if (response.status === 'success' && response.result) {
+            const currentTheme = response.result as any;
+            selectedTheme = currentTheme.selectedTheme || 'default';
+          }
+        } catch (error) {
+          console.error('Failed to get current theme from CLI:', error);
         }
-      } catch (error) {
-        console.error('Failed to get current theme from CLI:', error);
-      }
 
-      // Apply the theme to ensure colors and dropdown are in sync
-      void this._applyTheme(selectedTheme);
+        // Apply the theme to ensure colors and dropdown are in sync
+        void this._applyTheme(selectedTheme);
 
-      this._postMessage('setSelectedTheme', { theme: selectedTheme });
+        this._postMessage('setSelectedTheme', { theme: selectedTheme });
 
-      // Restore default permissions from user preferences
-      const defaultAiWrite = this._cm.get(CONFIG_KEYS.DEFAULT_AI_WRITE, false);
-      const defaultHumanWrite = this._cm.get(CONFIG_KEYS.DEFAULT_HUMAN_WRITE, true);
+        // Restore default permissions from user preferences
+        const defaultAiWrite = this._cm.get(CONFIG_KEYS.DEFAULT_AI_WRITE, false);
+        const defaultHumanWrite = this._cm.get(CONFIG_KEYS.DEFAULT_HUMAN_WRITE, true);
 
-      this._postMessage('restoreDefaultPermissions', {
-        defaultAiWrite,
-        defaultHumanWrite
-      });
+        this._postMessage('restoreDefaultPermissions', {
+          defaultAiWrite,
+          defaultHumanWrite
+        });
+      })();
     }, 100);
   }
 

@@ -4,7 +4,7 @@
 
 import type { TextEditorDecorationType } from 'vscode';
 import { window } from 'vscode';
-import { DEFAULT_COLORS, COLOR_THEMES } from '../../tools/colorCustomizer/ColorConfigTypes';
+import { DEFAULT_COLORS } from '../../tools/colorCustomizer/ColorConfigTypes';
 import { MixPattern } from '../../types/mixPatterns';
 import type { GuardColors } from '../../types/colorTypes';
 import { ColorRenderingEngine } from './colorRenderingEngine';

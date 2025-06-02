@@ -173,7 +173,7 @@ export class ColorRenderingEngine {
     borderOpacity: number;
   } {
     switch (pattern) {
-      case MixPattern.AVERAGE:
+      case MixPattern.AVERAGE: {
         const blendedColor = this.blendColors(config.aiColor, config.humanColor);
         const avgOpacity = (config.aiOpacity + config.humanOpacity) / 2;
         return {
@@ -181,6 +181,7 @@ export class ColorRenderingEngine {
           opacity: avgOpacity,
           borderOpacity: avgOpacity
         };
+      }
 
       case MixPattern.HUMAN_PRIORITY:
         return {

@@ -265,10 +265,10 @@ export class CLIWorker extends EventEmitter {
     }
 
     const versionInfo = response.result as CLIVersionInfo;
-    
+
     // Check compatibility and add to the response
     const isCompatible = this.isVersionCompatible(versionInfo.version, this.MIN_CLI_VERSION);
-    
+
     return {
       ...versionInfo,
       compatible: isCompatible,
@@ -282,15 +282,15 @@ export class CLIWorker extends EventEmitter {
   private isVersionCompatible(currentVersion: string, minVersion: string): boolean {
     const current = currentVersion.split('.').map(Number);
     const min = minVersion.split('.').map(Number);
-    
+
     for (let i = 0; i < Math.max(current.length, min.length); i++) {
       const currentPart = current[i] || 0;
       const minPart = min[i] || 0;
-      
+
       if (currentPart > minPart) return true;
       if (currentPart < minPart) return false;
     }
-    
+
     return true; // Equal versions are compatible
   }
 
