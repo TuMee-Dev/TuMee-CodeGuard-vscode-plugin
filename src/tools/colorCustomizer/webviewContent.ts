@@ -18,7 +18,7 @@ export function getWebviewStyles(): string {
   }
 }
 
-export function getWebviewJavaScript(previewLines: any[]): string {
+export function getWebviewJavaScript(previewLines: Array<{ content: string; parsed?: null }>): string {
   // Read the guard parser for webview
   const guardParserPath = path.join(__dirname, 'tools', 'colorCustomizer', 'webviewGuardParser.js');
   const guardParserContent = fs.readFileSync(guardParserPath, 'utf8');

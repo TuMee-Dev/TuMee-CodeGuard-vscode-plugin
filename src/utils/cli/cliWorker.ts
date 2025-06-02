@@ -412,7 +412,8 @@ export class CLIWorker extends EventEmitter {
 
       // Handle request responses
       if (data.id && this.pendingRequests.has(data.id)) {
-        const pending = this.pendingRequests.get(data.id)!;
+        const pending = this.pendingRequests.get(data.id);
+        if (!pending) return; // TypeScript flow analysis
         this.pendingRequests.delete(data.id);
         clearTimeout(pending.timeout);
         pending.resolve(data as CLIResponse);

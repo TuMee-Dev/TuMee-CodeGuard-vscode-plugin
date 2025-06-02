@@ -425,7 +425,7 @@ export class ColorCustomizerWebview {
    * Get the JavaScript code for the webview
    * @param previewLines - The preview lines data to inject
    */
-  static getJavaScript(previewLines: any[]): string {
+  static getJavaScript(previewLines: Array<{ content: string; parsed?: null }>): string {
     // This is now a template literal that receives the preview lines as a parameter
     return `
       const vscode = acquireVsCodeApi();

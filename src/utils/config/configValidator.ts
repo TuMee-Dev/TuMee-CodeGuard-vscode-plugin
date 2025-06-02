@@ -2,7 +2,7 @@ import type { ConfigurationChangeEvent } from 'vscode';
 import { window } from 'vscode';
 import { getExtensionWithOptionalName } from '../core/index';
 import { errorHandler } from '../error/errorHandler';
-import { configManager } from './configurationManager';
+import { configManager, CONFIG_KEYS } from './configurationManager';
 
 interface ValidationResult {
   valid: boolean;
@@ -212,9 +212,8 @@ export class ConfigValidator {
     const cm = configManager();
 
     for (const [key, rules] of Object.entries(CONFIG_RULES)) {
-      // Your solution: explicitly acknowledge we expect any for validation
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const value: any = cm.get(key);
+      // Get unknown value for validation - we don't know the type until we check it
+      const value: unknown = cm.get(key);
 
       // Check if required
       if (rules.required && (value === undefined || value === null)) {
@@ -307,9 +306,9 @@ export class ConfigValidator {
     let changed = false;
 
     // Fix opacity values out of range
-    const opacity = cm.get('codeDecorationOpacity' as any, 0.1) as number;
+    const opacity = cm.get(CONFIG_KEYS.CODE_DECORATION_OPACITY, 0.1);
     if (opacity !== undefined && (opacity < 0 || opacity > 1)) {
-      await cm.update('codeDecorationOpacity' as any, Math.max(0, Math.min(1, opacity)));
+      await cm.update(CONFIG_KEYS.CODE_DECORATION_OPACITY, Math.max(0, Math.min(1, opacity)));
       changed = true;
     }
 
@@ -325,9 +324,9 @@ export class ConfigValidator {
     }
 
     // Fix numeric values out of range
-    const decorationDelay = cm.get('decorationUpdateDelay' as any, 300) as number;
+    const decorationDelay = cm.get(CONFIG_KEYS.DECORATION_UPDATE_DELAY, 300);
     if (decorationDelay !== undefined && (decorationDelay < 100 || decorationDelay > 1000)) {
-      await cm.update('decorationUpdateDelay' as any, Math.max(100, Math.min(1000, decorationDelay)));
+      await cm.update(CONFIG_KEYS.DECORATION_UPDATE_DELAY, Math.max(100, Math.min(1000, decorationDelay)));
       changed = true;
     }
 
