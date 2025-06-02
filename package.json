@@ -2,7 +2,7 @@
   "name": "tumee-vscode-plugin",
   "displayName": "TuMee File and Folder Customization",
   "description": "Customize your files and folders based on human/AI attributes. Set colors, badges, or tooltips for any file or folder in your workspace based on ACL rules.",
-  "version": "1.5.18",
+  "version": "1.5.19",
   "license": "MIT",
   "publisher": "tumee",
   "repository": {

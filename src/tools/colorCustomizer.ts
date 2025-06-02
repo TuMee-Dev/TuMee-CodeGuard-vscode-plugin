@@ -597,9 +597,14 @@ export class ColorCustomizerPanel {
       void (async () => {
         void this._sendThemeList();
 
-        // Get current theme from CLI (authoritative source)
+        // Wait for CLI to be ready before getting current theme
         let selectedTheme = 'default';
+
+        // Wait for CLI worker to be ready (it was started at extension startup)
         try {
+          await this._cliWorker.waitForReady(10000); // Wait up to 10 seconds
+
+          // Now get current theme from CLI (authoritative source)
           const response = await this._cliWorker.sendRequest('getCurrentTheme', {});
           if (response.status === 'success' && response.result) {
             const currentTheme = response.result as { selectedTheme?: string };
@@ -607,11 +612,13 @@ export class ColorCustomizerPanel {
           }
         } catch (error) {
           console.error('Failed to get current theme from CLI:', error);
+          // Fall back to default theme if CLI is not available or times out
         }
 
         // Apply the theme to ensure colors and dropdown are in sync
-        void this._applyTheme(selectedTheme);
+        await this._applyTheme(selectedTheme);
 
+        // Send theme selection after applying theme to ensure proper message ordering
         this._postMessage('setSelectedTheme', { theme: selectedTheme });
 
         // Restore default permissions from user preferences

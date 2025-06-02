@@ -203,6 +203,34 @@ export class CLIWorker extends EventEmitter {
   }
 
   /**
+   * Wait for the CLI worker to be ready (if it's starting up)
+   * Returns immediately if already ready, or waits for startup event
+   */
+  async waitForReady(timeoutMs: number = 10000): Promise<void> {
+    if (this.isWorkerReady()) {
+      return; // Already ready
+    }
+
+    if (!this.process) {
+      throw new Error('CLI worker is not started. Call start() first.');
+    }
+
+    // Wait for the startup event
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timeout waiting for CLI worker to be ready'));
+      }, timeoutMs);
+
+      const onStartup = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+
+      this.once('startup', onStartup);
+    });
+  }
+
+  /**
    * Get startup information
    */
   getStartupInfo(): CLIStartupInfo | undefined {

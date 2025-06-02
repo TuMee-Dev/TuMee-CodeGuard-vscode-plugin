@@ -10,7 +10,8 @@ import {
   CONFIG_KEYS,
   DebugLogger,
   backgroundProcessor,
-  DecorationTypeFactory
+  DecorationTypeFactory,
+  getCliWorker
 } from '@/utils';
 import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTypes';
 
@@ -251,6 +252,18 @@ export class DocumentDecorationManager {
       let linePermissions = new Map<number, LinePermission>();
 
       try {
+        // Ensure CLI worker is ready before parsing guard tags
+        const cliWorker = getCliWorker();
+        if (cliWorker && !cliWorker.isWorkerReady()) {
+          try {
+            await cliWorker.waitForReady(10000); // Wait up to 10 seconds for CLI to be ready
+          } catch (cliError) {
+            console.error('CLI worker failed to become ready:', cliError);
+            // Continue with empty results if CLI can't start
+            return;
+          }
+        }
+
         // Parse guard tags - simple and direct
         guardTags = await parseGuardTags(document, lines);
 
