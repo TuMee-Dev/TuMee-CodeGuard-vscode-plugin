@@ -27,7 +27,6 @@ export * from './rendering/decorationTypeFactory';
 export * from './rendering/mixPatternLogic';
 export * from './rendering/mixPatternRenderer';
 export * from './rendering/themeLoader';
-export * from './rendering/templateLoader';
 
 // Error Handling
 export * from './error/errorHandler';

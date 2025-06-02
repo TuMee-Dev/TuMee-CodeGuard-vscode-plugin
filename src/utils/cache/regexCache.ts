@@ -3,8 +3,6 @@
  * Single source of truth for all guard tag patterns
  */
 
-// Guard tag prefix constant
-export const GUARD_TAG_PREFIX = '@guard:';
 
 // Permission aliases mapping
 export const PERMISSION_ALIASES = {

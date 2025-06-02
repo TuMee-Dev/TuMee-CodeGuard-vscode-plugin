@@ -2,14 +2,6 @@
 
 import type { Range } from 'vscode';
 
-/**
- * Default permissions for AI and human targets
- * These are used when no guard tags are present
- */
-export const DEFAULT_PERMISSIONS = {
-  ai: 'r',    // AI has read-only access by default
-  human: 'w'  // Human has write access by default
-} as const;
 
 /**
  * Type for permission values

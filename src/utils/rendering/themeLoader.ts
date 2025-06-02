@@ -22,7 +22,7 @@ let resolvedThemes: Record<string, { name: string; colors: GuardColors }> | null
 /**
  * Load theme configuration from JSON file
  */
-export function loadThemeConfiguration(): ThemesConfiguration {
+function loadThemeConfiguration(): ThemesConfiguration {
   if (cachedThemes) {
     return cachedThemes;
   }
@@ -74,10 +74,3 @@ export function getColorThemes(): Record<string, { name: string; colors: GuardCo
   return resolvedThemes;
 }
 
-/**
- * Clear cached themes (useful for testing or hot reload)
- */
-export function clearThemeCache(): void {
-  cachedThemes = null;
-  resolvedThemes = null;
-}

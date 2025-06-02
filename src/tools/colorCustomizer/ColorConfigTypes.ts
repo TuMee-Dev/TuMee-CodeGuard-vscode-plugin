@@ -73,18 +73,6 @@ export const DEFAULT_COLORS: GuardColors = {
   mixPattern: DEFAULT_MIX_PATTERN
 };
 
-// Export themes for CLI usage
-export function getBuiltInThemes(): Record<string, { name: string; colors: GuardColors }> {
-  const themes: Record<string, { name: string; colors: GuardColors }> = {};
-  // Convert COLOR_THEMES back to the format expected by CLI
-  Object.entries(COLOR_THEMES).forEach(([name, theme]) => {
-    themes[name] = {
-      name: theme.name,
-      colors: theme.colors
-    };
-  });
-  return themes;
-}
 
 // Helper function to merge colors with defaults
 export function mergeWithDefaults(colors: Partial<GuardColors> | undefined): GuardColors {
