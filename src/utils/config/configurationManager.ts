@@ -188,7 +188,9 @@ class ConfigurationManager {
    * Dispose of resources
    */
   dispose(): void {
-    this.disposables.forEach(d => d.dispose());
+    this.disposables.forEach((d: Disposable) => {
+      d.dispose();
+    });
     this.disposables = [];
     this.changeEmitter.dispose();
   }

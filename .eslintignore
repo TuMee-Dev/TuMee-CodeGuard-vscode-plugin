@@ -7,3 +7,4 @@ webpack.config.js
 tests/
 backups/
 Plugin/
+examples/

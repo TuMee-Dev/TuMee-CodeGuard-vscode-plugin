@@ -212,7 +212,9 @@ export class ConfigValidator {
     const cm = configManager();
 
     for (const [key, rules] of Object.entries(CONFIG_RULES)) {
-      const value = cm.get(key);
+      // Your solution: explicitly acknowledge we expect any for validation
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const value: any = cm.get(key);
 
       // Check if required
       if (rules.required && (value === undefined || value === null)) {
