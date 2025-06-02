@@ -15,6 +15,11 @@ export function createStatusBarItem(context: ExtensionContext, worker?: CLIWorke
   cliWorker = worker;
   statusBarItem = window.createStatusBarItem(StatusBarAlignment.Right, 100);
   statusBarItem.command = 'tumee-vscode-plugin.showGuardInfo';
+  
+  // Set initial state to show CLI is starting
+  statusBarItem.text = '$(shield) CodeGuard';
+  statusBarItem.color = new ThemeColor('charts.yellow');
+  statusBarItem.tooltip = 'CodeGuard CLI starting...';
 
   // Add command to show guard info or CLI missing message
   const infoDisposable = commands.registerCommand('tumee-vscode-plugin.showGuardInfo', async () => {
@@ -42,6 +47,14 @@ export function createStatusBarItem(context: ExtensionContext, worker?: CLIWorke
   statusBarItem.show();
 
   return [statusBarItem, infoDisposable, referenceDisposable, cliMissingDisposable];
+}
+
+/**
+ * Updates the CLI worker reference for the status bar
+ * @param worker The CLI worker instance (can be undefined)
+ */
+export function updateCliWorkerReference(worker?: CLIWorker): void {
+  cliWorker = worker;
 }
 
 /**

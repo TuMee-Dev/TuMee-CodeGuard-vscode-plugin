@@ -27,7 +27,8 @@ import {
   configManager,
   CONFIG_KEYS,
   createStatusBarItem,
-  updateStatusBarItem
+  updateStatusBarItem,
+  updateCliWorkerReference
 } from '@/utils';
 import type { GuardTag, LinePermission, DecorationRanges } from '@/types/guardTypes';
 import { registerColorCustomizerCommand } from '@/tools/colorCustomizer';
@@ -258,15 +259,14 @@ export async function activate(context: ExtensionContext) {
 
       registerCommands(context, provider);
 
-      // Initialize CLI processor FIRST - everything depends on this
-      const cliInitialized = await initializeCliProcessor();
+      // Start CLI initialization EARLY but don't wait for it - let it run in background
+      const cliInitPromise = initializeCliProcessor();
 
-      // Create decorations for code regions
+      // Continue with other initialization immediately (non-blocking)
       initializeCodeDecorations(context);
 
-      // Create status bar item with CLI worker reference
-      const cliWorker = getCliWorker();
-      const statusBarDisposables = createStatusBarItem(context, cliWorker);
+      // Create status bar item (it will update when CLI is ready)
+      const statusBarDisposables = createStatusBarItem(context, undefined); // Start with undefined worker
       disposables.push(...statusBarDisposables);
 
       // Validate configuration on startup
@@ -275,10 +275,20 @@ export async function activate(context: ExtensionContext) {
       // Set up event handlers (includes CLI document change handling)
       setupEventHandlers(context);
 
-      // Initialize current editor only if CLI is ready
-      if (cliInitialized) {
-        initializeActiveEditor();
-      }
+      // Check CLI status and initialize editor accordingly
+      cliInitPromise.then(cliInitialized => {
+        // Update status bar with actual CLI worker reference now that it's ready
+        const cliWorker = getCliWorker();
+        updateCliWorkerReference(cliWorker);
+        
+        // Initialize current editor if CLI is ready
+        if (cliInitialized) {
+          initializeActiveEditor();
+        }
+      }).catch(error => {
+        // CLI failed to start - that's fine, extension still works without it
+        console.warn('CLI initialization failed:', error.message);
+      });
     }
   } catch (error) {
     errorHandler.handleError(
