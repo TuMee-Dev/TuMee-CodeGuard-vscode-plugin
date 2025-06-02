@@ -313,12 +313,14 @@ export class ConfigValidator {
     }
 
     // Fix guard colors opacity
-    const guardColors = cm.get('guardColors' as any) as Record<string, unknown> | undefined;
+    const guardColors = cm.get(CONFIG_KEYS.GUARD_COLORS);
     if (guardColors && guardColors.opacity !== undefined) {
-      const opacity = guardColors.opacity as number;
-      if (opacity < 0 || opacity > 1) {
-        guardColors.opacity = Math.max(0, Math.min(1, opacity));
-        await cm.update('guardColors' as any, guardColors);
+      if (guardColors.opacity < 0 || guardColors.opacity > 1) {
+        const updatedColors = {
+          ...guardColors,
+          opacity: Math.max(0, Math.min(1, guardColors.opacity))
+        };
+        await cm.update(CONFIG_KEYS.GUARD_COLORS, updatedColors);
         changed = true;
       }
     }

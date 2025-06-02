@@ -31,6 +31,9 @@ export const CONFIG_KEYS = {
   // ACL settings
   ACL_CLI_PATH: 'aclCliPath',
 
+  // Color configuration
+  GUARD_COLORS: 'guardColors',
+
   // File customization
   ITEMS: 'items',
 
@@ -58,6 +61,16 @@ interface ConfigurationTypes {
   [CONFIG_KEYS.ENABLE_CHUNKED_PROCESSING]: boolean;
   [CONFIG_KEYS.CHUNK_SIZE]: number;
   [CONFIG_KEYS.ACL_CLI_PATH]: string;
+  [CONFIG_KEYS.GUARD_COLORS]: {
+    aiWrite?: string;
+    aiRead?: string;
+    aiNoAccess?: string;
+    humanWrite?: string;
+    humanRead?: string;
+    humanNoAccess?: string;
+    opacity?: number;
+    useAiColorAsBase?: boolean;
+  };
   [CONFIG_KEYS.ITEMS]: Array<ExtensionItem>;
   [CONFIG_KEYS.ENABLE_VALIDATION_MODE]: boolean;
   [CONFIG_KEYS.VALIDATION_ON_SAVE]: boolean;
