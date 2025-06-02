@@ -124,7 +124,7 @@ async function updateStatusBarBasic(): Promise<void> {
 /**
  * Update status bar when CLI worker status changes
  */
-export function updateStatusBarForWorkerStatus(status: 'ready' | 'error' | 'crashed' | 'starting'): void {
+export function updateStatusBarForWorkerStatus(status: 'ready' | 'error' | 'crashed' | 'starting' | 'incompatible'): void {
   if (!statusBarItem) return;
 
   switch (status) {
@@ -137,6 +137,11 @@ export function updateStatusBarForWorkerStatus(status: 'ready' | 'error' | 'cras
       statusBarItem.text = '$(shield) CodeGuard';
       statusBarItem.color = new ThemeColor('charts.yellow');
       statusBarItem.tooltip = 'CodeGuard CLI worker starting...';
+      break;
+    case 'incompatible':
+      statusBarItem.text = '$(shield) CodeGuard';
+      statusBarItem.color = new ThemeColor('charts.yellow');
+      statusBarItem.tooltip = 'CodeGuard CLI outdated version. Some features may not work. Click for installation instructions.';
       break;
     case 'error':
     case 'crashed':

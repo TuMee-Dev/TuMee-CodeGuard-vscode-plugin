@@ -266,12 +266,14 @@ export class CLIWorker extends EventEmitter {
 
     const versionInfo = response.result as CLIVersionInfo;
     
-    // Enforce minimum version requirement
-    if (!this.isVersionCompatible(versionInfo.version, this.MIN_CLI_VERSION)) {
-      throw new Error(`CLI version ${versionInfo.version} is below minimum required version ${this.MIN_CLI_VERSION}`);
-    }
-
-    return versionInfo;
+    // Check compatibility and add to the response
+    const isCompatible = this.isVersionCompatible(versionInfo.version, this.MIN_CLI_VERSION);
+    
+    return {
+      ...versionInfo,
+      compatible: isCompatible,
+      minCompatible: this.MIN_CLI_VERSION
+    };
   }
 
   /**

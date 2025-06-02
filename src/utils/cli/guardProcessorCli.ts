@@ -2,7 +2,7 @@
  * CLI-based guard processor that replaces local parsing with CLI worker
  */
 
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import type { GuardTag, LinePermission } from '../../types/guardTypes';
 import { CLIWorker } from './cliWorker';
 import { DocumentStateManager } from './documentStateManager';
@@ -17,6 +17,9 @@ import { EventEmitter } from 'events';
 let cliWorker: CLIWorker | undefined;
 let documentStateManager: DocumentStateManager;
 let debounceTimer: NodeJS.Timeout | undefined;
+let lastRestartAttempt = 0;
+let incompatibleVersionDetected = false;
+let lastVersionErrorShown = 0;
 
 // Event emitter for parse completion events
 const parseEventEmitter = new EventEmitter();
@@ -38,7 +41,8 @@ function getAutoRestart(): boolean {
   return configManager().get('cliWorkerAutoRestart', true);
 }
 
-const WORKER_RESTART_DELAY = 1000; // ms - fixed delay
+const WORKER_RESTART_DELAY = 10000; // ms - 10 second delay
+const VERSION_ERROR_COOLDOWN = 3600000; // ms - 1 hour between version error messages
 
 /**
  * Initialize the CLI-based guard processor
@@ -84,15 +88,43 @@ async function startCliWorker(): Promise<void> {
     // Check version compatibility
     const versionInfo = await cliWorker.checkVersion();
     if (!versionInfo.compatible) {
+      // CLI is present but incompatible - shut down worker and show yellow
+      updateStatusBarForWorkerStatus('incompatible');
+      
+      // Mark as incompatible to prevent restart loops
+      incompatibleVersionDetected = true;
+      
+      // Show user notification about version issue (with cooldown)
+      const now = Date.now();
+      if (now - lastVersionErrorShown > VERSION_ERROR_COOLDOWN) {
+        lastVersionErrorShown = now;
+        void vscode.window.showErrorMessage(
+          `CodeGuard CLI version ${versionInfo.version} is outdated. Please update to v${versionInfo.minCompatible} or higher.`,
+          'How to Update'
+        ).then(selection => {
+          if (selection === 'How to Update') {
+            void vscode.env.openExternal(vscode.Uri.parse('https://github.com/TuMee-Dev/TuMee-Code-Validator'));
+          }
+        });
+      }
+      
+      // Shut down the incompatible worker
+      await cliWorker.stop();
+      cliWorker = undefined;
+      
+      // Log the error for debugging
       errorHandler.handleError(
         new Error(`CLI version ${versionInfo.version} is not compatible (requires ${versionInfo.minCompatible}+)`),
         { operation: 'cliWorker.versionCheck' }
       );
+      
+      return; // Don't set to 'ready' status
     }
-
+    
     updateStatusBarForWorkerStatus('ready');
 
   } catch (error) {
+    // CLI is missing or failed to start - this should show red
     updateStatusBarForWorkerStatus('error');
     throw error;
   }
@@ -104,8 +136,21 @@ async function startCliWorker(): Promise<void> {
 function handleWorkerExit(info: { code: number | null; signal: string | null; message: string }): void {
   updateStatusBarForWorkerStatus('crashed');
 
+  // Don't restart if we detected an incompatible version
+  if (incompatibleVersionDetected) {
+    updateStatusBarForWorkerStatus('incompatible');
+    return;
+  }
+
+  // Rate limit restart attempts
+  const now = Date.now();
+  if (now - lastRestartAttempt < WORKER_RESTART_DELAY) {
+    return; // Too soon to restart
+  }
+
   // Attempt to restart worker after delay if auto-restart is enabled
   if (getAutoRestart()) {
+    lastRestartAttempt = now;
     setTimeout(() => {
       void restartCliWorker();
     }, WORKER_RESTART_DELAY);
@@ -128,14 +173,19 @@ function handleWorkerError(error: Error): void {
  * Restart the CLI worker
  */
 async function restartCliWorker(): Promise<void> {
+  // Don't restart if we detected an incompatible version
+  if (incompatibleVersionDetected) {
+    return;
+  }
+
   try {
     await startCliWorker();
   } catch (error) {
+    // Only log restart errors, don't show to user repeatedly
     errorHandler.handleError(
       error instanceof Error ? error : new Error(String(error)),
       {
-        operation: 'restartCliWorker',
-        userFriendlyMessage: 'Failed to restart CodeGuard CLI worker'
+        operation: 'restartCliWorker'
       }
     );
   }
@@ -154,6 +204,11 @@ export async function shutdownCliProcessor(): Promise<void> {
     await cliWorker.stop();
     cliWorker = undefined;
   }
+  
+  // Reset state
+  incompatibleVersionDetected = false;
+  lastRestartAttempt = 0;
+  lastVersionErrorShown = 0;
 }
 
 /**
