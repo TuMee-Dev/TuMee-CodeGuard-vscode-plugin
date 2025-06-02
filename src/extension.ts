@@ -455,13 +455,17 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
 
       linePermissions = getLinePermissions(document, guardTags);
     } catch (error) {
-      errorHandler.handleError(
-        error instanceof Error ? error : new Error(String(error)),
-        {
-          operation: 'parseGuardTags',
-          details: { document: document.fileName }
-        }
-      );
+      // Only log unexpected errors, not CLI worker availability issues (expected when CLI is incompatible)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (!errorMessage.includes('CLI worker is not available') && !errorMessage.includes('CLI worker is not ready')) {
+        errorHandler.handleError(
+          error instanceof Error ? error : new Error(String(error)),
+          {
+            operation: 'parseGuardTags',
+            details: { document: document.fileName }
+          }
+        );
+      }
       clearDecorations();
       return;
     }
@@ -563,13 +567,17 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
       fileName: document.fileName
     });
   } catch (error) {
-    errorHandler.handleError(
-      error instanceof Error ? error : new Error(String(error)),
-      {
-        operation: 'updateCodeDecorationsImpl',
-        details: { document: document.fileName }
-      }
-    );
+    // Only log unexpected errors, not CLI worker availability issues (expected when CLI is incompatible)
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!errorMessage.includes('CLI worker is not available') && !errorMessage.includes('CLI worker is not ready')) {
+      errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          operation: 'updateCodeDecorationsImpl',
+          details: { document: document.fileName }
+        }
+      );
+    }
     clearDecorations();
     performanceMonitor.endTimer('updateCodeDecorations', { error: true });
   }

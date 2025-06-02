@@ -360,10 +360,14 @@ export class CLIWorker extends EventEmitter {
     });
 
     this.process.stderr?.on('data', (data: string) => {
-      errorHandler.handleError(
-        new Error(`CLI worker stderr: ${data}`),
-        { operation: 'cliWorker.stderr' }
-      );
+      // CLI stderr is diagnostic output, not necessarily an error - don't log as error
+      // Only log if it appears to be an actual error message
+      if (data.toLowerCase().includes('error') || data.toLowerCase().includes('fatal')) {
+        errorHandler.handleError(
+          new Error(`CLI worker stderr: ${data}`),
+          { operation: 'cliWorker.stderr' }
+        );
+      }
     });
 
     this.process.on('exit', (code, signal) => {
@@ -440,10 +444,13 @@ export class CLIWorker extends EventEmitter {
 
     this.emit('exit', { code, signal, message });
 
-    errorHandler.handleError(
-      new Error(message),
-      { operation: 'cliWorker.exit', details: { code, signal } }
-    );
+    // Only log unexpected exits (non-zero codes, signals other than SIGTERM)
+    if (code !== 0 && signal !== 'SIGTERM') {
+      errorHandler.handleError(
+        new Error(message),
+        { operation: 'cliWorker.exit', details: { code, signal } }
+      );
+    }
   }
 
   /**

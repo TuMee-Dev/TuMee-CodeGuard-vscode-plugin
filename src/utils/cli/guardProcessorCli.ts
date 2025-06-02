@@ -29,13 +29,14 @@ function getDebounceDelay(): number {
   return configManager().get('decorationUpdateDelay', 300); // Use existing config
 }
 
-function getWorkerTimeout(): number {
-  return configManager().get('cliWorkerTimeout', 10000);
-}
+// Configuration getters - keeping for potential future use
+// function getWorkerTimeout(): number {
+//   return configManager().get('cliWorkerTimeout', 10000);
+// }
 
-function getWorkerStartupTimeout(): number {
-  return configManager().get('cliWorkerStartupTimeout', 5000);
-}
+// function getWorkerStartupTimeout(): number {
+//   return configManager().get('cliWorkerStartupTimeout', 5000);
+// }
 
 function getAutoRestart(): boolean {
   return configManager().get('cliWorkerAutoRestart', true);
@@ -83,17 +84,17 @@ async function startCliWorker(): Promise<void> {
   cliWorker.on('error', handleWorkerError);
 
   try {
-    const startupInfo = await cliWorker.start();
+    await cliWorker.start();
 
     // Check version compatibility
     const versionInfo = await cliWorker.checkVersion();
     if (!versionInfo.compatible) {
       // CLI is present but incompatible - shut down worker and show yellow
       updateStatusBarForWorkerStatus('incompatible');
-      
+
       // Mark as incompatible to prevent restart loops
       incompatibleVersionDetected = true;
-      
+
       // Show user notification about version issue (with cooldown)
       const now = Date.now();
       if (now - lastVersionErrorShown > VERSION_ERROR_COOLDOWN) {
@@ -107,20 +108,14 @@ async function startCliWorker(): Promise<void> {
           }
         });
       }
-      
+
       // Shut down the incompatible worker
       await cliWorker.stop();
       cliWorker = undefined;
-      
-      // Log the error for debugging
-      errorHandler.handleError(
-        new Error(`CLI version ${versionInfo.version} is not compatible (requires ${versionInfo.minCompatible}+)`),
-        { operation: 'cliWorker.versionCheck' }
-      );
-      
+
       return; // Don't set to 'ready' status
     }
-    
+
     updateStatusBarForWorkerStatus('ready');
 
   } catch (error) {
@@ -133,7 +128,7 @@ async function startCliWorker(): Promise<void> {
 /**
  * Handle CLI worker exit
  */
-function handleWorkerExit(info: { code: number | null; signal: string | null; message: string }): void {
+function handleWorkerExit(_info: { code: number | null; signal: string | null; message: string }): void {
   updateStatusBarForWorkerStatus('crashed');
 
   // Don't restart if we detected an incompatible version
@@ -181,13 +176,19 @@ async function restartCliWorker(): Promise<void> {
   try {
     await startCliWorker();
   } catch (error) {
-    // Only log restart errors, don't show to user repeatedly
-    errorHandler.handleError(
-      error instanceof Error ? error : new Error(String(error)),
-      {
-        operation: 'restartCliWorker'
-      }
-    );
+    // Restart failures are expected during recovery - don't log as errors
+    // Only log truly unexpected issues (not CLI worker availability)
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!errorMessage.includes('CLI worker is not available') && 
+        !errorMessage.includes('CLI worker is not ready') &&
+        !errorMessage.includes('is not compatible')) {
+      errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          operation: 'restartCliWorker'
+        }
+      );
+    }
   }
 }
 
@@ -204,7 +205,7 @@ export async function shutdownCliProcessor(): Promise<void> {
     await cliWorker.stop();
     cliWorker = undefined;
   }
-  
+
   // Reset state
   incompatibleVersionDetected = false;
   lastRestartAttempt = 0;
@@ -216,7 +217,7 @@ export async function shutdownCliProcessor(): Promise<void> {
  */
 export async function parseGuardTags(
   document: vscode.TextDocument,
-  lines: string[]
+  _lines: string[]
 ): Promise<GuardTag[]> {
   if (!cliWorker || !cliWorker.isWorkerReady()) {
     throw new Error('CLI worker is not available');
@@ -265,13 +266,17 @@ export async function parseGuardTags(
     return result.guardTags;
 
   } catch (error) {
-    errorHandler.handleError(
-      error instanceof Error ? error : new Error(String(error)),
-      {
-        operation: 'parseGuardTags.cli',
-        details: { document: document.fileName }
-      }
-    );
+    // Only log unexpected errors, not "CLI worker is not available" which is expected
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!errorMessage.includes('CLI worker is not available') && !errorMessage.includes('CLI worker is not ready')) {
+      errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          operation: 'parseGuardTags.cli',
+          details: { document: document.fileName }
+        }
+      );
+    }
     throw error;
   }
 }
@@ -280,8 +285,8 @@ export async function parseGuardTags(
  * Get line permissions - CLI replacement for getLinePermissions
  */
 export function getLinePermissions(
-  document: vscode.TextDocument,
-  guardTags: GuardTag[]
+  _document: vscode.TextDocument,
+  _guardTags: GuardTag[]
 ): Map<number, LinePermission> {
   // Use cached result from last parse
   const cachedResult = documentStateManager.getLastParseResult();
@@ -370,13 +375,17 @@ async function processDocumentChange(event: vscode.TextDocumentChangeEvent): Pro
     triggerDecorationUpdate(event.document);
 
   } catch (error) {
-    errorHandler.handleError(
-      error instanceof Error ? error : new Error(String(error)),
-      {
-        operation: 'processDocumentChange',
-        details: { document: event.document.fileName }
-      }
-    );
+    // Only log unexpected errors, not CLI worker availability issues
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!errorMessage.includes('CLI worker is not available') && !errorMessage.includes('CLI worker is not ready')) {
+      errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          operation: 'processDocumentChange',
+          details: { document: event.document.fileName }
+        }
+      );
+    }
 
     // On error, try to resend full document
     try {
@@ -414,7 +423,7 @@ export function getParseEventEmitter(): EventEmitter {
 /**
  * Clear scope cache - compatibility function
  */
-export function clearScopeCache(document: vscode.TextDocument): void {
+export function clearScopeCache(_document: vscode.TextDocument): void {
   // CLI worker maintains its own state, no manual cache clearing needed
   // This is a no-op for compatibility with existing code
 }
@@ -423,9 +432,9 @@ export function clearScopeCache(document: vscode.TextDocument): void {
  * Mark lines as modified - compatibility function
  */
 export function markLinesModified(
-  document: vscode.TextDocument,
-  startLine: number,
-  endLine: number
+  _document: vscode.TextDocument,
+  _startLine: number,
+  _endLine: number
 ): void {
   // CLI worker handles incremental changes automatically
   // This is a no-op for compatibility with existing code
