@@ -4,7 +4,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { withErrorRethrow } from '../validation/errorWrapper';
 
 export interface TemplateReplacements {
   [key: string]: string | number | boolean;
@@ -22,28 +21,26 @@ export async function loadTemplate(templateName: string): Promise<string> {
     return templateCache.get(cacheKey) || '';
   }
 
-  return withErrorRethrow(
-    async () => {
-      // Try multiple paths to find the template
-      let templatePath = path.join(__dirname, '..', 'resources', templateName);
+  try {
+    // Try multiple paths to find the template
+    let templatePath = path.join(__dirname, '..', 'resources', templateName);
 
-      // If not found in the expected location, try the dist location
-      if (!fs.existsSync(templatePath)) {
-        templatePath = path.join(__dirname, '..', '..', 'dist', 'resources', templateName);
-      }
+    // If not found in the expected location, try the dist location
+    if (!fs.existsSync(templatePath)) {
+      templatePath = path.join(__dirname, '..', '..', 'dist', 'resources', templateName);
+    }
 
-      // If still not found, try relative to process.cwd()
-      if (!fs.existsSync(templatePath)) {
-        templatePath = path.join(process.cwd(), 'dist', 'resources', templateName);
-      }
+    // If still not found, try relative to process.cwd()
+    if (!fs.existsSync(templatePath)) {
+      templatePath = path.join(process.cwd(), 'dist', 'resources', templateName);
+    }
 
-      const templateContent = fs.readFileSync(templatePath, 'utf8');
-      templateCache.set(cacheKey, templateContent);
-      return templateContent;
-    },
-    `Failed to load template ${templateName}`,
-    `Template ${templateName} not found`
-  );
+    const templateContent = await fs.promises.readFile(templatePath, 'utf8');
+    templateCache.set(cacheKey, templateContent);
+    return templateContent;
+  } catch (error) {
+    throw new Error(`Failed to load template ${templateName}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**

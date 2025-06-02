@@ -458,11 +458,6 @@
           "when": "editorTextFocus",
           "group": "tumeeGuardTags",
           "command": "tumee-vscode-plugin.setAINoAccess"
-        },
-        {
-          "when": "editorTextFocus",
-          "group": "tumeeGuardDeveloper",
-          "command": "tumee-vscode-plugin.validateSectionParsing"
         }
       ],
       "tumee-vscode-plugin.subMenu": [
@@ -618,16 +613,6 @@
         "title": "Show Performance Report",
         "category": "TuMee Customization",
         "icon": "$(graph)"
-      },
-      {
-        "command": "tumee-vscode-plugin.validateSectionParsing",
-        "title": "Validate Section Parsing",
-        "category": "CodeGuard Developer"
-      },
-      {
-        "command": "tumee-vscode-plugin.showValidationOutput",
-        "title": "Show Validation Output",
-        "category": "CodeGuard Developer"
       }
     ],
     "colors": [

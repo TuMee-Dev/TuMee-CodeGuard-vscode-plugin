@@ -6,7 +6,7 @@ import type * as vscode from 'vscode';
 import type { GuardTag, LinePermission } from '../../types/guardTypes';
 import { CLIWorker } from './cliWorker';
 import { DocumentStateManager } from './documentStateManager';
-import { errorHandler } from '../validation/errorHandler';
+import { errorHandler } from '../error/errorHandler';
 import { updateStatusBarForWorkerStatus } from '../ui/statusBar';
 import { configManager } from '../config/configurationManager';
 import { EventEmitter } from 'events';

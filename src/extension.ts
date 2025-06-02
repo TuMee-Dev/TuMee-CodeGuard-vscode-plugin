@@ -23,7 +23,6 @@ import {
   configValidator,
   DebugLogger,
   backgroundProcessor,
-  registerValidationCommands,
   DecorationTypeFactory,
   configManager,
   CONFIG_KEYS,
@@ -102,9 +101,6 @@ function registerCommands(context: ExtensionContext, provider: FileCustomization
     })
   );
 
-  // Register validation commands (developer feature)
-  const validationDisposables = registerValidationCommands(context);
-  disposables.push(...validationDisposables);
 }
 
 /**
@@ -447,8 +443,6 @@ async function updateCodeDecorationsImpl(document: TextDocument) {
     const text = document.getText();
     const lines = text.split(UTILITY_PATTERNS.LINE_SPLIT);
 
-    // Check if the document has any guard tags - if not, clear decorations and exit
-    const isMarkdown = document.languageId === 'markdown';
     // CLI worker handles guard tag detection - no need for pre-filtering
 
     // Use shared functions to parse guard tags and compute line permissions

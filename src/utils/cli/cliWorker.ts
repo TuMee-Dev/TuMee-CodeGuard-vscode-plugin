@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import type { GuardTag, LinePermission } from '@/types/guardTypes';
-import { errorHandler } from '../validation/errorHandler';
+import { errorHandler } from '../error/errorHandler';
 import { getAclCliPath } from '../config/acl';
 import { configManager } from '../config/configurationManager';
 

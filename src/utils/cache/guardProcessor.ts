@@ -17,7 +17,7 @@ import {
   isCliProcessorReady,
   refreshCurrentDocument
 } from '../cli/guardProcessorCli';
-import { validateDocument } from '../validation/errorHandler';
+import { validateDocument } from '../error/errorHandler';
 
 // Re-export CLI processor functions - these are the ONLY parsing functions allowed
 export {

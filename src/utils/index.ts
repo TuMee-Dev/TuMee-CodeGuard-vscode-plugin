@@ -29,11 +29,8 @@ export * from './rendering/mixPatternRenderer';
 export * from './rendering/themeLoader';
 export * from './rendering/templateLoader';
 
-// Validation
-export * from './validation/errorHandler';
-export * from './validation/errorWrapper';
-export * from './validation/validationMode';
-export * from './validation/validationReportView';
+// Error Handling  
+export * from './error/errorHandler';
 
 // Performance
 export * from './performance/performanceMonitor';
