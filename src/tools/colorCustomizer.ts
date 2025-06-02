@@ -102,6 +102,7 @@ export class ColorCustomizerPanel {
   }
 
   // Helper methods for common operations
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _postMessage(command: string, data?: any): void {
     void this._panel.webview.postMessage({ command, ...data });
   }

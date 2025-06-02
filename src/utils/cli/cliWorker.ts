@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import type { GuardTag, LinePermission } from '@/types/guardTypes';
+import type { GuardColors } from '../../tools/colorCustomizer/ColorConfigTypes';
 import { errorHandler } from '../error/errorHandler';
 import { getAclCliPath } from '../config/acl';
 import { configManager } from '../config/configurationManager';
@@ -50,8 +51,8 @@ export interface ParseResult {
 }
 
 export interface ThemeResponse {
-  builtIn: Record<string, { name: string; colors: any }>;
-  custom: Record<string, { name: string; colors: any }>;
+  builtIn: Record<string, { name: string; colors: GuardColors }>;
+  custom: Record<string, { name: string; colors: GuardColors }>;
 }
 
 export interface CreateThemeResponse {
@@ -63,7 +64,7 @@ export interface ExportThemeResponse {
   name: string;
   exportData: {
     name: string;
-    colors: any;
+    colors: GuardColors;
     exportedAt: string;
     version: string;
   };
@@ -76,7 +77,7 @@ export interface ImportThemeResponse {
 
 export interface SetThemeResponse {
   message: string;
-  colors: any;
+  colors: GuardColors;
 }
 
 /**
