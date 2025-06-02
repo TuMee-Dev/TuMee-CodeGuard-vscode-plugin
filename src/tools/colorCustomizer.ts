@@ -9,6 +9,7 @@ import {
   DEFAULT_COLORS,
   mergeWithDefaults
 } from './colorCustomizer/ColorConfigTypes';
+import { getDecorationManager } from '../extension';
 
 export class ColorCustomizerPanel {
   public static currentPanel: ColorCustomizerPanel | undefined;
@@ -16,6 +17,7 @@ export class ColorCustomizerPanel {
 
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
+  private readonly _context: vscode.ExtensionContext;
   private readonly _cm = configManager();
   private readonly _cliWorker: CLIWorker;
   private _disposables: vscode.Disposable[] = [];
@@ -23,7 +25,7 @@ export class ColorCustomizerPanel {
   private _isSystemTheme: boolean = false;
   private _isDeleting: boolean = false;
 
-  public static createOrShow(extensionUri: vscode.Uri) {
+  public static createOrShow(context: vscode.ExtensionContext) {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
       : undefined;
@@ -43,16 +45,14 @@ export class ColorCustomizerPanel {
       }
     );
 
-    ColorCustomizerPanel.currentPanel = new ColorCustomizerPanel(panel, extensionUri);
+    ColorCustomizerPanel.currentPanel = new ColorCustomizerPanel(panel, context);
   }
 
-  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+  private constructor(panel: vscode.WebviewPanel, context: vscode.ExtensionContext) {
     this._panel = panel;
-    this._extensionUri = extensionUri;
+    this._extensionUri = context.extensionUri;
+    this._context = context;
     this._cliWorker = CLIWorker.getInstance();
-
-    // Migrate existing custom themes to CLI on first run
-    void this._migrateExistingThemes();
 
     this._update();
 
@@ -116,61 +116,6 @@ export class ColorCustomizerPanel {
     void vscode.window.showErrorMessage(message);
   }
 
-  /**
-   * Migrate existing VSCode custom themes to CLI storage
-   */
-  private async _migrateExistingThemes(): Promise<void> {
-    try {
-      // Check if migration has already been done
-      const migrationKey = 'tumee-vscode-plugin.themesMigrated';
-      const alreadyMigrated = this._cm.get(migrationKey, false);
-
-      if (alreadyMigrated) {
-        return;
-      }
-
-      // Get existing custom themes from VSCode configuration
-      const existingCustomThemes = this._cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, { name: string; colors: GuardColors }>);
-
-      if (Object.keys(existingCustomThemes).length === 0) {
-        // No themes to migrate, mark as done
-        await this._cm.update(migrationKey, true);
-        return;
-      }
-
-      // Try to migrate themes via CLI
-      let migratedCount = 0;
-      for (const [_themeId, themeData] of Object.entries(existingCustomThemes)) {
-        try {
-          const response = await this._cliWorker.sendRequest('createTheme', {
-            name: themeData.name,
-            colors: themeData.colors
-          });
-
-          if (response.status === 'success') {
-            migratedCount++;
-          } else {
-            console.warn(`Failed to migrate theme "${themeData.name}":`, response.error);
-          }
-        } catch (error) {
-          console.warn(`Failed to migrate theme "${themeData.name}" via CLI:`, error);
-        }
-      }
-
-      if (migratedCount > 0) {
-        console.log(`Successfully migrated ${migratedCount} custom themes to CLI storage`);
-
-        // Clear the old VSCode configuration after successful migration
-        await this._cm.update(CONFIG_KEYS.CUSTOM_THEMES, {});
-      }
-
-      // Mark migration as completed regardless of success
-      await this._cm.update(migrationKey, true);
-
-    } catch (error) {
-      console.error('Theme migration failed:', error);
-    }
-  }
 
   private async _getCustomThemes(): Promise<Record<string, { name: string; colors: GuardColors }>> {
     try {
@@ -181,8 +126,6 @@ export class ColorCustomizerPanel {
       }
     } catch (error) {
       console.error('Failed to get themes from CLI:', error);
-      // Fallback to VSCode configuration for backwards compatibility
-      return this._cm.get(CONFIG_KEYS.CUSTOM_THEMES, {} as Record<string, { name: string; colors: GuardColors }>);
     }
     return {};
   }
@@ -196,10 +139,8 @@ export class ColorCustomizerPanel {
       }
     } catch (error) {
       console.error('Failed to get built-in themes from CLI:', error);
-      // Fallback to local themes for backwards compatibility
-      return COLOR_THEMES;
     }
-    return COLOR_THEMES;
+    return {};
   }
 
   private async _saveColors(colors: GuardColors, fromTheme: boolean = false) {
@@ -261,10 +202,24 @@ export class ColorCustomizerPanel {
     } else if (!fromTheme) {
       await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
       await this._cm.update(CONFIG_KEYS.SELECTED_THEME, '');
+      
+      // Refresh all editor decorations immediately
+      const decorationManager = getDecorationManager();
+      if (decorationManager) {
+        decorationManager.handleColorConfigurationChange(this._context);
+      }
+      
       this._showInfo('Guard tag colors saved successfully!');
     } else {
       // This is fromTheme = true case, update the config
       await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, colors);
+      
+      // Refresh all editor decorations immediately
+      const decorationManager = getDecorationManager();
+      if (decorationManager) {
+        decorationManager.handleColorConfigurationChange(this._context);
+      }
+      
       // Send the new theme colors to update the UI
       this._postMessage('updateColors', { colors });
     }
@@ -277,28 +232,17 @@ export class ColorCustomizerPanel {
     if (savedColors) {
       colors = mergeWithDefaults(savedColors);
     } else {
-      // No saved colors, check if we have a selected theme
-      const selectedTheme = this._cm.get(CONFIG_KEYS.SELECTED_THEME, 'default');
-      const themeKey = selectedTheme.toLowerCase();
-
-      // Check built-in themes first
-      let theme = COLOR_THEMES[themeKey];
-
-      // If not found, check custom themes
-      if (!theme) {
-        try {
-          const customThemes = await this._getCustomThemes();
-          if (customThemes[themeKey]) {
-            theme = customThemes[themeKey];
-          }
-        } catch (error) {
-          console.error('Failed to get custom themes:', error);
+      // No saved colors, get current theme from CLI
+      try {
+        const response = await this._cliWorker.sendRequest('getCurrentTheme', {});
+        if (response.status === 'success' && response.result) {
+          const currentTheme = response.result as any;
+          colors = mergeWithDefaults(currentTheme.colors);
+        } else {
+          colors = DEFAULT_COLORS;
         }
-      }
-
-      if (theme) {
-        colors = mergeWithDefaults(theme.colors);
-      } else {
+      } catch (error) {
+        console.error('Failed to get current theme from CLI:', error);
         colors = DEFAULT_COLORS;
       }
     }
@@ -320,13 +264,19 @@ export class ColorCustomizerPanel {
         if (setThemeResponse.colors) {
           this._currentTheme = themeName;
 
-          // Determine if this is a built-in theme
+          // Determine if this is a built-in theme  
           this._isSystemTheme = !!COLOR_THEMES[themeKey];
 
           // Update colors from CLI response
           const mergedColors = mergeWithDefaults(setThemeResponse.colors as Partial<GuardColors>);
           await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
           await this._cm.update(CONFIG_KEYS.SELECTED_THEME, themeName);
+
+          // Refresh all editor decorations immediately
+          const decorationManager = getDecorationManager();
+          if (decorationManager) {
+            decorationManager.handleColorConfigurationChange(this._context);
+          }
 
           this._postMessage('updateColors', { colors: mergedColors });
           this._postMessage('setThemeType', { isSystem: this._isSystemTheme });
@@ -710,6 +660,6 @@ export class ColorCustomizerPanel {
 // Register the command
 export function registerColorCustomizerCommand(context: vscode.ExtensionContext): vscode.Disposable {
   return vscode.commands.registerCommand('tumee-vscode-plugin.customizeColors', () => {
-    ColorCustomizerPanel.createOrShow(context.extensionUri);
+    ColorCustomizerPanel.createOrShow(context);
   });
 }

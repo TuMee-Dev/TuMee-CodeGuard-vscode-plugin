@@ -30,6 +30,13 @@ let disposables: Disposable[] = [];
 let decorationManager: DocumentDecorationManager;
 
 /**
+ * Get the global decoration manager instance
+ */
+export function getDecorationManager(): DocumentDecorationManager | undefined {
+  return decorationManager;
+}
+
+/**
  * Initialize the extension core components
  */
 function initializeExtension(context: ExtensionContext): void {

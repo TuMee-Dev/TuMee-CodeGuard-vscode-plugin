@@ -229,10 +229,6 @@ function updatePreview() {
     // Call real parseGuardTag from extension instead of duplicating logic
     const parsed = callExtensionParseGuardTag(content);
     
-    // Temporary debug for context lines
-    if (content.includes('context')) {
-      console.log('Line', index + 1, 'content:', content, 'parsed aiPermission:', parsed.aiPermission, 'aiIsContext:', parsed.aiIsContext);
-    }
     
     
     
