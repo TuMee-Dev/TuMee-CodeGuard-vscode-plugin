@@ -2,15 +2,6 @@
 
 import type { Range } from 'vscode';
 
-/**
- * Type for permission values
- */
-export type PermissionValue = 'r' | 'w' | 'n';
-
-/**
- * Type for permission targets
- */
-export type PermissionTarget = 'ai' | 'human';
 
 export interface GuardTag {
   lineNumber: number;
@@ -44,18 +35,6 @@ export interface LinePermission {
   };
 }
 
-export interface ParsedGuardTag {
-  identifier?: string;
-  scope?: string;
-  lineCount?: number;
-  addScopes?: string[];
-  removeScopes?: string[];
-  type: string;
-  aiPermission?: string;
-  humanPermission?: string;
-  aiIsContext?: boolean;
-  humanIsContext?: boolean;
-}
 
 export interface DecorationRanges {
   // All permission combinations
@@ -79,14 +58,3 @@ export interface DecorationRanges {
 
 }
 
-// Cache types
-export interface ScopeCache {
-  version: number;
-  scopes: Map<string, ScopeBoundary | null>;
-}
-
-export interface ScopeBoundary {
-  startLine: number;
-  endLine: number;
-  type: string;
-}

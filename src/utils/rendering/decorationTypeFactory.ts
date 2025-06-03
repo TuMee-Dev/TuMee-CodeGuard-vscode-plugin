@@ -6,7 +6,7 @@ import type { TextEditorDecorationType } from 'vscode';
 import { window } from 'vscode';
 import { DEFAULT_COLORS } from '../../tools/colorCustomizer/ColorConfigTypes';
 import { MixPattern } from '../../types/mixPatterns';
-import type { GuardColors } from '../../types/colorTypes';
+import type { GuardColors } from '../../tools/colorCustomizer/ColorConfigTypes';
 import { ColorRenderingEngine } from './colorRenderingEngine';
 import { DebugLogger } from '../ui/debugLogger';
 import { configManager, CONFIG_KEYS } from '../config/configurationManager';

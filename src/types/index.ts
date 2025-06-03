@@ -34,26 +34,12 @@ export type ExtensionItemInput = {
 
 export type GitAPIState = 'uninitialized' | 'initialized';
 
-export interface GitRepository {
-  state: GitRepositoryState;
-  rootUri: {
-    fsPath: string;
-    path: string;
-  };
-  repository: {
-    getBranches: () => Promise<GitBranch[]>;
-  };
-}
-
-export type CommandCTX = { fsPath: string; path: string; query: string; scheme: string };
-
 export const enum GitStatus {
   INDEX_MODIFIED,
   INDEX_ADDED,
   INDEX_DELETED,
   INDEX_RENAMED,
   INDEX_COPIED,
-
   MODIFIED,
   DELETED,
   UNTRACKED,
@@ -61,7 +47,6 @@ export const enum GitStatus {
   INTENT_TO_ADD,
   INTENT_TO_RENAME,
   TYPE_CHANGED,
-
   ADDED_BY_US,
   ADDED_BY_THEM,
   DELETED_BY_US,
@@ -78,6 +63,15 @@ export interface Change {
   status: GitStatus;
 }
 
+export interface GitBranch {
+  type: number;
+  name?: string;
+  upstream: { name: string; remote: string; commit: string };
+  commit: string;
+  ahead: number;
+  behind: number;
+}
+
 export interface GitRepositoryState {
   HEAD?: GitBranch;
   mergeChanges?: Change[];
@@ -88,17 +82,14 @@ export interface GitRepositoryState {
   onDidChange: (listener: () => void) => void;
 }
 
-export interface GitBranch {
-  type: number;
-  name?: string;
-  upstream: Upstream;
-  commit: string;
-  ahead: number;
-  behind: number;
+export interface GitRepository {
+  state: GitRepositoryState;
+  rootUri: {
+    fsPath: string;
+    path: string;
+  };
+  repository: {
+    getBranches: () => Promise<GitBranch[]>;
+  };
 }
 
-export interface Upstream {
-  name: string;
-  remote: string;
-  commit: string;
-}
