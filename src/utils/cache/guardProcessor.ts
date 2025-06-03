@@ -8,14 +8,11 @@ import type { GuardTag, LinePermission } from '../../types/guardTypes';
 import {
   parseGuardTags as parseGuardTagsCli,
   getLinePermissions as getLinePermissionsCli,
-  clearScopeCache as clearScopeCacheCli,
   markLinesModified as markLinesModifiedCli,
   handleDocumentChange,
   initializeCliProcessor,
   shutdownCliProcessor,
   getCliWorker,
-  isCliProcessorReady,
-  refreshCurrentDocument
 } from '../cli/guardProcessorCli';
 import { validateDocument } from '../error/errorHandler';
 
@@ -24,8 +21,6 @@ export {
   initializeCliProcessor,
   shutdownCliProcessor,
   getCliWorker,
-  isCliProcessorReady,
-  refreshCurrentDocument,
   handleDocumentChange
 };
 
@@ -46,10 +41,6 @@ export async function parseGuardTags(
   return parseGuardTagsCli(document, lines);
 }
 
-/**
- * Export alias for backward compatibility - still CLI only
- */
-export const parseGuardTagsChunked = parseGuardTags;
 
 /**
  * Get line permissions - PURE CLI IMPLEMENTATION ONLY
@@ -63,12 +54,6 @@ export function getLinePermissions(
   return getLinePermissionsCli(document, guardTags);
 }
 
-/**
- * Clear scope cache - CLI implementation only
- */
-export function clearScopeCache(document: vscode.TextDocument): void {
-  clearScopeCacheCli(document);
-}
 
 /**
  * Mark lines as modified - CLI implementation only

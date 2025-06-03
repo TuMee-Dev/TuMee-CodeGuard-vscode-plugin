@@ -190,7 +190,7 @@ const CONFIG_RULES: ConfigurationRules = {
   }
 };
 
-export class ConfigValidator {
+class ConfigValidator {
   private lastValidationTime = 0;
   private validationInterval = 5000; // Don't validate more than once per 5 seconds
 

@@ -40,4 +40,3 @@ export * from './ui/debugLogger';
 export * from './ui/statusBar';
 
 // Core (fs already exported by core/index)
-export * from './core/languageScopeLoader';

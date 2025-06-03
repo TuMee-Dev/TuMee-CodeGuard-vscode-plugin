@@ -4,7 +4,6 @@ import { Uri, workspace } from 'vscode';
 import type { ACLStatus } from '@/types';
 import { cleanPath } from '../core';
 // Removed local parsing - CLI only
-import { GUARD_TAG_PATTERNS } from '../cache/regexCache';
 import { getConfig, CONFIG_KEYS } from './configurationManager';
 
 const exec = promisify(execCallback);
@@ -43,13 +42,6 @@ export const isCliAvailable = async (): Promise<boolean> => {
     return false;
   }
 };
-
-/**
- * Regular expressions for parsing guard tags in code
- * Single source of truth from regexCache.ts
- */
-export const GUARD_TAG_REGEX = GUARD_TAG_PATTERNS.GUARD_TAG;
-export const MARKDOWN_GUARD_TAG_REGEX = GUARD_TAG_PATTERNS.MARKDOWN_GUARD_TAG;
 
 /**
  * Helper function to parse a guard tag from a line of text

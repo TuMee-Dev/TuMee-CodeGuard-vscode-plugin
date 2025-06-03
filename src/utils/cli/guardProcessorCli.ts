@@ -414,21 +414,6 @@ function triggerDecorationUpdate(document: vscode.TextDocument): void {
 }
 
 /**
- * Get the parse event emitter for external listeners
- */
-export function getParseEventEmitter(): EventEmitter {
-  return parseEventEmitter;
-}
-
-/**
- * Clear scope cache - compatibility function
- */
-export function clearScopeCache(_document: vscode.TextDocument): void {
-  // CLI worker maintains its own state, no manual cache clearing needed
-  // This is a no-op for compatibility with existing code
-}
-
-/**
  * Mark lines as modified - compatibility function
  */
 export function markLinesModified(
@@ -447,32 +432,3 @@ export function getCliWorker(): CLIWorker | undefined {
   return cliWorker;
 }
 
-/**
- * Check if CLI processor is ready
- */
-export function isCliProcessorReady(): boolean {
-  return cliWorker?.isWorkerReady() ?? false;
-}
-
-/**
- * Force refresh current document
- */
-export async function refreshCurrentDocument(document: vscode.TextDocument): Promise<void> {
-  if (!cliWorker || !cliWorker.isWorkerReady()) {
-    throw new Error('CLI worker is not available');
-  }
-
-  // Force document refresh by setting it again
-  documentStateManager.setDocument(document);
-  const docInfo = documentStateManager.getDocumentInfo();
-
-  if (docInfo) {
-    const result = await cliWorker.setDocument(
-      docInfo.fileName,
-      docInfo.languageId,
-      docInfo.content
-    );
-    documentStateManager.updateParseResult(result);
-    triggerDecorationUpdate(document);
-  }
-}

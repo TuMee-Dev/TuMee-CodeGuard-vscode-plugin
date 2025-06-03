@@ -29,7 +29,7 @@ export const getColorsForPicker = (_context: ExtensionContext): Array<QuickPickI
   return pickItems;
 };
 
-export const updateConfigItem = (
+const updateConfigItem = (
   item: ExtensionItemInput,
   opts: { provider?: { fireOnChange: () => void } } = {},
 ): boolean => {
@@ -127,11 +127,3 @@ export const removeAllFromConfig = (opts: { provider?: { fireOnChange: () => voi
   return true;
 };
 
-export const getCustomizationForPath = (path: string): ExtensionItem | null => {
-  const cm = configManager();
-  const items = cm.get(CONFIG_KEYS.ITEMS, [] as Array<ExtensionItem>);
-
-  const item = items.find((f) => f.path === path);
-
-  return item || null;
-};
