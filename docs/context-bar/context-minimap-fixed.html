@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Context Minimap with Expand View</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #cccccc;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .main-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        /* MINIMAP STYLES - The narrow always-visible version */
+        .context-minimap {
+            width: 40px;
+            background: #252526;
+            border-left: 1px solid #2d2d30;
+            position: relative;
+            cursor: pointer;
+            transition: width 0.3s ease;
+        }
+
+        .minimap-gauge {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #1e1e1e;
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: stretch;
+            padding: 4px;
+        }
+
+        .minimap-chunk {
+            margin: 1px 0;
+            border-radius: 2px;
+            position: relative;
+            min-height: 2px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .minimap-chunk.file { 
+            background: #e05252;
+        }
+        .minimap-chunk.conversation { 
+            background: #3794ff;
+        }
+        .minimap-chunk.analysis { 
+            background: #4ec9b0;
+        }
+        .minimap-chunk.code { 
+            background: #c586c0;
+        }
+        .minimap-chunk.search { 
+            background: #dcdcaa;
+        }
+
+        /* Hide text on very small chunks */
+        .minimap-chunk.small {
+            font-size: 0;
+        }
+
+        .minimap-chunk:hover {
+            transform: scaleX(1.2);
+            z-index: 10;
+        }
+
+        .minimap-empty {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 24%;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            pointer-events: none;
+        }
+
+        .minimap-percentage {
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            font-weight: 600;
+            color: #cccccc;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            z-index: 20;
+        }
+
+        .expand-indicator {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 20px;
+            color: #858585;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+            z-index: 20;
+        }
+
+        .context-minimap:hover .expand-indicator {
+            opacity: 1;
+            color: #cccccc;
+        }
+
+
+
+        /* EXPANDED STYLES - The detailed editor view */
+        .context-minimap.expanded {
+            width: 360px;
+        }
+
+        .expanded-content {
+            display: none;
+            height: 100%;
+            flex-direction: column;
+        }
+
+        .context-minimap.expanded .minimap-gauge {
+            display: none;
+        }
+
+        .context-minimap.expanded .expanded-content {
+            display: flex;
+        }
+
+        .manager-header {
+            padding: 12px 16px;
+            background: #1e1e1e;
+            border-bottom: 1px solid #2d2d30;
+            position: relative;
+        }
+
+        .close-button {
+            position: absolute;
+            top: 6px;
+            right: 12px;
+            background: transparent;
+            border: none;
+            color: #858585;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 0 4px;
+            width: 28px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            opacity: 0.6;
+            transition: all 0.15s ease;
+            z-index: 10;
+            line-height: 1;
+        }
+
+        .close-button:hover {
+            background: rgba(90, 93, 94, 0.31);
+            opacity: 1;
+            color: #cccccc;
+        }
+
+        .context-gauge {
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .gauge-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 6px;
+        }
+
+        .gauge-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: #cccccc;
+        }
+
+        .gauge-tokens {
+            font-size: 12px;
+            color: #969696;
+        }
+
+        .gauge-container {
+            position: relative;
+            margin-bottom: 12px;
+        }
+
+        .gauge-bar {
+            height: 24px;
+            background: #3c3c3c;
+            border-radius: 3px;
+            overflow: visible;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .threshold-marker {
+            position: absolute;
+            top: -2px;
+            bottom: -2px;
+            width: 2px;
+            background: #007acc;
+            cursor: ew-resize;
+            transition: left 0.2s ease, opacity 0.2s ease;
+            z-index: 2;
+            pointer-events: auto;
+        }
+
+        .threshold-marker::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 1px;
+            height: 8px;
+            background: #007acc;
+            opacity: 0.5;
+        }
+
+        .threshold-handle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: #007acc;
+            border: 2px solid #1e1e1e;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+
+        .threshold-marker:hover .threshold-handle,
+        .threshold-marker.dragging .threshold-handle {
+            opacity: 1;
+        }
+
+        .threshold-marker:hover {
+            background: #1a8cff;
+            width: 3px;
+        }
+
+        .threshold-marker:hover::after {
+            background: #1a8cff;
+            opacity: 0.8;
+        }
+
+        .threshold-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 4px;
+            padding: 2px 6px;
+            background: #252526;
+            border: 1px solid #454545;
+            border-radius: 3px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+
+        .threshold-marker:hover .threshold-tooltip,
+        .threshold-marker.dragging .threshold-tooltip {
+            opacity: 1;
+        }
+
+        .gauge-fill {
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            transition: width 0.3s ease;
+            border-radius: 3px;
+            z-index: 1;
+        }
+
+        .gauge-gradient {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: calc(100% / (var(--fill-percent, 76) / 100));
+            background: linear-gradient(90deg, 
+                #16a34a 0%, 
+                #16a34a 40%, 
+                #eab308 60%, 
+                #eab308 87%, 
+                #dc2626 93%,
+                #dc2626 100%
+            );
+            transition: background 0.3s ease;
+        }
+
+        .gauge-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            z-index: 1;
+            letter-spacing: 0.5px;
+            pointer-events: none;
+        }
+
+        .view-controls {
+            display: flex;
+            gap: 1px;
+            background: #2d2d30;
+            border-radius: 4px;
+            padding: 2px;
+            margin-bottom: 10px;
+        }
+
+        .view-button {
+            flex: 1;
+            padding: 4px 8px;
+            background: transparent;
+            border: none;
+            border-radius: 3px;
+            color: #969696;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-align: center;
+            position: relative;
+        }
+
+        .view-button:hover {
+            color: #cccccc;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .view-button.active {
+            background: #094771;
+            color: #ffffff;
+        }
+
+        .view-button.active:hover {
+            background: #0e5490;
+        }
+
+        .view-button:active {
+            transform: scale(0.98);
+        }
+
+        .context-chunks {
+            flex: 1;
+            background: #1e1e1e;
+            overflow-y: auto;
+            padding: 8px 12px;
+        }
+
+        .context-chunks::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .context-chunks::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .context-chunks::-webkit-scrollbar-thumb {
+            background: #424242;
+            border-radius: 5px;
+        }
+
+        .context-chunks::-webkit-scrollbar-thumb:hover {
+            background: #4e4e4e;
+        }
+
+        .chunk-group {
+            margin-bottom: 4px;
+            background: #252526;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid transparent;
+            transition: all 0.15s ease;
+        }
+
+        .chunk-group:hover {
+            border-color: #464647;
+            background: #2a2a2b;
+        }
+
+        .chunk-group.deleting {
+            opacity: 0;
+            transform: translateX(20px);
+            transition: all 0.3s ease;
+        }
+
+        .chunk-header {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .chunk-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            flex: 1;
+        }
+
+        .chunk-title {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #cccccc;
+        }
+
+        .chunk-meta {
+            font-size: 11px;
+            color: #858585;
+        }
+
+        .chunk-size {
+            font-size: 13px;
+            font-weight: 600;
+            color: #f4b643;
+        }
+
+        .chunk-type-icon {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .icon-file { background: #e05252; }
+        .icon-conversation { background: #3794ff; }
+        .icon-analysis { background: #4ec9b0; }
+        .icon-code { background: #c586c0; }
+        .icon-search { background: #dcdcaa; }
+
+        .chunk-actions {
+            padding: 0 12px 8px 12px;
+            background: transparent;
+            display: none;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .action-button {
+            padding: 4px 10px;
+            background: #0e639c;
+            border: none;
+            border-radius: 3px;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .action-button:hover {
+            background: #1177bb;
+        }
+
+        .action-button:active {
+            background: #094771;
+        }
+
+        .action-button.danger {
+            background: transparent;
+            border: 1px solid #f14c4c;
+            color: #f14c4c;
+        }
+
+        .action-button.danger:hover {
+            background: #f14c4c;
+            color: #ffffff;
+        }
+
+        .temporal-divider {
+            text-align: center;
+            margin: 12px 0 8px 0;
+            position: relative;
+            font-size: 11px;
+            color: #858585;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .temporal-divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #2d2d30;
+        }
+
+        .temporal-divider span {
+            background: #1e1e1e;
+            padding: 0 10px;
+            position: relative;
+            font-weight: 500;
+        }
+
+        .temporal-divider.clickable {
+            cursor: pointer;
+        }
+
+        .temporal-divider.clickable:hover span {
+            color: #cccccc;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: #252526;
+            border: 1px solid #454545;
+            padding: 8px 12px;
+            border-radius: 3px;
+            pointer-events: none;
+            z-index: 1000;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: none;
+            color: #cccccc;
+        }
+        
+        .tooltip strong {
+            color: #ffffff;
+            font-weight: 500;
+        }
+
+        /* Transition for expand/collapse */
+        .minimap-gauge {
+            transition: opacity 0.3s ease;
+        }
+
+        .expanded-content {
+            transition: opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        .context-minimap.expanded .expanded-content {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-panel">
+        <h2 style="margin-bottom: 20px; font-size: 20px; font-weight: 400; color: #cccccc;">Editor with Context Minimap</h2>
+        <div style="background: #252526; padding: 16px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #2d2d30;">
+            <p style="margin-bottom: 12px;"><strong style="color: #4ec9b0;">Minimap Mode (narrow):</strong></p>
+            <ul style="margin: 0 0 16px 20px; line-height: 1.6; font-size: 13px; color: #cccccc;">
+                <li>Shows context fullness as a vertical gauge</li>
+                <li>All chunks scaled to fit in the used portion (76%)</li>
+                <li>No scrolling - everything visible at once</li>
+                <li>Colored blocks represent different content types</li>
+                <li>Hover for details, click to expand</li>
+            </ul>
+            <p style="margin-bottom: 12px;"><strong style="color: #4ec9b0;">Expanded Mode:</strong></p>
+            <ul style="margin: 0 0 0 20px; line-height: 1.6; font-size: 13px; color: #cccccc;">
+                <li>Full context management interface</li>
+                <li>Delete chunks, extract insights from files</li>
+                <li>Temporal grouping for bulk operations</li>
+            </ul>
+        </div>
+        
+        <div style="flex: 1; background: #1e1e1e; border: 1px solid #2d2d30; border-radius: 4px; padding: 20px; display: flex; align-items: center; justify-content: center;">
+            <div style="text-align: center;">
+                <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;">📝</div>
+                <div style="color: #858585; font-size: 14px;">Your main editor content here</div>
+                <div style="font-size: 12px; margin-top: 8px; color: #606060;">The minimap stays narrow on the right →</div>
+            </div>
+        </div>
+
+        <div style="background: #252526; padding: 16px; border-radius: 4px; margin-top: 20px;">
+            <div style="font-size: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #cccccc; font-weight: 500;">Test: Simulate Context Usage</span>
+                <span id="usageValue" style="color: #f4b643; font-weight: 600;">76%</span>
+            </div>
+            <input type="range" id="contextUsage" min="0" max="100" value="76" 
+                   style="width: 100%; height: 4px; background: #3c3c3c; outline: none; cursor: pointer; border-radius: 2px; -webkit-appearance: none;"
+                   oninput="updateContextUsage(this.value)">
+            <style>
+                #contextUsage::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 16px;
+                    height: 16px;
+                    background: #007acc;
+                    border: 2px solid #1e1e1e;
+                    border-radius: 50%;
+                    cursor: pointer;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+                #contextUsage::-webkit-slider-thumb:hover {
+                    background: #1a8cff;
+                }
+                #contextUsage::-moz-range-thumb {
+                    width: 16px;
+                    height: 16px;
+                    background: #007acc;
+                    border: 2px solid #1e1e1e;
+                    border-radius: 50%;
+                    cursor: pointer;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+            </style>
+            <div style="font-size: 11px; margin-top: 10px; color: #858585; line-height: 1.4;">
+                Move this slider to test different context fill levels and see how the gauge colors change.
+            </div>
+        </div>
+    </div>
+
+    <div class="context-minimap" id="contextMinimap">
+        <!-- Minimap view -->
+        <div class="minimap-gauge" id="minimapGauge" style="height: 100%;">
+            <div class="expand-indicator">«</div>
+            <div class="minimap-empty"></div>
+            <div class="minimap-percentage">76%</div>
+            <!-- Chunks will be rendered here, scaled to fit -->
+        </div>
+
+        <!-- Expanded view -->
+        <div class="expanded-content">
+            <div class="manager-header">
+                <button class="close-button" onclick="toggleMinimap()">»</button>
+                <div class="context-gauge" style="padding-right: 36px;">
+                    <div class="gauge-header">
+                        <span class="gauge-title">Context Usage</span>
+                        <span class="gauge-tokens">152k / 200k</span>
+                    </div>
+                    <div class="gauge-container">
+                        <div class="gauge-bar">
+                            <div class="gauge-fill" style="width: 76%; --fill-percent: 76;">
+                                <div class="gauge-gradient"></div>
+                                <div class="gauge-text">76% USED</div>
+                            </div>
+                            <div class="threshold-marker" id="thresholdMarker" style="left: 40%;">
+                                <div class="threshold-handle"></div>
+                                <div class="threshold-tooltip">Auto-cleanup: 40%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="view-controls" style="margin-right: 36px;">
+                    <button class="view-button active" data-view="temporal" onclick="sortChunks('temporal')">Timeline</button>
+                    <button class="view-button" data-view="type" onclick="sortChunks('type')">By Type</button>
+                    <button class="view-button" data-view="size" onclick="sortChunks('size')">By Size</button>
+                </div>
+            </div>
+
+            <div class="context-chunks">
+                <!-- Last Week (Oldest - Top) -->
+                <div class="temporal-divider">
+                    <span>Last Week - 32k tokens</span>
+                </div>
+
+                <div class="chunk-group" data-tokens="32000" data-type="conversation">
+                    <div class="chunk-header" onclick="toggleChunk(this)">
+                        <div class="chunk-info">
+                            <div class="chunk-title">
+                                <span class="chunk-type-icon icon-conversation"></span>
+                                Project Planning
+                            </div>
+                            <div class="chunk-meta">💬 45 msgs • Nov 25-29</div>
+                        </div>
+                        <div class="chunk-size">32k</div>
+                    </div>
+                    <div class="chunk-actions">
+                        <button class="action-button">Summarize Week</button>
+                        <button class="action-button danger">Delete Week</button>
+                    </div>
+                </div>
+
+                <!-- Yesterday -->
+                <div class="temporal-divider">
+                    <span>Yesterday - 52k tokens</span>
+                </div>
+
+                <div class="chunk-group" data-tokens="35000" data-type="file">
+                    <div class="chunk-header" onclick="toggleChunk(this)">
+                        <div class="chunk-info">
+                            <div class="chunk-title">
+                                <span class="chunk-type-icon icon-file"></span>
+                                customer_data.csv
+                            </div>
+                            <div class="chunk-meta">📊 Dataset • Mon 10:00 AM</div>
+                        </div>
+                        <div class="chunk-size">35k</div>
+                    </div>
+                    <div class="chunk-actions">
+                        <button class="action-button">Keep Analysis Only</button>
+                        <button class="action-button danger">Delete Dataset</button>
+                    </div>
+                </div>
+
+                <div class="chunk-group" data-tokens="12000" data-type="search">
+                    <div class="chunk-header" onclick="toggleChunk(this)">
+                        <div class="chunk-info">
+                            <div class="chunk-title">
+                                <span class="chunk-type-icon icon-search"></span>
+                                Web Research
+                            </div>
+                            <div class="chunk-meta">🔍 8 searches • Mon 11:00 AM</div>
+                        </div>
+                        <div class="chunk-size">12k</div>
+                    </div>
+                </div>
+
+                <div class="chunk-group" data-tokens="5000" data-type="conversation">
+                    <div class="chunk-header" onclick="toggleChunk(this)">
+                        <div class="chunk-info">
+                            <div class="chunk-title">
+                                <span class="chunk-type-icon icon-conversation"></span>
+                                ML Discussion
+                            </div>
+                            <div class="chunk-meta">💬 8 messages • Mon 2:00 PM</div>
+                        </div>
+                        <div class="chunk-size">5k</div>
+                    </div>
+                </div>
+
+                <!-- Today (Newest - Bottom) -->
+                <div class="temporal-divider">
+                    <span>Today - 68k tokens</span>
+                </div>
+
+                <div class="chunk-group" data-tokens="45000" data-type="file">
+                    <div class="chunk-header" onclick="toggleChunk(this)">
+                        <div class="chunk-info">
+                            <div class="chunk-title">
+                                <span class="chunk-type-icon icon-file"></span>
+                                quarterly_report_2024.pdf
+                            </div>
+                            <div class="chunk-meta">📄 File • 2:30 PM</div>
+                        </div>
+                        <div class="chunk-size">45k</div>
+                    </div>
+                    <div class="chunk-actions">
+                        <button class="action-button">Extract Key Points</button>
+                        <button class="action-button danger">Delete File</button>
+                    </div>
+                </div>
+
+                <div class="chunk-group" data-tokens="15000" data-type="analysis">
+                    <div class="chunk-header" onclick="toggleChunk(this)">
+                        <div class="chunk-info">
+                            <div class="chunk-title">
+                                <span class="chunk-type-icon icon-analysis"></span>
+                                Financial Analysis
+                            </div>
+                            <div class="chunk-meta">💬 12 messages • 2:35 PM</div>
+                        </div>
+                        <div class="chunk-size">15k</div>
+                    </div>
+                </div>
+
+                <div class="chunk-group" data-tokens="8000" data-type="code">
+                    <div class="chunk-header" onclick="toggleChunk(this)">
+                        <div class="chunk-info">
+                            <div class="chunk-title">
+                                <span class="chunk-type-icon icon-code"></span>
+                                Data Analysis Code
+                            </div>
+                            <div class="chunk-meta">🎨 3 artifacts • 3:20 PM</div>
+                        </div>
+                        <div class="chunk-size">8k</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // Context data with icons (reordered: oldest first, newest last)
+        const contextChunks = [
+            { tokens: 32000, type: 'conversation', icon: '💬', name: 'Project Planning', time: 'Last Week' },
+            { tokens: 35000, type: 'file', icon: '📑', name: 'customer_data.csv', time: 'Yesterday 10:00 AM' },
+            { tokens: 12000, type: 'search', icon: '🔍', name: 'Web Research', time: 'Yesterday 11:00 AM' },
+            { tokens: 5000, type: 'conversation', icon: '💬', name: 'ML Discussion', time: 'Yesterday 2:00 PM' },
+            { tokens: 45000, type: 'file', icon: '📄', name: 'quarterly_report_2024.pdf', time: 'Today 2:30 PM' },
+            { tokens: 15000, type: 'analysis', icon: '📊', name: 'Financial Analysis', time: 'Today 2:35 PM' },
+            { tokens: 8000, type: 'code', icon: '{ }', name: 'Data Analysis Code', time: 'Today 3:20 PM' }
+        ];
+
+        let totalTokens = contextChunks.reduce((sum, chunk) => sum + chunk.tokens, 0);
+        const maxTokens = 200000;
+
+        function renderMinimap() {
+            const gauge = document.getElementById('minimapGauge');
+            const usagePercent = parseInt(document.querySelector('.minimap-percentage').textContent);
+            const usableHeight = gauge.offsetHeight * (usagePercent / 100);
+            
+            // Clear existing chunks
+            const existingChunks = gauge.querySelectorAll('.minimap-chunk');
+            existingChunks.forEach(chunk => chunk.remove());
+            
+            // Calculate heights and render chunks
+            let currentBottom = 0;
+            contextChunks.forEach((chunk, index) => {
+                const chunkHeight = (chunk.tokens / totalTokens) * usableHeight;
+                
+                const div = document.createElement('div');
+                div.className = `minimap-chunk ${chunk.type}`;
+                // Add small class for chunks too small to show text
+                if (chunkHeight < 16) {
+                    div.classList.add('small');
+                }
+                div.style.height = `${chunkHeight}px`;
+                div.style.bottom = `${currentBottom}px`;
+                div.style.position = 'absolute';
+                div.style.left = '4px';
+                div.style.right = '4px';
+                
+                // Add icon/text
+                div.textContent = chunk.icon || chunk.type[0].toUpperCase();
+                
+                // Add hover listener
+                div.addEventListener('mouseenter', (e) => {
+                    showTooltip(e, chunk);
+                });
+                div.addEventListener('mouseleave', hideTooltip);
+                
+                gauge.appendChild(div);
+                currentBottom += chunkHeight + 2; // 2px gap
+            });
+        }
+
+        function showTooltip(event, chunk) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.innerHTML = `
+                <strong>${chunk.name}</strong><br>
+                ${chunk.time}<br>
+                ${(chunk.tokens/1000).toFixed(0)}k tokens
+            `;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (event.pageX - 150) + 'px';
+            tooltip.style.top = event.pageY + 'px';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.display = 'none';
+        }
+
+        function toggleMinimap() {
+            const minimap = document.getElementById('contextMinimap');
+            minimap.classList.toggle('expanded');
+        }
+
+        function toggleChunk(header) {
+            const actions = header.nextElementSibling;
+            if (actions && actions.classList.contains('chunk-actions')) {
+                actions.style.display = actions.style.display === 'none' ? 'flex' : 'none';
+            }
+        }
+
+        // Click minimap to expand
+        document.getElementById('minimapGauge').addEventListener('click', () => {
+            toggleMinimap();
+        });
+
+        // Initialize minimap
+        renderMinimap();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (!document.getElementById('contextMinimap').classList.contains('expanded')) {
+                renderMinimap();
+            }
+        });
+
+        function updateGradient(greenEnd) {
+            // Calculate dynamic gradient stops
+            const greenEndNum = parseInt(greenEnd);
+            
+            // Always have a transition zone after green ends
+            const transitionSize = 10; // 10% transition zone
+            const greenYellowEnd = Math.min(greenEndNum + transitionSize, 87); // Don't go past yellow plateau
+            
+            // Fixed zones
+            const yellowEnd = 87; // Yellow plateau ends at 87%
+            const yellowRedStart = 88; // Yellow-red transition starts at 88%
+            const yellowRedEnd = 92; // Yellow-red transition ends at 92%
+            const redStart = 93; // Red starts at 93%
+            
+            // Build gradient string with smooth transitions
+            const gradient = `linear-gradient(90deg, 
+                #16a34a 0%, 
+                #16a34a ${greenEndNum}%, 
+                #eab308 ${greenYellowEnd}%, 
+                #eab308 ${yellowEnd}%, 
+                #dc2626 ${redStart}%,
+                #dc2626 100%
+            )`;
+            
+            // Apply to gauge gradient
+            const gaugeGradient = document.querySelector('.gauge-gradient');
+            if (gaugeGradient) {
+                gaugeGradient.style.background = gradient;
+            }
+        }
+
+        function updateContextUsage(usage) {
+            const percent = parseInt(usage);
+            document.getElementById('usageValue').textContent = percent + '%';
+            
+            // Update gauge fill width and CSS variable
+            const gaugeFill = document.querySelector('.gauge-fill');
+            if (gaugeFill) {
+                gaugeFill.style.width = percent + '%';
+                gaugeFill.style.setProperty('--fill-percent', percent);
+                gaugeFill.querySelector('.gauge-text').textContent = percent + '% USED';
+            }
+            
+            // Update minimap percentage
+            const minimapPercentage = document.querySelector('.minimap-percentage');
+            if (minimapPercentage) {
+                minimapPercentage.textContent = percent + '%';
+            }
+            
+            // Update minimap empty space
+            const minimapEmpty = document.querySelector('.minimap-empty');
+            if (minimapEmpty) {
+                minimapEmpty.style.height = (100 - percent) + '%';
+            }
+            
+            // Update tokens display
+            const usedTokens = Math.round((percent / 100) * maxTokens);
+            const tokensDisplay = document.querySelector('.gauge-tokens');
+            if (tokensDisplay) {
+                tokensDisplay.textContent = `${Math.round(usedTokens/1000)}k / ${Math.round(maxTokens/1000)}k`;
+            }
+            
+            // Re-render minimap with new percentage
+            renderMinimap();
+        }
+
+        function setupThresholdDragging() {
+            const marker = document.getElementById('thresholdMarker');
+            const gaugeBar = marker.parentElement;
+            const tooltip = marker.querySelector('.threshold-tooltip');
+            let isDragging = false;
+            let thresholdPercent = 40;
+
+            function updateThresholdPosition(x) {
+                if (!gaugeBar) return;
+                
+                const rect = gaugeBar.getBoundingClientRect();
+                const percent = Math.max(20, Math.min(70, ((x - rect.left) / rect.width) * 100));
+                
+                marker.style.left = percent + '%';
+                tooltip.textContent = `Auto-cleanup: ${Math.round(percent)}%`;
+                thresholdPercent = Math.round(percent);
+                
+                updateGradient(thresholdPercent);
+            }
+
+            marker.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                marker.classList.add('dragging');
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    updateThresholdPosition(e.clientX);
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                marker.classList.remove('dragging');
+            });
+
+            // Click on gauge bar to move threshold
+            gaugeBar.addEventListener('click', (e) => {
+                if (e.target === gaugeBar || e.target.classList.contains('gauge-fill')) {
+                    updateThresholdPosition(e.clientX);
+                }
+            });
+        }
+        
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            updateGradient(40);
+            setupThresholdDragging();
+            
+            // Re-attach event listeners for dynamic content
+            function attachEventListeners() {
+                // Toggle chunk expansion
+                document.querySelectorAll('.chunk-header').forEach(header => {
+                    header.onclick = function() { toggleChunk(this); };
+                });
+                
+                // Action buttons
+                document.querySelectorAll('.action-button').forEach(btn => {
+                    btn.onclick = function(e) {
+                        e.stopPropagation();
+                        if (this.classList.contains('danger')) {
+                            const group = this.closest('.chunk-group');
+                            const tokens = parseInt(group.dataset.tokens);
+                            
+                            group.classList.add('deleting');
+                            setTimeout(() => {
+                                group.remove();
+                                // Update total and re-render
+                                totalTokens -= tokens;
+                                const percent = Math.round((totalTokens / maxTokens) * 100);
+                                updateContextUsage(percent);
+                                
+                                // Update divider totals if in timeline view
+                                updateDividerTotals();
+                            }, 300);
+                        }
+                    };
+                });
+            }
+            
+            // Call initially
+            attachEventListeners();
+            
+            // Make attachEventListeners globally available
+            window.attachEventListeners = attachEventListeners;
+        });
+        
+        // Update divider totals after deletion
+        function updateDividerTotals() {
+            const activeView = document.querySelector('.view-button.active').dataset.view;
+            
+            if (activeView === 'temporal') {
+                // Recalculate temporal groups
+                const groups = {
+                    'Last Week': 0,
+                    'Yesterday': 0,
+                    'Today': 0
+                };
+                
+                document.querySelectorAll('.chunk-group').forEach(chunk => {
+                    const meta = chunk.querySelector('.chunk-meta').textContent;
+                    const title = chunk.querySelector('.chunk-title').textContent;
+                    const tokens = parseInt(chunk.dataset.tokens);
+                    
+                    if (meta.includes('Nov 25-29') || title.includes('Planning')) {
+                        groups['Last Week'] += tokens;
+                    } else if (meta.includes('Mon') || meta.includes('Yesterday')) {
+                        groups['Yesterday'] += tokens;
+                    } else if (meta.includes('Today') || meta.includes('PM')) {
+                        groups['Today'] += tokens;
+                    }
+                });
+                
+                // Update divider labels
+                document.querySelectorAll('.temporal-divider span').forEach(span => {
+                    const text = span.textContent;
+                    if (text.includes('Last Week')) {
+                        span.textContent = `Last Week - ${Math.round(groups['Last Week']/1000)}k tokens`;
+                    } else if (text.includes('Yesterday')) {
+                        span.textContent = `Yesterday - ${Math.round(groups['Yesterday']/1000)}k tokens`;
+                    } else if (text.includes('Today')) {
+                        span.textContent = `Today - ${Math.round(groups['Today']/1000)}k tokens`;
+                    }
+                });
+            }
+        }
+
+        // Sort chunks function
+        function sortChunks(sortType) {
+            // Update active button
+            document.querySelectorAll('.view-button').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.view === sortType) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            const chunksContainer = document.querySelector('.context-chunks');
+            const allChunks = Array.from(document.querySelectorAll('.chunk-group'));
+            const dividers = Array.from(document.querySelectorAll('.temporal-divider'));
+            
+            // Add fade out effect
+            chunksContainer.style.opacity = '0';
+            chunksContainer.style.transition = 'opacity 0.15s ease';
+            
+            setTimeout(() => {
+                // Clear the container
+                chunksContainer.innerHTML = '';
+            
+            if (sortType === 'temporal') {
+                // Timeline view - restore original chronological order with dividers
+                const groups = [
+                    { label: 'Last Week - 32k tokens', chunks: [] },
+                    { label: 'Yesterday - 52k tokens', chunks: [] },
+                    { label: 'Today - 68k tokens', chunks: [] }
+                ];
+                
+                // Sort chunks into temporal groups based on their content
+                allChunks.forEach(chunk => {
+                    const meta = chunk.querySelector('.chunk-meta').textContent;
+                    const title = chunk.querySelector('.chunk-title').textContent;
+                    
+                    if (meta.includes('Nov 25-29') || title.includes('Planning')) {
+                        groups[0].chunks.push(chunk);
+                    } else if (meta.includes('Mon') || meta.includes('Yesterday')) {
+                        groups[1].chunks.push(chunk);
+                    } else if (meta.includes('Today') || meta.includes('PM')) {
+                        groups[2].chunks.push(chunk);
+                    }
+                });
+                
+                // Render groups with dividers
+                groups.forEach(group => {
+                    if (group.chunks.length > 0) {
+                        const divider = document.createElement('div');
+                        divider.className = 'temporal-divider';
+                        divider.innerHTML = `<span>${group.label}</span>`;
+                        chunksContainer.appendChild(divider);
+                        
+                        group.chunks.forEach(chunk => {
+                            chunksContainer.appendChild(chunk);
+                        });
+                    }
+                });
+                
+            } else if (sortType === 'type') {
+                // By Type view - group by content type
+                const typeGroups = {
+                    file: { label: 'Files', chunks: [], total: 0, icon: '📑' },
+                    conversation: { label: 'Conversations', chunks: [], total: 0, icon: '💬' },
+                    analysis: { label: 'Analysis', chunks: [], total: 0, icon: '📊' },
+                    code: { label: 'Code', chunks: [], total: 0, icon: '🎨' },
+                    search: { label: 'Search', chunks: [], total: 0, icon: '🔍' }
+                };
+                
+                // Sort chunks into type groups
+                allChunks.forEach(chunk => {
+                    const type = chunk.dataset.type;
+                    const tokens = parseInt(chunk.dataset.tokens);
+                    if (typeGroups[type]) {
+                        typeGroups[type].chunks.push(chunk);
+                        typeGroups[type].total += tokens;
+                    }
+                });
+                
+                // Render type groups in logical order
+                const typeOrder = ['file', 'conversation', 'analysis', 'code', 'search'];
+                typeOrder.forEach(type => {
+                    const group = typeGroups[type];
+                    if (group && group.chunks.length > 0) {
+                        const divider = document.createElement('div');
+                        divider.className = 'temporal-divider';
+                        const plural = group.chunks.length > 1 ? 's' : '';
+                        divider.innerHTML = `<span>${group.icon} ${group.label} - ${group.chunks.length} item${plural}, ${Math.round(group.total/1000)}k tokens</span>`;
+                        chunksContainer.appendChild(divider);
+                        
+                        // Sort chunks within type by size (largest first)
+                        group.chunks.sort((a, b) => {
+                            return parseInt(b.dataset.tokens) - parseInt(a.dataset.tokens);
+                        });
+                        
+                        group.chunks.forEach(chunk => {
+                            chunksContainer.appendChild(chunk);
+                        });
+                    }
+                });
+                
+            } else if (sortType === 'size') {
+                // By Size view - sort all chunks by token count
+                const sortedChunks = allChunks.sort((a, b) => {
+                    return parseInt(b.dataset.tokens) - parseInt(a.dataset.tokens);
+                });
+                
+                // Group by size ranges
+                const sizeGroups = [
+                    { label: 'Large (30k+ tokens)', min: 30000, chunks: [] },
+                    { label: 'Medium (10k-30k tokens)', min: 10000, max: 30000, chunks: [] },
+                    { label: 'Small (<10k tokens)', max: 10000, chunks: [] }
+                ];
+                
+                sortedChunks.forEach(chunk => {
+                    const tokens = parseInt(chunk.dataset.tokens);
+                    if (tokens >= 30000) {
+                        sizeGroups[0].chunks.push(chunk);
+                    } else if (tokens >= 10000) {
+                        sizeGroups[1].chunks.push(chunk);
+                    } else {
+                        sizeGroups[2].chunks.push(chunk);
+                    }
+                });
+                
+                // Render size groups
+                sizeGroups.forEach(group => {
+                    if (group.chunks.length > 0) {
+                        const divider = document.createElement('div');
+                        divider.className = 'temporal-divider';
+                        const plural = group.chunks.length > 1 ? 'items' : 'item';
+                        const totalTokens = group.chunks.reduce((sum, chunk) => sum + parseInt(chunk.dataset.tokens), 0);
+                        divider.innerHTML = `<span>${group.label} - ${group.chunks.length} ${plural}, ${Math.round(totalTokens/1000)}k total</span>`;
+                        chunksContainer.appendChild(divider);
+                        
+                        group.chunks.forEach(chunk => {
+                            chunksContainer.appendChild(chunk);
+                        });
+                    }
+                });
+            }
+            
+            // Re-attach event listeners after sorting
+            window.attachEventListeners();
+            
+            // Fade in effect
+            chunksContainer.style.opacity = '1';
+            }, 150);
+        }
+    </script>
+</body>
+</html>

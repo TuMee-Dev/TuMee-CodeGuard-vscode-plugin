@@ -1,0 +1,295 @@
+{
+  "contextUsage": {
+    "current": 152000,
+    "maximum": 200000,
+    "percentage": 76,
+    "unit": "tokens"
+  },
+  "settings": {
+    "autoCleanupThreshold": 40,
+    "autoCleanupEnabled": true,
+    "sortBy": "temporal",
+    "groupByTime": true
+  },
+  "chunks": [
+    {
+      "id": "chunk_001",
+      "type": "conversation",
+      "title": "Project Planning",
+      "description": "Architecture discussion and timeline planning",
+      "tokens": 32000,
+      "timestamp": "2024-11-29T14:30:00Z",
+      "metadata": {
+        "messageCount": 45,
+        "participants": ["user", "assistant"],
+        "tags": ["architecture", "planning"],
+        "source": "chat"
+      },
+      "actions": {
+        "canDelete": true,
+        "canSummarize": true,
+        "canExtract": false,
+        "canArchive": true
+      },
+      "visual": {
+        "icon": "💬",
+        "color": "#3794ff"
+      }
+    },
+    {
+      "id": "chunk_002",
+      "type": "file",
+      "title": "customer_data.csv",
+      "description": "Customer dataset with 50k rows",
+      "tokens": 35000,
+      "timestamp": "2024-12-02T10:00:00Z",
+      "metadata": {
+        "fileName": "customer_data.csv",
+        "fileSize": "12.4 MB",
+        "mimeType": "text/csv",
+        "rows": 50000,
+        "columns": 15,
+        "source": "upload",
+        "extractedInsights": false
+      },
+      "actions": {
+        "canDelete": true,
+        "canSummarize": false,
+        "canExtract": true,
+        "canArchive": false,
+        "customActions": [
+          {
+            "id": "keepAnalysisOnly",
+            "label": "Keep Analysis Only",
+            "description": "Remove raw data, keep insights"
+          }
+        ]
+      },
+      "visual": {
+        "icon": "📑",
+        "color": "#e05252"
+      }
+    },
+    {
+      "id": "chunk_003",
+      "type": "search",
+      "title": "Web Research",
+      "description": "Market analysis research results",
+      "tokens": 12000,
+      "timestamp": "2024-12-02T11:00:00Z",
+      "metadata": {
+        "searchQueries": [
+          "SaaS market trends 2024",
+          "competitor analysis tools",
+          "market segmentation strategies"
+        ],
+        "resultCount": 8,
+        "sources": ["web_search", "academic_papers"],
+        "domains": ["gartner.com", "mckinsey.com", "hbr.org"]
+      },
+      "actions": {
+        "canDelete": true,
+        "canSummarize": true,
+        "canExtract": false,
+        "canArchive": true
+      },
+      "visual": {
+        "icon": "🔍",
+        "color": "#dcdcaa"
+      }
+    },
+    {
+      "id": "chunk_004",
+      "type": "conversation",
+      "title": "ML Discussion",
+      "description": "Machine learning model optimization",
+      "tokens": 5000,
+      "timestamp": "2024-12-02T14:00:00Z",
+      "metadata": {
+        "messageCount": 8,
+        "participants": ["user", "assistant"],
+        "tags": ["ml", "optimization"],
+        "codeBlocks": 3,
+        "source": "chat"
+      },
+      "actions": {
+        "canDelete": true,
+        "canSummarize": true,
+        "canExtract": false,
+        "canArchive": true
+      },
+      "visual": {
+        "icon": "💬",
+        "color": "#3794ff"
+      }
+    },
+    {
+      "id": "chunk_005",
+      "type": "file",
+      "title": "quarterly_report_2024.pdf",
+      "description": "Q3 2024 Financial Report",
+      "tokens": 45000,
+      "timestamp": "2024-12-03T14:30:00Z",
+      "metadata": {
+        "fileName": "quarterly_report_2024.pdf",
+        "fileSize": "2.8 MB",
+        "mimeType": "application/pdf",
+        "pageCount": 48,
+        "source": "upload",
+        "extracted": {
+          "keyPoints": 12,
+          "figures": 8,
+          "tables": 5
+        }
+      },
+      "actions": {
+        "canDelete": true,
+        "canSummarize": false,
+        "canExtract": true,
+        "canArchive": false,
+        "customActions": [
+          {
+            "id": "extractKeyPoints",
+            "label": "Extract Key Points",
+            "description": "Extract main insights and data"
+          }
+        ]
+      },
+      "visual": {
+        "icon": "📄",
+        "color": "#e05252"
+      }
+    },
+    {
+      "id": "chunk_006",
+      "type": "analysis",
+      "title": "Financial Analysis",
+      "description": "Revenue trends and projections",
+      "tokens": 15000,
+      "timestamp": "2024-12-03T14:35:00Z",
+      "metadata": {
+        "messageCount": 12,
+        "analysisType": "financial",
+        "dataPoints": 150,
+        "charts": 4,
+        "source": "computation",
+        "parentChunk": "chunk_005"
+      },
+      "actions": {
+        "canDelete": true,
+        "canSummarize": true,
+        "canExtract": false,
+        "canArchive": true
+      },
+      "visual": {
+        "icon": "📊",
+        "color": "#4ec9b0"
+      }
+    },
+    {
+      "id": "chunk_007",
+      "type": "code",
+      "title": "Data Analysis Code",
+      "description": "Python analysis scripts and visualizations",
+      "tokens": 8000,
+      "timestamp": "2024-12-03T15:20:00Z",
+      "metadata": {
+        "artifactCount": 3,
+        "language": "python",
+        "artifacts": [
+          {
+            "id": "artifact_001",
+            "title": "revenue_analysis.py",
+            "lines": 145
+          },
+          {
+            "id": "artifact_002",
+            "title": "visualization_dashboard.py",
+            "lines": 203
+          },
+          {
+            "id": "artifact_003",
+            "title": "data_cleaning.py",
+            "lines": 89
+          }
+        ],
+        "source": "generation"
+      },
+      "actions": {
+        "canDelete": true,
+        "canSummarize": false,
+        "canExtract": false,
+        "canArchive": true
+      },
+      "visual": {
+        "icon": "🎨",
+        "color": "#c586c0"
+      }
+    }
+  ],
+  "temporalGroups": [
+    {
+      "id": "last_week",
+      "label": "Last Week",
+      "dateRange": {
+        "start": "2024-11-25T00:00:00Z",
+        "end": "2024-11-29T23:59:59Z"
+      },
+      "chunkIds": ["chunk_001"],
+      "totalTokens": 32000
+    },
+    {
+      "id": "yesterday",
+      "label": "Yesterday",
+      "dateRange": {
+        "start": "2024-12-02T00:00:00Z",
+        "end": "2024-12-02T23:59:59Z"
+      },
+      "chunkIds": ["chunk_002", "chunk_003", "chunk_004"],
+      "totalTokens": 52000
+    },
+    {
+      "id": "today",
+      "label": "Today",
+      "dateRange": {
+        "start": "2024-12-03T00:00:00Z",
+        "end": "2024-12-03T23:59:59Z"
+      },
+      "chunkIds": ["chunk_005", "chunk_006", "chunk_007"],
+      "totalTokens": 68000
+    }
+  ],
+  "statistics": {
+    "totalChunks": 7,
+    "byType": {
+      "file": { "count": 2, "tokens": 80000 },
+      "conversation": { "count": 2, "tokens": 37000 },
+      "analysis": { "count": 1, "tokens": 15000 },
+      "code": { "count": 1, "tokens": 8000 },
+      "search": { "count": 1, "tokens": 12000 }
+    },
+    "oldestChunk": "2024-11-29T14:30:00Z",
+    "newestChunk": "2024-12-03T15:20:00Z",
+    "averageChunkSize": 21714
+  },
+  "suggestions": [
+    {
+      "id": "sug_001",
+      "type": "cleanup",
+      "priority": "medium",
+      "message": "Consider extracting insights from 'customer_data.csv' to reduce tokens by ~80%",
+      "affectedChunks": ["chunk_002"],
+      "potentialSavings": 28000
+    },
+    {
+      "id": "sug_002",
+      "type": "archive",
+      "priority": "low",
+      "message": "Last week's planning discussion could be summarized",
+      "affectedChunks": ["chunk_001"],
+      "potentialSavings": 25000
+    }
+  ],
+  "version": "1.0",
+  "timestamp": "2024-12-03T16:00:00Z"
+}
