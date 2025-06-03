@@ -66,24 +66,4 @@ export function parseColor(color: string): { r: number, g: number, b: number } |
   return null;
 }
 
-/**
- * Calculate color brightness using YIQ formula
- * @param color Color in any CSS format
- * @returns Brightness value (0-255)
- */
-export function getColorBrightness(color: string): number {
-  const rgb = parseColor(color);
-  if (!rgb) return 128; // Default to medium brightness
 
-  // YIQ formula for perceived brightness
-  return (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
-}
-
-/**
- * Determine if a color is light or dark
- * @param color Color in any CSS format
- * @returns true if light, false if dark
- */
-export function isLightColor(color: string): boolean {
-  return getColorBrightness(color) > 128;
-}
