@@ -125,4 +125,3 @@ class BackgroundProcessor {
 
 // Singleton instance
 export const backgroundProcessor = new BackgroundProcessor();
-

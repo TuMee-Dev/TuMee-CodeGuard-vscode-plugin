@@ -126,4 +126,3 @@ export const removeAllFromConfig = (opts: { provider?: { fireOnChange: () => voi
 
   return true;
 };
-

@@ -3,7 +3,8 @@
  * Handles all HTML template generation and formatting
  */
 
-import { COLOR_THEMES } from './ColorConfigTypes';
+import type { GuardColors } from './ColorConfigTypes';
+import { DEFAULT_COLORS } from './ColorConfigTypes';
 import { getWebviewStyles, getWebviewJavaScript } from './webviewContent';
 // parseGuardTag removed - CLI only
 import * as fs from 'fs';
@@ -23,7 +24,8 @@ export class ColorCustomizerHtmlBuilder {
    * Generate the complete HTML content for the webview
    */
   public static getHtmlForWebview(
-    selectedTheme: string
+    selectedTheme: string,
+    builtInThemes: Record<string, { name: string; colors: GuardColors }> = {}
   ): string {
     // Use external module for CSS and JavaScript
     const css = getWebviewStyles();
@@ -31,8 +33,8 @@ export class ColorCustomizerHtmlBuilder {
     const javascript = getWebviewJavaScript(previewLines);
 
     // Get the current theme colors for initial HTML generation
-    const theme = COLOR_THEMES[selectedTheme] || COLOR_THEMES.light;
-    const colors = theme.colors;
+    const theme = builtInThemes[selectedTheme] || Object.values(builtInThemes)[0];
+    const colors = theme?.colors || DEFAULT_COLORS;
 
     // Generate permission sections with theme colors
     const permissionSections = Object.entries(colors.permissions).map(([id, perm]) => {
@@ -79,8 +81,8 @@ export class ColorCustomizerHtmlBuilder {
                         <h2>Themes</h2>
                         <div class="theme-controls">
                             <select id="themeSelect" onchange="applyPreset(this.value)" style="width: 45%;">
-                                ${Object.keys(COLOR_THEMES).map(key =>
-    `<option value="${key}">${COLOR_THEMES[key].name}</option>`).join('')}
+                                ${Object.keys(builtInThemes).map(key =>
+    `<option value="${key}">${builtInThemes[key].name}</option>`).join('')}
                             </select>
                             <select id="mixPatternSelect" onchange="updateMixPattern(this.value)" style="width: 45%; margin-left: 5px;">
                                 <option value="aiBorder">AI Border</option>

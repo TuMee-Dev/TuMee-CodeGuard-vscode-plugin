@@ -5,7 +5,6 @@ import type { ThemeResponse, CreateThemeResponse, ExportThemeResponse, ImportThe
 import { CLIWorker } from '../utils/cli/cliWorker';
 import type { GuardColors } from './colorCustomizer/ColorConfigTypes';
 import {
-  COLOR_THEMES,
   DEFAULT_COLORS,
   mergeWithDefaults
 } from './colorCustomizer/ColorConfigTypes';
@@ -153,8 +152,9 @@ export class ColorCustomizerPanel {
             return 'Theme name cannot be empty';
           }
           const customThemes = await this._getCustomThemes();
+          const builtInThemes = await this._getBuiltInThemes();
           const themeKey = value.toLowerCase();
-          if (customThemes[themeKey] || COLOR_THEMES[themeKey]) {
+          if (customThemes[themeKey] || builtInThemes[themeKey]) {
             return 'A theme with this name already exists';
           }
           return null;
@@ -269,7 +269,8 @@ export class ColorCustomizerPanel {
           this._currentTheme = themeName;
 
           // Determine if this is a built-in theme
-          this._isSystemTheme = !!COLOR_THEMES[themeKey];
+          const builtInThemes = await this._getBuiltInThemes();
+          this._isSystemTheme = !!builtInThemes[themeKey];
 
           // Update colors from CLI response
           const mergedColors = mergeWithDefaults(setThemeResponse.colors as Partial<GuardColors>);
@@ -290,20 +291,23 @@ export class ColorCustomizerPanel {
     } catch (error) {
       console.error('Failed to apply theme via CLI:', error);
 
-      // Fallback to local theme application
-      let theme = COLOR_THEMES[themeKey];
-      this._isSystemTheme = !!theme;
+      // Fallback to CLI theme lookup
+      let theme;
+      try {
+        const builtInThemes = await this._getBuiltInThemes();
+        theme = builtInThemes[themeKey];
+        this._isSystemTheme = !!theme;
 
-      if (!theme) {
-        try {
+        if (!theme) {
           const customThemes = await this._getCustomThemes();
           if (customThemes[themeKey]) {
             theme = customThemes[themeKey];
             this._isSystemTheme = false;
           }
-        } catch (customError) {
-          console.error('Failed to get custom themes:', customError);
         }
+      } catch (fallbackError) {
+        console.error('Failed to get themes for fallback:', fallbackError);
+        this._isSystemTheme = false;
       }
 
       if (theme) {
@@ -381,12 +385,13 @@ export class ColorCustomizerPanel {
         });
 
         if (response.status === 'success') {
+          // Get fresh theme lists after deletion
+          const builtInThemes = await this._getBuiltInThemes();
+          const customThemes = await this._getCustomThemes();
+
           // Determine next theme to select
           let nextTheme = '';
           if (this._currentTheme === name) {
-            // Get fresh theme lists after deletion
-            const builtInThemes = await this._getBuiltInThemes();
-            const customThemes = await this._getCustomThemes();
             const builtInThemeKeys = Object.keys(builtInThemes);
 
             if (Object.keys(customThemes).length > 0) {
@@ -414,7 +419,7 @@ export class ColorCustomizerPanel {
           // Then send the deletion notification
           setTimeout(() => {
             // Include whether the next theme is a system theme
-            const isNextThemeSystem = nextTheme && !!COLOR_THEMES[nextTheme.toLowerCase()];
+            const isNextThemeSystem = nextTheme && !!builtInThemes[nextTheme.toLowerCase()];
             this._postMessage('themeDeleted', {
               deletedTheme: name,
               nextTheme,
@@ -575,15 +580,9 @@ export class ColorCustomizerPanel {
       });
     } catch (error) {
       console.error('Failed to send theme list:', error);
-      // Fallback to local themes
-      const builtInThemeKeys = Object.keys(COLOR_THEMES);
-      const builtInThemesWithNames = builtInThemeKeys.map(key => ({
-        key: key,
-        name: COLOR_THEMES[key]?.name || key
-      }));
-
+      // No fallback - CLI-only architecture
       this._postMessage('updateThemeList', {
-        builtIn: builtInThemesWithNames,
+        builtIn: [],
         custom: []
       });
     }
@@ -591,10 +590,20 @@ export class ColorCustomizerPanel {
 
   private _update() {
     this._panel.title = 'Guard Tag Color Customizer';
-    this._panel.webview.html = ColorCustomizerHtmlBuilder.getHtmlForWebview('');
+
+    // Initial HTML with empty themes - will be updated after CLI loads
+    this._panel.webview.html = ColorCustomizerHtmlBuilder.getHtmlForWebview('', {});
 
     setTimeout(() => {
       void (async () => {
+        // Get themes and update HTML
+        try {
+          const builtInThemes = await this._getBuiltInThemes();
+          this._panel.webview.html = ColorCustomizerHtmlBuilder.getHtmlForWebview('', builtInThemes);
+        } catch (error) {
+          console.error('Failed to load themes for HTML generation:', error);
+        }
+
         void this._sendThemeList();
 
         // Wait for CLI to be ready before getting current theme

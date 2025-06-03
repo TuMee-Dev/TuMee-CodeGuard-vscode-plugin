@@ -19,5 +19,3 @@ export interface MixPatternResult {
   // For patterns that can't be represented with basic CSS, we'll fall back to a solid color
   fallbackToSolid?: boolean;
 }
-
-

@@ -65,5 +65,3 @@ export function parseColor(color: string): { r: number, g: number, b: number } |
 
   return null;
 }
-
-

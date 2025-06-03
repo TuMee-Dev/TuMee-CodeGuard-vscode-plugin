@@ -1,6 +1,5 @@
 import type { MixPattern } from '../../types/mixPatterns';
 import { DEFAULT_MIX_PATTERN } from '../../types/mixPatterns';
-import { getColorThemes } from '../../utils/rendering/themeLoader';
 
 export interface PermissionColorConfig {
   enabled: boolean;                // Whether to use own color or other's
@@ -53,9 +52,6 @@ export interface GuardColors {
   };
 }
 
-// Get themes from external configuration
-export const COLOR_THEMES = getColorThemes();
-
 // Default colors (Light theme)
 export const DEFAULT_COLORS: GuardColors = {
   permissions: {
@@ -72,7 +68,6 @@ export const DEFAULT_COLORS: GuardColors = {
   highlightEntireLine: false,  // Default to false for backward compatibility
   mixPattern: DEFAULT_MIX_PATTERN
 };
-
 
 // Helper function to merge colors with defaults
 export function mergeWithDefaults(colors: Partial<GuardColors> | undefined): GuardColors {

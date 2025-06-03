@@ -12,7 +12,6 @@ export interface MixPatternDefinition {
   description: string;
 }
 
-
 export const DEFAULT_MIX_PATTERN = MixPattern.HUMAN_BORDER;
 
 /**

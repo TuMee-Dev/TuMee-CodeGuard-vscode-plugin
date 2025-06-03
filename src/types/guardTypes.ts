@@ -2,7 +2,6 @@
 
 import type { Range } from 'vscode';
 
-
 /**
  * Type for permission values
  */

@@ -41,7 +41,6 @@ export async function parseGuardTags(
   return parseGuardTagsCli(document, lines);
 }
 
-
 /**
  * Get line permissions - PURE CLI IMPLEMENTATION ONLY
  * This function is FORBIDDEN to do any local parsing
@@ -53,7 +52,6 @@ export function getLinePermissions(
   // CLI ONLY - NO LOCAL PARSING ALLOWED
   return getLinePermissionsCli(document, guardTags);
 }
-
 
 /**
  * Mark lines as modified - CLI implementation only

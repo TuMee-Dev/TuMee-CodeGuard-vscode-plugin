@@ -24,4 +24,3 @@ export const filterUris = async (uris: Array<Uri>): Promise<Array<Uri>> => {
 
   return filteredUris;
 };
-

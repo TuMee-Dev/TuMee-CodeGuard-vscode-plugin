@@ -431,4 +431,3 @@ export function markLinesModified(
 export function getCliWorker(): CLIWorker | undefined {
   return cliWorker;
 }
-

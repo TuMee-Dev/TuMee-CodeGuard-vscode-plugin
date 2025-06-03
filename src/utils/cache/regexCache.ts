@@ -3,7 +3,6 @@
  * Single source of truth for all guard tag patterns
  */
 
-
 // Guard tag patterns - compile once and reuse
 export const GUARD_TAG_PATTERNS = {
   // Comprehensive guard tag pattern supporting ALL specification formats
@@ -26,7 +25,6 @@ export const GUARD_TAG_PATTERNS = {
   HAS_GUARD_TAG: /@guard:/i
 } as const;
 
-
 // Utility patterns
 export const UTILITY_PATTERNS = {
   // Path normalization
@@ -39,5 +37,3 @@ export const UTILITY_PATTERNS = {
   // Numeric validation
   NUMERIC_ONLY: /^\d+$/
 } as const;
-
-

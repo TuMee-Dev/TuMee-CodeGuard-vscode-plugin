@@ -11,7 +11,6 @@ import { ColorRenderingEngine } from './colorRenderingEngine';
 import { DebugLogger } from '../ui/debugLogger';
 import { configManager, CONFIG_KEYS } from '../config/configurationManager';
 
-
 /**
  * Factory class for creating and managing decoration types
  */
@@ -137,7 +136,6 @@ export class DecorationTypeFactory {
       permissionHighlightEntireLine
     };
   }
-
 
   /**
    * Create decoration types for all permission combinations
