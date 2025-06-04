@@ -2,7 +2,7 @@
 
 ## Current Status
 Date: 2025-01-25
-Last Task: Fixed guard tag parser scope resolution (block and file scopes)
+Last Task: Integrated gitignore functionality with RPC-only suggestions (v1.6.0)
 
 ## Todo List Status
 
@@ -42,6 +42,13 @@ Last Task: Fixed guard tag parser scope resolution (block and file scopes)
     - VSCode configuration objects are proxies that don't allow direct property deletion
     - Fixed by creating a shallow copy of customThemes object before deleting properties
     - Prevents "trap result does not reflect extensibility of proxy target" error
+22. Integrate gitignore functionality with RPC-only suggestions:
+    - Added gitignore autocomplete provider using existing CLI RPC connection
+    - Added context menu "Add to .gitignore" command for files/folders  
+    - Added "Create .gitignore file" command with server-provided templates
+    - All suggestions come from RPC `getGitignoreSuggestions` command - NO hardcoded fallbacks in IDE
+    - Uses existing error handling and CLI worker infrastructure
+    - Created comprehensive RPC API specification in docs/rpc-gitignore-api-spec.md
 
 ### 🚀 In Progress
 - **None currently** - Ready for next task

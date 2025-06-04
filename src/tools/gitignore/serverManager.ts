@@ -28,7 +28,7 @@ export class ServerManager {
   async getSuggestions(prefix: string): Promise<Suggestion[]> {
     const cliWorker = getCliWorker();
 
-    // If CLI worker is available, try to get suggestions from it
+    // If CLI worker is available, get suggestions from RPC
     if (cliWorker?.isWorkerReady()) {
       try {
         const response = await cliWorker.sendRequest('getGitignoreSuggestions', {
@@ -41,7 +41,7 @@ export class ServerManager {
           return result.suggestions || [];
         }
       } catch (error) {
-        // Log but don't show error to user - fall back to built-in suggestions
+        // Log error and return empty array - no fallback suggestions in IDE
         errorHandler.handleError(
           error instanceof Error ? error : new Error(String(error)),
           {
@@ -52,90 +52,8 @@ export class ServerManager {
       }
     }
 
-    // Fallback to built-in suggestions
-    return this.getBuiltInSuggestions(prefix);
+    // No CLI available - return empty suggestions
+    return [];
   }
 
-  private getBuiltInSuggestions(prefix: string): Suggestion[] {
-    const allSuggestions = [
-      {
-        label: 'node_modules/',
-        detail: 'Node.js dependencies',
-        documentation: 'Ignores all Node.js package dependencies',
-        insertText: 'node_modules/'
-      },
-      {
-        label: '*.log',
-        detail: 'Log files',
-        documentation: 'Ignores all files with .log extension',
-        insertText: '*.log'
-      },
-      {
-        label: '.env',
-        detail: 'Environment variables',
-        documentation: 'Ignores environment configuration file',
-        insertText: '.env'
-      },
-      {
-        label: 'dist/',
-        detail: 'Distribution folder',
-        documentation: 'Ignores compiled/built distribution files',
-        insertText: 'dist/'
-      },
-      {
-        label: 'build/',
-        detail: 'Build folder',
-        documentation: 'Ignores build output directory',
-        insertText: 'build/'
-      },
-      {
-        label: 'coverage/',
-        detail: 'Test coverage',
-        documentation: 'Ignores test coverage reports',
-        insertText: 'coverage/'
-      },
-      {
-        label: '.DS_Store',
-        detail: 'macOS system file',
-        documentation: 'Ignores macOS Finder metadata files',
-        insertText: '.DS_Store'
-      },
-      {
-        label: 'Thumbs.db',
-        detail: 'Windows system file',
-        documentation: 'Ignores Windows thumbnail cache files',
-        insertText: 'Thumbs.db'
-      },
-      {
-        label: '*.tmp',
-        detail: 'Temporary files',
-        documentation: 'Ignores all temporary files',
-        insertText: '*.tmp'
-      },
-      {
-        label: '*.swp',
-        detail: 'Vim swap files',
-        documentation: 'Ignores Vim editor swap files',
-        insertText: '*.swp'
-      },
-      {
-        label: '.vscode/',
-        detail: 'VS Code settings',
-        documentation: 'Ignores VS Code workspace settings',
-        insertText: '.vscode/'
-      },
-      {
-        label: '.idea/',
-        detail: 'IntelliJ IDEA settings',
-        documentation: 'Ignores IntelliJ IDEA project files',
-        insertText: '.idea/'
-      }
-    ];
-
-    // Filter suggestions based on prefix
-    return allSuggestions.filter(suggestion =>
-      suggestion.label.toLowerCase().includes(prefix.toLowerCase()) ||
-            suggestion.detail.toLowerCase().includes(prefix.toLowerCase())
-    );
-  }
 }
