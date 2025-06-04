@@ -2,7 +2,6 @@
 
 import type { Range } from 'vscode';
 
-
 export interface GuardTag {
   lineNumber: number;
   identifier?: string;
@@ -35,7 +34,6 @@ export interface LinePermission {
   };
 }
 
-
 export interface DecorationRanges {
   // All permission combinations
   aiRead_humanRead: { range: Range }[];
@@ -57,4 +55,3 @@ export interface DecorationRanges {
   aiWriteContext_humanNoAccess: { range: Range }[];
 
 }
-

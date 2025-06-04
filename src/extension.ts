@@ -1,7 +1,7 @@
 // The final extension.ts file with thoroughly verified line count handling
 
 import type * as vscode from 'vscode';
-import { type Disposable, type ExtensionContext, window, workspace, commands } from 'vscode';
+import { type Disposable, type ExtensionContext, window, workspace, commands, languages } from 'vscode';
 import type { FileCustomizationProvider } from '@/tools/file-customization-provider';
 import { registerFileDecorationProvider } from '@/tools/file-customization-provider';
 import { registerContextMenu } from '@/tools/register-context-menu';
@@ -24,6 +24,10 @@ import {
 } from '@/utils';
 import { registerColorCustomizerCommand } from '@/tools/colorCustomizer';
 import { DocumentDecorationManager } from './extension/DocumentDecorationManager';
+import { GitignoreCompletionProvider } from '@/tools/gitignore/completionProvider';
+import { ServerManager } from '@/tools/gitignore/serverManager';
+import { addToGitignore } from '@/tools/gitignore/addToGitignore';
+import { createGitignore } from '@/tools/gitignore/createGitignore';
 
 let disposables: Disposable[] = [];
 // Global decoration manager instance
@@ -69,6 +73,23 @@ function registerCommands(context: ExtensionContext, provider: FileCustomization
 
   // Register color customizer command
   disposables.push(registerColorCustomizerCommand(context));
+
+  // Register gitignore completion provider for .gitignore files
+  const gitignoreServerManager = new ServerManager();
+  const gitignoreProvider = new GitignoreCompletionProvider(gitignoreServerManager);
+  disposables.push(
+    languages.registerCompletionItemProvider(
+      { language: 'ignore', scheme: 'file' },
+      gitignoreProvider,
+      '/', '!', '#'
+    )
+  );
+
+  // Register gitignore commands
+  disposables.push(
+    commands.registerCommand('tumee-vscode-plugin.addToGitignore', addToGitignore),
+    commands.registerCommand('tumee-vscode-plugin.createGitignore', createGitignore)
+  );
 
   // Register refresh decorations command
   disposables.push(
@@ -269,7 +290,7 @@ export function activate(context: ExtensionContext): void {
 // All decoration implementation functions moved to DocumentDecorationManager
 
 export function deactivate(): void {
-  // Shutdown CLI processor FIRST
+  // Shutdown CLI processor FIRST (handles all server communication)
   void shutdownCliProcessor();
 
   // Dispose decoration manager

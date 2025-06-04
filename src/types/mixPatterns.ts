@@ -6,7 +6,6 @@ export enum MixPattern {
   HUMAN_BORDER = 'humanBorder'         // AI background with Human left border
 }
 
-
 export const DEFAULT_MIX_PATTERN = MixPattern.HUMAN_BORDER;
 
 /**

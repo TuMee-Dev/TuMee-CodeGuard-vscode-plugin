@@ -92,4 +92,3 @@ export interface GitRepository {
     getBranches: () => Promise<GitBranch[]>;
   };
 }
-

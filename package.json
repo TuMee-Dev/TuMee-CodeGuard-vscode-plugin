@@ -2,7 +2,7 @@
   "name": "tumee-vscode-plugin",
   "displayName": "TuMee File and Folder Customization",
   "description": "Customize your files and folders based on human/AI attributes. Set colors, badges, or tooltips for any file or folder in your workspace based on ACL rules.",
-  "version": "1.5.20",
+  "version": "1.6.0",
   "license": "MIT",
   "publisher": "tumee",
   "repository": {
@@ -28,11 +28,16 @@
     "tooltip",
     "human",
     "ai",
-    "acl"
+    "acl",
+    "gitignore",
+    "git",
+    "ignore",
+    "autocomplete"
   ],
   "pricing": "Free",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onLanguage:ignore"
   ],
   "main": "./dist/extension.js",
   "snippets": [
@@ -42,6 +47,12 @@
     }
   ],
   "contributes": {
+    "languages": [{
+      "id": "ignore",
+      "aliases": ["Ignore", "gitignore"],
+      "extensions": [".gitignore"],
+      "filenames": [".gitignore"]
+    }],
     "configuration": {
       "title": "TuMee File and Folder Customization",
       "properties": {
@@ -197,8 +208,13 @@
       "explorer/context": [
         {
           "when": "explorerResourceIsFolder || resourceScheme == file",
-          "group": "tumeeCustomization",
+          "group": "1_tumeeCustomization",
           "submenu": "tumee-vscode-plugin.subMenu"
+        },
+        {
+          "command": "tumee-vscode-plugin.addToGitignore",
+          "when": "resourceScheme == file",
+          "group": "2_tumeeGitignore"
         }
       ],
       "editor/context": [
@@ -371,6 +387,16 @@
         "title": "Show Performance Report",
         "category": "TuMee Customization",
         "icon": "$(graph)"
+      },
+      {
+        "command": "tumee-vscode-plugin.addToGitignore",
+        "title": "Add to .gitignore",
+        "category": "TuMee Gitignore"
+      },
+      {
+        "command": "tumee-vscode-plugin.createGitignore",
+        "title": "Create .gitignore file",
+        "category": "TuMee Gitignore"
       }
     ],
     "colors": [
