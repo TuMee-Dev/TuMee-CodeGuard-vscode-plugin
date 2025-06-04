@@ -2,17 +2,17 @@
 
 ## Overview
 
-This document specifies the `--worker-mode` functionality for the CodeGuard CLI tool. Worker mode provides a persistent, high-performance parser service that communicates via JSON over stdin/stdout for real-time document parsing in the VSCode extension.
+This document specifies the `ide` functionality for the CodeGuard CLI tool. Worker mode provides a persistent, high-performance parser service that communicates via JSON over stdin/stdout for real-time document parsing in the VSCode extension.
 
 ## Command Line Interface
 
 ### Startup Command
 ```bash
-codeguard --worker-mode [--min-version=1.2.0]
+codeguard ide [--min-version 1.2.0]
 ```
 
 ### Flags
-- `--worker-mode`: Enable persistent worker mode with JSON protocol
+- `ide`: Enable persistent worker mode with JSON protocol
 - `--min-version`: Optional minimum version requirement for compatibility checking
 
 ### Expected Behavior
@@ -628,7 +628,7 @@ interface ThemeExportData {
 
 ```bash
 # CLI startup
-$ codeguard --worker-mode
+$ codeguard --ide
 {"type":"startup","version":"1.3.5","capabilities":["delta-updates","tree-sitter"],"ready":true}
 
 # VSCode sends document

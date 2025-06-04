@@ -133,7 +133,7 @@ export class CLIWorker extends EventEmitter {
       const cliPath = getAclCliPath();
 
       try {
-        this.process = spawn(cliPath, ['--worker-mode'], {
+        this.process = spawn(cliPath, ['ide'], {
           stdio: ['pipe', 'pipe', 'pipe'],
           shell: false
         });
