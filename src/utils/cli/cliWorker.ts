@@ -97,7 +97,7 @@ export class CLIWorker extends EventEmitter {
   private isReady = false;
   private startupInfo?: CLIStartupInfo;
 
-  private readonly MIN_CLI_VERSION = '0.3.0';
+  private readonly MIN_CLI_VERSION = '0.4.0';
 
   private get REQUEST_TIMEOUT(): number {
     return configManager().get('cliWorkerTimeout', 10000);
