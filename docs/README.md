@@ -17,7 +17,7 @@ In modern AI-assisted development:
 CodeGuard introduces **guard tags** - special comments that define AI/human access permissions at the code block level:
 
 ```javascript
-// @guard:ai:r,human:w - AI can read, humans can write
+// @guard:ai:r @guard:human:w - AI can read, humans can write
 function criticalSecurityFunction() {
     // @guard:ai:n - AI has no access to this block
     const apiKey = process.env.SECRET_KEY;
@@ -38,6 +38,7 @@ function formatDate(date) {
 
 **How it works**:
 - **Syntax**: `@guard:actor:permission` where actor is `ai` or `human`, permission is `r` (read), `w` (write), or `n` (no access)
+- **Multiple Tags**: Use separate tags on same line: `@guard:ai:r @guard:human:w`
 - **Scope**: Works at file level and code block level
 - **Intelligence**: Automatically detects code block boundaries using tree-sitter parsing
 - **Visual Feedback**: Real-time color coding shows permission levels
@@ -45,7 +46,7 @@ function formatDate(date) {
 **Example Use Cases**:
 - **Security Code**: `@guard:ai:n` - Keep AI away from authentication logic
 - **AI Playground**: `@guard:ai:w` - Let AI freely experiment with utility functions  
-- **Human Review Required**: `@guard:ai:r,human:w` - AI can read for context but humans must make changes
+- **Human Review Required**: `@guard:ai:r @guard:human:w` - AI can read for context but humans must make changes
 - **Legacy Code**: `@guard:ai:r` - AI can understand but shouldn't modify stable code
 
 **Supported Languages**: JavaScript, TypeScript, Python, Java, C++, Rust, Go, and more (with automatic fallback for unsupported languages)
@@ -121,7 +122,7 @@ function formatDate(date) {
 ### Example 1: Secure API Development
 
 ```javascript
-// @guard:ai:r,human:w - AI can understand the API structure but humans control changes
+// @guard:ai:r @guard:human:w - AI can understand the API structure but humans control changes
 class AuthenticationAPI {
     // @guard:ai:n - Critical security logic - AI cannot access
     private validateApiKey(key: string): boolean {
@@ -156,7 +157,7 @@ def new_data_validator(data):
     # AI: feel free to enhance validation logic here
     return True
 
-# @guard:human:w,ai:r - Humans handle business logic, AI provides context
+# @guard:human:w @guard:ai:r - Humans handle business logic, AI provides context
 def calculate_pricing(customer_tier, usage):
     """Business-critical pricing - requires human oversight"""
     # Pricing logic requires business domain knowledge
