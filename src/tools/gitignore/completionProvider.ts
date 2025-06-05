@@ -23,7 +23,7 @@ export class GitignoreCompletionProvider implements vscode.CompletionItemProvide
 
       // Set appropriate completion item kind based on suggestion type
       if ('type' in suggestion) {
-        const workspaceSuggestion = suggestion as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const workspaceSuggestion = suggestion as { type: 'file' | 'folder' | 'pattern' };
         switch (workspaceSuggestion.type) {
           case 'file':
             item.kind = vscode.CompletionItemKind.File;
