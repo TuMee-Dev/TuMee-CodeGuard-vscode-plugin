@@ -47,12 +47,21 @@
     }
   ],
   "contributes": {
-    "languages": [{
-      "id": "ignore",
-      "aliases": ["Ignore", "gitignore"],
-      "extensions": [".gitignore"],
-      "filenames": [".gitignore"]
-    }],
+    "languages": [
+      {
+        "id": "ignore",
+        "aliases": [
+          "Ignore",
+          "gitignore"
+        ],
+        "extensions": [
+          ".gitignore"
+        ],
+        "filenames": [
+          ".gitignore"
+        ]
+      }
+    ],
     "configuration": {
       "title": "TuMee File and Folder Customization",
       "properties": {
@@ -474,6 +483,7 @@
     "deadcode:files": "knip --include files",
     "deadcode:deps": "knip --include dependencies",
     "deadcode:exports": "knip --include exports",
+    "build:vsix": "vsce package",
     "test": "node ./tests/integration.test.js",
     "test:old": "node ./tests/line-count/focused-fix.js",
     "precommit": "npm run lint && npm run typecheck && npm run test"
@@ -483,6 +493,7 @@
     "@types/vscode": "^1.100.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
+    "@vscode/vsce": "^3.5.0",
     "copy-webpack-plugin": "^13.0.0",
     "eslint": "^8.57.0",
     "jsdom": "^26.1.0",
