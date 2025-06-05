@@ -46,6 +46,7 @@ const extensionConfig = {
         { from: 'src/tools/colorCustomizer/colorRenderingEngineWebview.js', to: 'tools/colorCustomizer/colorRenderingEngineWebview.js' },
         { from: 'src/tools/colorCustomizer/webviewGuardParser.js', to: 'tools/colorCustomizer/webviewGuardParser.js' },
         { from: 'resources/preview-lines.json', to: 'resources/preview-lines.json' },
+        { from: 'resources/vscode.png', to: 'resources/vscode.png' },
       ],
     }),
   ]
