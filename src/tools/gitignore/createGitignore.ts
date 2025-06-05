@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { errorHandler } from '@/utils/error/errorHandler';
+import { getCliWorker } from '@/utils/cli/guardProcessorCli';
 
 export async function createGitignore() {
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -42,39 +43,12 @@ export async function createGitignore() {
     }
   }
 
-  // Basic .gitignore template
-  const template = `# Dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Build outputs
-dist/
-build/
-out/
-*.log
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# Temporary files
-*.tmp
-*.temp
-`;
+  // Get template from RPC server
+  const template = await getGitignoreTemplate(targetFolder.uri.fsPath);
+  if (!template) {
+    void vscode.window.showErrorMessage('Failed to get .gitignore template from server');
+    return;
+  }
 
   try {
     await fs.promises.writeFile(gitignorePath, template);
@@ -94,4 +68,34 @@ Thumbs.db
       }
     );
   }
+}
+
+async function getGitignoreTemplate(workspacePath: string): Promise<string | null> {
+  const cliWorker = getCliWorker();
+
+  if (!cliWorker?.isWorkerReady()) {
+    return null;
+  }
+
+  try {
+    const response = await cliWorker.sendRequest('getGitignoreTemplate', {
+      workspacePath: workspacePath,
+      context: 'template'
+    });
+
+    if (response.status === 'success' && response.result) {
+      const result = response.result as { template: string };
+      return result.template;
+    }
+  } catch (error) {
+    errorHandler.handleError(
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        operation: 'getGitignoreTemplate',
+        details: { workspacePath }
+      }
+    );
+  }
+
+  return null;
 }

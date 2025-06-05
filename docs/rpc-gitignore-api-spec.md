@@ -235,9 +235,101 @@ The server could analyze the workspace and provide framework-specific suggestion
 ### Custom Templates
 Future API could support saving and retrieving custom gitignore templates.
 
+## Command: `getGitignoreTemplate`
+
+### Request
+```json
+{
+  "id": "req-125",
+  "command": "getGitignoreTemplate",
+  "payload": {
+    "workspacePath": "/Users/dev/myproject",
+    "context": "template"
+  }
+}
+```
+
+### Request Parameters
+- **`workspacePath`** (string): Absolute path to the workspace root
+- **`context`** (string): Context hint for template generation
+  - `"template"` - User creating new .gitignore file
+  - `"default"` - Generic template
+  - `"detected"` - Template based on detected project type
+
+### Response (Success)
+```json
+{
+  "id": "req-125",
+  "status": "success",
+  "result": {
+    "template": "# Dependencies\nnode_modules/\nnpm-debug.log*\n\n# Build outputs\ndist/\nbuild/\n\n# IDE\n.vscode/\n.idea/\n\n# OS\n.DS_Store\nThumbs.db\n\n# Environment\n.env\n.env.local\n\n# Temporary\n*.tmp\n*.temp\n"
+  }
+}
+```
+
+### Response (Error)
+```json
+{
+  "id": "req-125",
+  "status": "error",
+  "error": "Failed to generate gitignore template"
+}
+```
+
+### Template Generation Logic
+The server should analyze the workspace to provide intelligent templates:
+
+1. **Language Detection**: Scan for package.json, Cargo.toml, requirements.txt, etc.
+2. **Framework Detection**: Identify React, Vue, Angular, etc.
+3. **Build Tool Detection**: Detect webpack, vite, rollup configurations
+4. **IDE Detection**: Check for existing .vscode/, .idea/ folders
+
+### Example Template Content
+```gitignore
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+out/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+
+# Coverage reports
+coverage/
+
+# Test outputs
+test-results/
+playwright-report/
+```
+
 ## Implementation Notes
 
 1. **Performance**: Server should cache common patterns for fast response
 2. **Extensibility**: Pattern database should be easily configurable
 3. **Context Awareness**: Future versions could analyze project structure for smarter suggestions
 4. **No Client Fallbacks**: IDE client must not contain hardcoded patterns - all suggestions come from server
+5. **Template Intelligence**: Templates should be generated based on workspace analysis
