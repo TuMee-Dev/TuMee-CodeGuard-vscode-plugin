@@ -5,6 +5,7 @@
   "version": "1.7.0",
   "license": "MIT",
   "publisher": "tumee",
+  "icon": "resources/vscode.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/TuMee/CodeGuard-vscode-plugin.git"
