@@ -90,9 +90,9 @@ async function updateStatusBarWithWorker(): Promise<void> {
       const versionInfo = await cliWorker.checkVersion();
 
       if (versionInfo.compatible) {
-        // Green: CLI available and compatible
+        // Default color: CLI available and compatible
         statusBarItem.text = '$(shield) CodeGuard';
-        statusBarItem.color = new ThemeColor('charts.green');
+        statusBarItem.color = undefined; // Use default status bar text color
         statusBarItem.tooltip = `CodeGuard CLI v${versionInfo.version} ready. Click for guard tags reference.`;
       } else {
         // Yellow: CLI available but older version
@@ -124,7 +124,7 @@ async function updateStatusBarBasic(): Promise<void> {
 
   if (cliAvailable) {
     statusBarItem.text = '$(shield) CodeGuard';
-    statusBarItem.color = new ThemeColor('charts.green');
+    statusBarItem.color = undefined; // Use default status bar text color
     statusBarItem.tooltip = 'CodeGuard CLI detected but worker not initialized. Click for guard tags reference.';
   } else {
     statusBarItem.text = '$(shield) CodeGuard';
@@ -142,7 +142,7 @@ export function updateStatusBarForWorkerStatus(status: 'ready' | 'error' | 'cras
   switch (status) {
     case 'ready':
       statusBarItem.text = '$(shield) CodeGuard';
-      statusBarItem.color = new ThemeColor('charts.green');
+      statusBarItem.color = undefined; // Use default status bar text color
       statusBarItem.tooltip = 'CodeGuard CLI worker ready. Click for guard tags reference.';
       break;
     case 'starting':
