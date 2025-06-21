@@ -184,18 +184,23 @@ export class FileCustomizationProvider implements FileDecorationProvider {
 
     // Determine if this is a file or folder
     let isDirectory = false;
-    try {
-      const fileStat = await workspace.fs.stat(uri);
-      isDirectory = (fileStat.type & 1) === 1; // FileType.Directory === 1
-    } catch (error) {
-      errorHandler.handleError(
-        error instanceof Error ? error : new Error(String(error)),
-        {
-          operation: 'getDecorationValue.stat',
-          details: { uri: uri.toString() }
-        }
-      );
-      return null;
+    // Handle untitled URIs separately - they're always files and don't exist on filesystem
+    if (uri.scheme === 'untitled') {
+      isDirectory = false; // Untitled documents are always files
+    } else {
+      try {
+        const fileStat = await workspace.fs.stat(uri);
+        isDirectory = (fileStat.type & 1) === 1; // FileType.Directory === 1
+      } catch (error) {
+        errorHandler.handleError(
+          error instanceof Error ? error : new Error(String(error)),
+          {
+            operation: 'getDecorationValue.stat',
+            details: { uri: uri.toString() }
+          }
+        );
+        return null;
+      }
     }
 
     // Check if we have any custom settings for this exact file/folder or parent folders
