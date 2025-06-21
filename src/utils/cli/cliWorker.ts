@@ -430,11 +430,17 @@ export class CLIWorker extends EventEmitter {
    */
   private processMessage(message: string): void {
     try {
-      const data = JSON.parse(message) as { type?: string; id?: string };
+      const data = JSON.parse(message) as { type?: string; id?: string; stream?: string; data?: string; encoding?: string };
 
       // Handle startup handshake
       if (data.type === 'startup') {
         this.emit('startup', data as CLIStartupInfo);
+        return;
+      }
+
+      // Handle output chunk messages
+      if (data.type === 'output_chunk') {
+        this.handleOutputChunk(data as { stream: string; data: string; encoding?: string });
         return;
       }
 
@@ -458,6 +464,32 @@ export class CLIWorker extends EventEmitter {
       errorHandler.handleError(
         new Error(`Failed to parse CLI message: ${message}`),
         { operation: 'cliWorker.parseMessage', details: { error: String(error) } }
+      );
+    }
+  }
+
+  /**
+   * Handle output chunk messages from CLI worker
+   */
+  private handleOutputChunk(chunk: { stream: string; data: string; encoding?: string }): void {
+    try {
+      let decodedData = chunk.data;
+      
+      // Decode base64 if specified
+      if (chunk.encoding === 'base64') {
+        decodedData = Buffer.from(chunk.data, 'base64').toString('utf8');
+      }
+
+      // Output to appropriate stream
+      if (chunk.stream === 'stdout') {
+        process.stdout.write(decodedData);
+      } else if (chunk.stream === 'stderr') {
+        process.stderr.write(decodedData);
+      }
+    } catch (error) {
+      errorHandler.handleError(
+        new Error(`Failed to process output chunk: ${String(error)}`),
+        { operation: 'cliWorker.handleOutputChunk' }
       );
     }
   }
