@@ -474,7 +474,6 @@ export class CLIWorker extends EventEmitter {
   private handleOutputChunk(chunk: { stream: string; data: string; encoding?: string }): void {
     try {
       let decodedData = chunk.data;
-      
       // Decode base64 if specified
       if (chunk.encoding === 'base64') {
         decodedData = Buffer.from(chunk.data, 'base64').toString('utf8');
