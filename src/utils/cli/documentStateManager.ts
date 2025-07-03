@@ -24,8 +24,8 @@ export class DocumentStateManager {
    */
   setDocument(document: TextDocument): boolean {
     const newState: DocumentState = {
-      fileName: document.fileName,
-      languageId: document.languageId,
+      fileName: document.fileName || document.uri.fsPath || 'unknown',
+      languageId: document.languageId || 'plaintext',
       content: document.getText(),
       version: document.version
     };

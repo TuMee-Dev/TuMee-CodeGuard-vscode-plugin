@@ -290,36 +290,7 @@ export class ColorCustomizerPanel {
       }
     } catch (error) {
       console.error('Failed to apply theme via CLI:', error);
-
-      // Fallback to CLI theme lookup
-      let theme;
-      try {
-        const builtInThemes = await this._getBuiltInThemes();
-        theme = builtInThemes[themeKey];
-        this._isSystemTheme = !!theme;
-
-        if (!theme) {
-          const customThemes = await this._getCustomThemes();
-          if (customThemes[themeKey]) {
-            theme = customThemes[themeKey];
-            this._isSystemTheme = false;
-          }
-        }
-      } catch (fallbackError) {
-        console.error('Failed to get themes for fallback:', fallbackError);
-        this._isSystemTheme = false;
-      }
-
-      if (theme) {
-        this._currentTheme = themeName;
-
-        // Update colors without showing notification
-        const mergedColors = mergeWithDefaults(theme.colors);
-        await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
-
-        this._postMessage('updateColors', { colors: mergedColors });
-        this._postMessage('setThemeType', { isSystem: this._isSystemTheme });
-      }
+      this._showError(`Failed to apply theme: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

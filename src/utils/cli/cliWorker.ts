@@ -96,6 +96,8 @@ export class CLIWorker extends EventEmitter {
   private currentDocumentVersion = 0;
   private isReady = false;
   private startupInfo?: CLIStartupInfo;
+  private commandErrorCount = 0;
+  private lastCommandError?: string;
 
   private readonly MIN_CLI_VERSION = '0.4.0';
 
@@ -203,6 +205,20 @@ export class CLIWorker extends EventEmitter {
   }
 
   /**
+   * Get the current command error count
+   */
+  getCommandErrorCount(): number {
+    return this.commandErrorCount;
+  }
+
+  /**
+   * Get the last command error
+   */
+  getLastCommandError(): string | undefined {
+    return this.lastCommandError;
+  }
+
+  /**
    * Wait for the CLI worker to be ready (if it's starting up)
    * Returns immediately if already ready, or waits for startup event
    */
@@ -247,12 +263,20 @@ export class CLIWorker extends EventEmitter {
   ): Promise<ParseResult> {
     this.currentDocumentVersion++;
 
-    const response = await this.sendRequest('setDocument', {
+    // Validate parameters
+    if (!fileName || !languageId) {
+      console.error('setDocument called with missing params:', { fileName, languageId, hasContent: !!content });
+      throw new Error(`Invalid setDocument parameters: fileName='${fileName}', languageId='${languageId}'`);
+    }
+
+    const payload = {
       fileName,
       languageId,
       content,
       version: this.currentDocumentVersion
-    });
+    };
+    
+    const response = await this.sendRequest('setDocument', payload);
 
     if (response.status === 'error') {
       throw new Error(`CLI setDocument failed: ${response.error}`);
@@ -346,13 +370,29 @@ export class CLIWorker extends EventEmitter {
     const id = `req-${++this.requestIdCounter}`;
     const request: CLIRequest = { id, command, payload };
 
+
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(id);
         reject(new Error(`CLI request timeout: ${command}`));
       }, this.REQUEST_TIMEOUT);
 
-      this.pendingRequests.set(id, { resolve, reject, timeout });
+      this.pendingRequests.set(id, {
+        resolve: (response: CLIResponse) => {
+          // Track command errors
+          if (response.status === 'error') {
+            this.commandErrorCount++;
+            this.lastCommandError = response.error || 'Unknown error';
+            this.emit('command-error', { command, error: this.lastCommandError, count: this.commandErrorCount });
+          } else {
+            // Reset error count on successful command
+            this.commandErrorCount = 0;
+          }
+          resolve(response);
+        },
+        reject,
+        timeout
+      });
 
       const message = `${JSON.stringify(request)  }\n\n`;
 

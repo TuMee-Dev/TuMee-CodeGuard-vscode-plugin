@@ -199,6 +199,11 @@ function handleDocumentChange(event: vscode.TextDocumentChangeEvent): void {
  * Handle active editor changes
  */
 function handleActiveEditorChange(editor: vscode.TextEditor): void {
+  // Skip non-file documents
+  if (editor.document.uri.scheme !== 'file') {
+    return;
+  }
+
   // Apply cached decorations immediately to prevent flashing
   decorationManager.applyCachedDecorations(editor.document);
 
@@ -212,7 +217,7 @@ function handleActiveEditorChange(editor: vscode.TextEditor): void {
  */
 function initializeActiveEditor(): void {
   const activeEditor = window.activeTextEditor;
-  if (activeEditor) {
+  if (activeEditor && activeEditor.document.uri.scheme === 'file') {
     // Update immediately without debounce for initial load
     void decorationManager.updateCodeDecorations(activeEditor.document);
     void updateStatusBarItem(activeEditor.document);

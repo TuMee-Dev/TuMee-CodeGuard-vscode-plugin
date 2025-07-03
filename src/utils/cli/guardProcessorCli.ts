@@ -82,6 +82,7 @@ async function startCliWorker(): Promise<void> {
   // Set up event handlers
   cliWorker.on('exit', handleWorkerExit);
   cliWorker.on('error', handleWorkerError);
+  cliWorker.on('command-error', handleCommandError);
 
   try {
     await cliWorker.start();
@@ -165,6 +166,29 @@ function handleWorkerError(error: Error): void {
 }
 
 /**
+ * Handle CLI command errors
+ */
+function handleCommandError(info: { command: string; error: string; count: number }): void {
+  // Update status bar to yellow to indicate issues
+  updateStatusBarForWorkerStatus('command-error');
+
+  // Log the error for debugging
+  console.warn(`CodeGuard CLI command '${info.command}' failed: ${info.error} (error count: ${info.count})`);
+
+  // If we get too many errors, show a notification
+  if (info.count >= 3) {
+    void vscode.window.showWarningMessage(
+      `CodeGuard CLI is experiencing errors: ${info.error}. The CLI may need updating.`,
+      'Check CLI Version'
+    ).then(selection => {
+      if (selection === 'Check CLI Version') {
+        void vscode.commands.executeCommand('tumee-vscode-plugin.showGuardInfo');
+      }
+    });
+  }
+}
+
+/**
  * Restart the CLI worker
  */
 async function restartCliWorker(): Promise<void> {
@@ -219,6 +243,17 @@ export async function parseGuardTags(
   document: vscode.TextDocument,
   _lines: string[]
 ): Promise<GuardTag[]> {
+  // Skip non-file documents
+  if (document.uri.scheme !== 'file') {
+    return [];
+  }
+
+  // Validate document has required properties
+  if (!document.fileName && !document.uri.fsPath) {
+    console.warn('Document missing fileName:', { uri: document.uri.toString(), scheme: document.uri.scheme });
+    return [];
+  }
+
   if (!cliWorker || !cliWorker.isWorkerReady()) {
     throw new Error('CLI worker is not available');
   }
@@ -235,6 +270,16 @@ export async function parseGuardTags(
         throw new Error('Failed to get document info');
       }
 
+      // Validate required fields
+      if (!docInfo.fileName || !docInfo.languageId) {
+        console.error('Missing required fields:', { 
+          fileName: docInfo.fileName, 
+          languageId: docInfo.languageId,
+          hasContent: !!docInfo.content 
+        });
+        throw new Error(`Missing required fields: fileName=${docInfo.fileName}, languageId=${docInfo.languageId}`);
+      }
+      
       result = await cliWorker.setDocument(
         docInfo.fileName,
         docInfo.languageId,
@@ -253,6 +298,16 @@ export async function parseGuardTags(
         throw new Error('Failed to get document info');
       }
 
+      // Validate required fields
+      if (!docInfo.fileName || !docInfo.languageId) {
+        console.error('Missing required fields:', { 
+          fileName: docInfo.fileName, 
+          languageId: docInfo.languageId,
+          hasContent: !!docInfo.content 
+        });
+        throw new Error(`Missing required fields: fileName=${docInfo.fileName}, languageId=${docInfo.languageId}`);
+      }
+      
       result = await cliWorker.setDocument(
         docInfo.fileName,
         docInfo.languageId,
@@ -307,6 +362,11 @@ export function handleDocumentChange(event: vscode.TextDocumentChangeEvent): voi
     return;
   }
 
+  // Skip non-file documents (output channels, debug consoles, etc.)
+  if (event.document.uri.scheme !== 'file') {
+    return;
+  }
+
   // Clear existing timer
   if (debounceTimer) {
     clearTimeout(debounceTimer);
@@ -323,6 +383,11 @@ export function handleDocumentChange(event: vscode.TextDocumentChangeEvent): voi
  */
 async function processDocumentChange(event: vscode.TextDocumentChangeEvent): Promise<void> {
   if (!cliWorker || !cliWorker.isWorkerReady()) {
+    return;
+  }
+
+  // Skip non-file documents
+  if (event.document.uri.scheme !== 'file') {
     return;
   }
 
