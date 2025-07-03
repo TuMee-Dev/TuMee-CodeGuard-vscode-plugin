@@ -272,14 +272,14 @@ export async function parseGuardTags(
 
       // Validate required fields
       if (!docInfo.fileName || !docInfo.languageId) {
-        console.error('Missing required fields:', { 
-          fileName: docInfo.fileName, 
+        console.error('Missing required fields:', {
+          fileName: docInfo.fileName,
           languageId: docInfo.languageId,
-          hasContent: !!docInfo.content 
+          hasContent: !!docInfo.content
         });
         throw new Error(`Missing required fields: fileName=${docInfo.fileName}, languageId=${docInfo.languageId}`);
       }
-      
+
       result = await cliWorker.setDocument(
         docInfo.fileName,
         docInfo.languageId,
@@ -300,14 +300,14 @@ export async function parseGuardTags(
 
       // Validate required fields
       if (!docInfo.fileName || !docInfo.languageId) {
-        console.error('Missing required fields:', { 
-          fileName: docInfo.fileName, 
+        console.error('Missing required fields:', {
+          fileName: docInfo.fileName,
           languageId: docInfo.languageId,
-          hasContent: !!docInfo.content 
+          hasContent: !!docInfo.content
         });
         throw new Error(`Missing required fields: fileName=${docInfo.fileName}, languageId=${docInfo.languageId}`);
       }
-      
+
       result = await cliWorker.setDocument(
         docInfo.fileName,
         docInfo.languageId,
