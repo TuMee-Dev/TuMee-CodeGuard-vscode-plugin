@@ -3,7 +3,7 @@ name: Release VSIX
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.0'  # Only trigger on X.Y.0 versions
+      - 'v[0-9]+.[0-9]+.[0-9]+'  # Trigger on all versions X.Y.Z
   workflow_dispatch:  # Allow manual triggers
 
 jobs:
