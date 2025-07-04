@@ -275,7 +275,7 @@ export class CLIWorker extends EventEmitter {
       content,
       version: this.currentDocumentVersion
     };
-    
+
     const response = await this.sendRequest('setDocument', payload);
 
     if (response.status === 'error') {
@@ -369,7 +369,6 @@ export class CLIWorker extends EventEmitter {
 
     const id = `req-${++this.requestIdCounter}`;
     const request: CLIRequest = { id, command, payload };
-
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
