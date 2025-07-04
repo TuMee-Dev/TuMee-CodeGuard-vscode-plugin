@@ -57,7 +57,6 @@ function createColorRenderingEngine(colors) {
 
       const config = colors.permissions[configKey];
       
-      
       if (!config || !config.enabled) {
         return {
           opacity: 0,
@@ -318,11 +317,6 @@ function applyColorResultToLine(line, content, border, result, borderBarEnabled)
     const rgb = hexToRgb(result.backgroundColor);
     if (rgb) {
       const bgColorRgba = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + result.opacity + ')';
-      
-      // Debug: log what color is being applied
-      if (line.id && (line.textContent.includes('context:w') || line.id === 'line51')) {
-        console.log(`Applying color to ${line.id}:`, result.backgroundColor, '→', bgColorRgba);
-      }
       
       if (result.highlightEntireLine) {
         // Apply background to entire line

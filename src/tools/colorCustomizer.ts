@@ -265,13 +265,16 @@ export class ColorCustomizerPanel {
 
       if (response.status === 'success' && response.result) {
         const setThemeResponse = response.result as SetThemeResponse;
+        this._currentTheme = themeName;
+
+        // Determine if this is a built-in theme
+        const builtInThemes = await this._getBuiltInThemes();
+        this._isSystemTheme = !!builtInThemes[themeKey];
+
+        // Always send the theme type, even if no colors are returned
+        this._postMessage('setThemeType', { isSystem: this._isSystemTheme });
+
         if (setThemeResponse.colors) {
-          this._currentTheme = themeName;
-
-          // Determine if this is a built-in theme
-          const builtInThemes = await this._getBuiltInThemes();
-          this._isSystemTheme = !!builtInThemes[themeKey];
-
           // Update colors from CLI response
           const mergedColors = mergeWithDefaults(setThemeResponse.colors as Partial<GuardColors>);
           await this._cm.update(CONFIG_KEYS.GUARD_COLORS_COMPLETE, mergedColors);
@@ -283,7 +286,10 @@ export class ColorCustomizerPanel {
           }
 
           this._postMessage('updateColors', { colors: mergedColors });
-          this._postMessage('setThemeType', { isSystem: this._isSystemTheme });
+        } else {
+          // No colors from CLI, use defaults or current config
+          const currentColors = this._cm.get(CONFIG_KEYS.GUARD_COLORS_COMPLETE) || DEFAULT_COLORS;
+          this._postMessage('updateColors', { colors: currentColors });
         }
       } else {
         this._showError(`Failed to apply theme: ${response.error || 'Unknown error'}`);

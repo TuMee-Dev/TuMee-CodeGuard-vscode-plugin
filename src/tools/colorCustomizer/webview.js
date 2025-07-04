@@ -1,17 +1,59 @@
 const vscode = acquireVsCodeApi();
 let currentColors = null;
 let colorLinks = {};
+let isSystemTheme = false; // Track if current theme is a system theme
 const PREVIEW_LINES = __PREVIEW_LINES_PLACEHOLDER__;
 
 // Cache for parsed guard tags to avoid repeated calls to extension
 const parseCache = new Map();
 
-// Use pre-parsed guard data from extension instead of parsing in webview
+// Use pre-parsed guard data from preview JSON
 function callExtensionParseGuardTag(content) {
-  // Preview lines now include pre-parsed guard data from the extension
-  // This eliminates the need to duplicate parseGuardTag logic in the webview
+  // Find the line in PREVIEW_LINES that matches this content
   const currentLine = PREVIEW_LINES.find(line => line.content === content);
-  return currentLine ? currentLine.parsed : null;
+  if (!currentLine) return null;
+  
+  // Check if this line has guard tags in the content
+  if (!content.includes('@guard:')) return null;
+  
+  // Convert the JSON format to the expected parsed format
+  const parsed = {};
+  
+  // Extract permission data from the JSON
+  if (currentLine.ai) {
+    if (currentLine.ai === 'context') {
+      parsed.aiIsContext = true;
+      parsed.aiPermission = 'contextRead';
+    } else if (currentLine.ai === 'contextWrite') {
+      parsed.aiIsContext = true;
+      parsed.aiPermission = 'contextWrite';
+    } else {
+      // Convert to single letter format that the preview expects
+      parsed.aiPermission = currentLine.ai === 'write' ? 'w' : 
+                           currentLine.ai === 'read' ? 'r' : 
+                           currentLine.ai === 'noAccess' ? 'n' : currentLine.ai;
+    }
+  }
+  
+  if (currentLine.human) {
+    if (currentLine.human === 'context') {
+      parsed.humanIsContext = true;
+      parsed.humanPermission = 'contextRead';
+    } else if (currentLine.human === 'contextWrite') {
+      parsed.humanIsContext = true; 
+      parsed.humanPermission = 'contextWrite';
+    } else {
+      // Convert to single letter format
+      parsed.humanPermission = currentLine.human === 'write' ? 'w' : 
+                              currentLine.human === 'read' ? 'r' : 
+                              currentLine.human === 'noAccess' ? 'n' : currentLine.human;
+    }
+  }
+  
+  // Default scope to block for preview
+  parsed.scope = 'block';
+  
+  return parsed;
 }
 
 // Initialize on load
@@ -415,14 +457,22 @@ function checkForChanges() {
             Math.abs((original.borderOpacity || 1.0) - current.borderOpacity) > 0.001 ||
             (original.highlightEntireLine || false) !== (current.highlightEntireLine || false)) {
           hasChanges = true;
-          console.log(`Change detected in ${key}:`, original, current);
           break;
         }
       }
     }
   }
   
-  if (hasChanges) {
+  // Don't enable buttons if this is a system theme
+  if (isSystemTheme) {
+    applyButton.disabled = true;
+    applyButton.style.opacity = '0.5';
+    applyButton.style.cursor = 'not-allowed';
+    
+    resetButton.disabled = true;
+    resetButton.style.opacity = '0.5';
+    resetButton.style.cursor = 'not-allowed';
+  } else if (hasChanges) {
     applyButton.disabled = false;
     applyButton.style.opacity = '1';
     applyButton.style.cursor = 'pointer';
@@ -555,10 +605,6 @@ function updateAllColors(colors) {
     const colorInput = document.getElementById(key + '-color');
     if (colorInput) {
       colorInput.value = config.color;
-      // Debug logging for context colors
-      if (key === 'contextRead' || key === 'contextWrite') {
-        console.log(`Setting ${key} color to:`, config.color);
-      }
     }
     
     const minimapInput = document.getElementById(key + '-minimapColor');
@@ -675,6 +721,7 @@ function updateDeleteButton() {
 }
 
 function updateThemeStatus(isSystem) {
+  isSystemTheme = isSystem; // Store globally
   const statusDiv = document.getElementById('themeStatus');
   if (!statusDiv) return;
   

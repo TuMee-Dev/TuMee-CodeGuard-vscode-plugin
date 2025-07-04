@@ -12,11 +12,12 @@ import * as path from 'path';
 
 interface PreviewLine {
   content: string;
-  parsed?: null;
+  ai?: string | null;
+  human?: string | null;
 }
 
 interface PreviewLinesData {
-  lines: Array<{ content: string }>;
+  lines: Array<{ content: string; ai?: string | null; human?: string | null }>;
 }
 
 export class ColorCustomizerHtmlBuilder {
@@ -278,10 +279,11 @@ export class ColorCustomizerHtmlBuilder {
       const jsonPath = path.join(__dirname, 'resources', 'preview-lines.json');
       const jsonContent = fs.readFileSync(jsonPath, 'utf8');
       const data = JSON.parse(jsonContent) as PreviewLinesData;
-      // Return lines with content only - CLI handles parsing
-      return data.lines.map((line: { content: string }) => ({
+      // Return lines with content and permission data
+      return data.lines.map((line: { content: string; ai?: string | null; human?: string | null }) => ({
         content: line.content,
-        parsed: null // CLI handles parsing
+        ai: line.ai || null,
+        human: line.human || null
       })) || [];
     } catch (error) {
       console.error('Failed to load preview lines:', error);
